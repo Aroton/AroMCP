@@ -8,13 +8,18 @@ AroMCP is a suite of MCP (Model Context Protocol) servers designed as utilities 
 
 ## Current State
 
-The project has a functional MCP server architecture with all tool signatures implemented as stubs. The main server (`src/aromcp/main_server.py`) unifies all four MCP servers into a single FastMCP instance. All core tools are defined but currently return placeholder responses - actual implementations are needed.
+The project has a functional MCP server architecture with **Phase 1: FileSystem Tools** fully implemented. The main server (`src/aromcp/main_server.py`) unifies all MCP servers into a single FastMCP instance. FileSystem tools are production-ready with comprehensive functionality.
 
 **Implementation Status:**
 - ✅ Server architecture and tool signatures complete
 - ✅ FastMCP integration working
-- ⚠️ All tools are stub implementations (return empty/placeholder data)
-- ❌ No input validation, error handling, or security measures implemented
+- ✅ **Phase 1: FileSystem Tools - FULLY IMPLEMENTED**
+  - ✅ All 6 filesystem tools implemented with full functionality
+  - ✅ Comprehensive input validation, error handling, and security measures
+  - ✅ 46 comprehensive tests with 100% pass rate
+  - ✅ Path traversal protection and encoding safety
+  - ✅ Batch operations and atomic file writing with backup support
+- ⚠️ Phases 2-6: Other tool categories are stub implementations (return empty/placeholder data)
 
 ## Planned Architecture
 
@@ -47,11 +52,26 @@ The project consists of six main tool categories:
 ## Project Structure
 
 - `src/aromcp/main_server.py` - Unified FastMCP server that combines all tools
-- `src/aromcp/filesystem_server/tools.py` - File I/O, git operations, code parsing tools
-- `src/aromcp/state_server/tools.py` - Persistent state management tools  
-- `src/aromcp/build_server/tools.py` - Build, lint, test execution tools
-- `src/aromcp/analysis_server/tools.py` - Code analysis and metrics tools
+- `src/aromcp/filesystem_server/tools.py` - FastMCP tool registration for filesystem operations
+- `src/aromcp/filesystem_server/tools/` - Individual filesystem tool implementations:
+  - `get_target_files.py` - File listing with git integration and pattern matching
+  - `read_files_batch.py` - Multi-file reading with encoding detection
+  - `write_files_batch.py` - Atomic multi-file writing with backup support
+  - `extract_method_signatures.py` - AST-based code signature extraction
+  - `find_imports_for_files.py` - Import dependency analysis
+  - `load_documents_by_pattern.py` - Pattern-based document loading with type classification
+- `src/aromcp/state_server/tools.py` - Persistent state management tools (planned)
+- `src/aromcp/build_server/tools.py` - Build, lint, test execution tools (planned)
+- `src/aromcp/analysis_server/tools.py` - Code analysis and metrics tools (planned)
 - `main.py` - Entry point that imports and runs the main server
+- `tests/filesystem_server/` - Modular test suite with separate files per test class:
+  - `test_get_target_files.py` - Tests for file listing and pattern matching
+  - `test_read_files_batch.py` - Tests for multi-file reading operations
+  - `test_write_files_batch.py` - Tests for atomic file writing operations
+  - `test_extract_method_signatures.py` - Tests for code signature extraction
+  - `test_find_imports_for_files.py` - Tests for import dependency analysis
+  - `test_load_documents_by_pattern.py` - Tests for document loading and classification
+  - `test_security_validation.py` - Tests for security measures across all tools
 
 ## Core Design Principles
 
@@ -71,12 +91,126 @@ MCP_SECURITY_LEVEL=strict|standard|permissive
 MCP_LOG_LEVEL=debug|info|warn|error
 ```
 
-## Documentation
+## Documentation Structure
 
-- Main technical design: `documentation/simplify-workflow.md`
-- Contains detailed specifications for each planned MCP server
-- Includes security requirements and deployment considerations
+The project follows a structured documentation approach with the main README.md serving as an index to detailed documentation:
+
+### Main Documentation Files
+- `README.md` - Project overview, installation, quick start, and index to detailed documentation
+- `CLAUDE.md` - Development guidelines and instructions for Claude Code (this file)
+- `documentation/simplify-workflow.md` - Main technical design and architecture specifications
+
+### Usage Documentation
+- `documentation/usage/filesystem_tools.md` - Comprehensive usage guide for all FileSystem tools with examples
+- Additional usage guides will be added as new tool categories are implemented
+
+### Documentation Standards
+- **README.md**: Keep concise with overview and links to detailed documentation
+- **Usage Guides**: Detailed examples, parameters, and practical usage patterns for each tool category
+- **Technical Documentation**: Architecture, design decisions, and implementation specifications
+- **Cross-References**: All documentation should link to related files to create a connected knowledge base
 
 ## Server Configuration
 
 - We use FastMCP server for this project. Always load the documentation index: https://gofastmcp.com/llms.txt - Only load documentation through *.md files located in llms.txt. DO NOT LOAD HTML PAGES.
+
+## Implementation Conventions
+
+### Code Organization
+- **Modular Architecture**: Each tool category has its own directory under `src/aromcp/`
+- **Separation of Concerns**: Main `tools.py` contains only FastMCP registration, actual implementations in `tools/` subdirectory
+- **Individual Tool Files**: Each tool has its own implementation file (e.g., `get_target_files.py`)
+- **Consistent Imports**: Tool implementations are imported in `tools/__init__.py` and then imported in main `tools.py`
+
+### Function Naming Convention
+- **Registration Functions**: `register_[category]_tools(mcp)` in main tools.py files
+- **Implementation Functions**: `[tool_name]_impl(...)` for actual implementation
+- **Helper Functions**: Private functions prefixed with `_` (e.g., `_validate_file_path()`)
+
+### Error Handling Standards
+All tools must follow consistent error response format:
+```python
+# Success Response
+{
+    "data": {
+        # Tool-specific data structure
+    }
+}
+
+# Error Response
+{
+    "error": {
+        "code": "ERROR_CODE",
+        "message": "Detailed error message"
+    }
+}
+```
+
+**Standard Error Codes:**
+- `INVALID_INPUT`: Parameter validation failed
+- `NOT_FOUND`: Resource not found
+- `PERMISSION_DENIED`: Security check failed  
+- `OPERATION_FAILED`: Operation failed to complete
+- `TIMEOUT`: Operation timed out
+- `UNSUPPORTED`: Feature not supported
+
+### Security Requirements
+- **Path Validation**: All file operations must validate paths to prevent directory traversal
+- **Input Sanitization**: Validate all input parameters with appropriate type checking
+- **Resource Limits**: Implement reasonable limits (file size, operation timeouts)
+- **Error Information**: Never expose sensitive system information in error messages
+
+### Testing Standards
+- **Modular Test Structure**: Each test class has its own file (e.g., `test_get_target_files.py` for `TestGetTargetFiles`)
+- **Comprehensive Coverage**: Each tool should have multiple test scenarios covering:
+  - Happy path functionality
+  - Parameter variations (optional parameters, different values)
+  - Error conditions and edge cases
+  - Security validation (path traversal protection)
+  - Performance considerations (large files, empty inputs)
+- **Test Organization**: Tests organized by tool in classes like `TestToolName`, with one class per file
+- **Descriptive Test Names**: Test method names should clearly describe what is being tested
+- **Isolated Tests**: Each test should be independent and use temporary directories
+- **Security Testing**: Dedicated `test_security_validation.py` file for cross-tool security validation
+
+### Type Annotations
+- **Modern Python Types**: Use `dict[str, Any]` instead of `Dict[str, Any]`
+- **Optional Parameters**: Use `list[str] | None` instead of `Optional[List[str]]`
+- **Comprehensive Typing**: All function parameters and return types should be annotated
+
+### Documentation Standards
+- **Docstrings**: All public functions must have comprehensive docstrings with Args and Returns sections
+- **Parameter Documentation**: FastMCP tool decorators should include parameter descriptions
+- **Usage Examples**: README.md should contain practical examples for each tool
+- **Implementation Notes**: Complex logic should include inline comments explaining the approach
+
+## FileSystem Tools (Phase 1) - Production Ready
+
+The FileSystem tools are fully implemented and provide comprehensive file operations optimized for AI-driven workflows. All tools include:
+
+### Available Tools
+1. **get_target_files** - File listing with git integration and glob pattern matching
+2. **read_files_batch** - Multi-file reading with automatic encoding detection
+3. **write_files_batch** - Atomic multi-file writing with backup support and directory creation
+4. **extract_method_signatures** - AST-based code parsing for Python and regex for JavaScript/TypeScript
+5. **find_imports_for_files** - Import dependency analysis across multiple languages
+6. **load_documents_by_pattern** - Pattern-based document loading with automatic type classification
+
+### Key Features
+- **Security**: Path traversal protection, input validation, file size limits
+- **Performance**: Batch operations, atomic transactions, efficient encoding detection
+- **Multi-language**: Python AST parsing, JavaScript/TypeScript regex parsing, generic text analysis
+- **Error Resilience**: Structured error responses, graceful failure handling
+- **Automation**: Automatic directory creation, backup management, encoding detection
+- **Metadata**: Rich file metadata (size, modification time, line/word counts, file types)
+
+### Usage Patterns
+```python
+# Common workflow: Find, Read, Analyze, Write
+files = get_target_files(status="pattern", patterns=["**/*.py"])
+content = read_files_batch(file_paths=[f["path"] for f in files["data"]["files"]])
+signatures = extract_method_signatures(file_path="src/main.py")
+write_files_batch(files={"output/analysis.json": json.dumps(signatures)})
+```
+
+See `documentation/usage/filesystem_tools.md` for detailed usage examples and parameter documentation.
