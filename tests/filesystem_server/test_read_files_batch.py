@@ -62,44 +62,44 @@ class TestReadFilesBatch:
             assert "data" in result
             assert "errors" in result["data"]
             assert any("outside project root" in error["error"] for error in result["data"]["errors"])
-    
+
     def test_encoding_auto_detection(self):
         """Test automatic encoding detection."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create files with different encodings
             utf8_file = Path(temp_dir) / "utf8.txt"
             utf8_file.write_text("Hello 世界", encoding="utf-8")
-            
+
             ascii_file = Path(temp_dir) / "ascii.txt"
             ascii_file.write_text("Hello World", encoding="ascii")
-            
+
             result = read_files_batch_impl(
                 file_paths=["utf8.txt", "ascii.txt"],
                 project_root=temp_dir,
                 encoding="auto"
             )
-            
+
             assert "data" in result
             assert len(result["data"]["files"]) == 2
             assert result["data"]["files"]["utf8.txt"]["content"] == "Hello 世界"
             assert result["data"]["files"]["ascii.txt"]["content"] == "Hello World"
-    
+
     def test_explicit_encoding(self):
         """Test explicit encoding specification."""
         with tempfile.TemporaryDirectory() as temp_dir:
             test_file = Path(temp_dir) / "test.txt"
             test_file.write_text("Hello World", encoding="utf-8")
-            
+
             result = read_files_batch_impl(
                 file_paths=["test.txt"],
                 project_root=temp_dir,
                 encoding="utf-8"
             )
-            
+
             assert "data" in result
             assert len(result["data"]["files"]) == 1
             assert result["data"]["files"]["test.txt"]["encoding"] == "utf-8"
-    
+
     def test_large_file_handling(self):
         """Test handling of large files."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -107,34 +107,34 @@ class TestReadFilesBatch:
             large_file = Path(temp_dir) / "large.txt"
             large_content = "x" * (1024 * 1024 + 1)  # Just over 1MB
             large_file.write_text(large_content)
-            
+
             result = read_files_batch_impl(
                 file_paths=["large.txt"],
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             assert len(result["data"]["files"]) == 0
             assert "errors" in result["data"]
             assert any("too large" in error["error"] for error in result["data"]["errors"])
-    
+
     def test_directory_instead_of_file(self):
         """Test error when path points to directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a directory
             dir_path = Path(temp_dir) / "subdir"
             dir_path.mkdir()
-            
+
             result = read_files_batch_impl(
                 file_paths=["subdir"],
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             assert len(result["data"]["files"]) == 0
             assert "errors" in result["data"]
             assert any("not a file" in error["error"] for error in result["data"]["errors"])
-    
+
     def test_empty_file_list(self):
         """Test behavior with empty file list."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -142,7 +142,7 @@ class TestReadFilesBatch:
                 file_paths=[],
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             assert len(result["data"]["files"]) == 0
             assert result["data"]["summary"]["total_files"] == 0

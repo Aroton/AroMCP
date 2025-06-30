@@ -52,14 +52,17 @@ The project consists of six main tool categories:
 ## Project Structure
 
 - `src/aromcp/main_server.py` - Unified FastMCP server that combines all tools
-- `src/aromcp/filesystem_server/tools.py` - FastMCP tool registration for filesystem operations
-- `src/aromcp/filesystem_server/tools/` - Individual filesystem tool implementations:
+- `src/aromcp/filesystem_server/tools/` - FileSystem tools with registration and implementations:
+  - `__init__.py` - FastMCP tool registration for filesystem operations
   - `get_target_files.py` - File listing with git integration and pattern matching
   - `read_files_batch.py` - Multi-file reading with encoding detection
   - `write_files_batch.py` - Atomic multi-file writing with backup support
   - `extract_method_signatures.py` - AST-based code signature extraction
   - `find_imports_for_files.py` - Import dependency analysis
   - `load_documents_by_pattern.py` - Pattern-based document loading with type classification
+  - `apply_file_diffs.py` - Apply unified diffs with validation and rollback
+  - `preview_file_changes.py` - Preview diff changes before applying
+  - `validate_diffs.py` - Pre-validate diffs for conflicts and syntax
 - `src/aromcp/state_server/tools.py` - Persistent state management tools (planned)
 - `src/aromcp/build_server/tools.py` - Build, lint, test execution tools (planned)
 - `src/aromcp/analysis_server/tools.py` - Code analysis and metrics tools (planned)
@@ -72,6 +75,7 @@ The project consists of six main tool categories:
   - `test_find_imports_for_files.py` - Tests for import dependency analysis
   - `test_load_documents_by_pattern.py` - Tests for document loading and classification
   - `test_security_validation.py` - Tests for security measures across all tools
+  - `test_diff_operations.py` - Tests for diff operations (apply, preview, validate)
 
 ## Core Design Principles
 
@@ -118,12 +122,12 @@ The project follows a structured documentation approach with the main README.md 
 
 ### Code Organization
 - **Modular Architecture**: Each tool category has its own directory under `src/aromcp/`
-- **Separation of Concerns**: Main `tools.py` contains only FastMCP registration, actual implementations in `tools/` subdirectory
+- **Unified Structure**: Each tool category has a `tools/` directory containing both registration and implementations
 - **Individual Tool Files**: Each tool has its own implementation file (e.g., `get_target_files.py`)
-- **Consistent Imports**: Tool implementations are imported in `tools/__init__.py` and then imported in main `tools.py`
+- **Registration in __init__.py**: Tool implementations are imported and registered in `tools/__init__.py`
 
 ### Function Naming Convention
-- **Registration Functions**: `register_[category]_tools(mcp)` in main tools.py files
+- **Registration Functions**: `register_[category]_tools(mcp)` in `tools/__init__.py` files
 - **Implementation Functions**: `[tool_name]_impl(...)` for actual implementation
 - **Helper Functions**: Private functions prefixed with `_` (e.g., `_validate_file_path()`)
 
@@ -195,6 +199,9 @@ The FileSystem tools are fully implemented and provide comprehensive file operat
 4. **extract_method_signatures** - AST-based code parsing for Python and regex for JavaScript/TypeScript
 5. **find_imports_for_files** - Import dependency analysis across multiple languages
 6. **load_documents_by_pattern** - Pattern-based document loading with automatic type classification
+7. **apply_file_diffs** - Apply unified diffs with validation and rollback support
+8. **preview_file_changes** - Preview diff changes before applying with impact analysis
+9. **validate_diffs** - Pre-validate diffs for conflicts, syntax, and applicability
 
 ### Key Features
 - **Security**: Path traversal protection, input validation, file size limits
@@ -203,6 +210,7 @@ The FileSystem tools are fully implemented and provide comprehensive file operat
 - **Error Resilience**: Structured error responses, graceful failure handling
 - **Automation**: Automatic directory creation, backup management, encoding detection
 - **Metadata**: Rich file metadata (size, modification time, line/word counts, file types)
+- **Diff Operations**: Unified diff format support with validation, preview, and rollback capabilities
 
 ### Usage Patterns
 ```python
@@ -214,3 +222,7 @@ write_files_batch(files={"output/analysis.json": json.dumps(signatures)})
 ```
 
 See `documentation/usage/filesystem_tools.md` for detailed usage examples and parameter documentation.
+
+## Development Memories
+
+- Always use `uv` to run python commands

@@ -74,7 +74,7 @@ class TestGetTargetFiles:
 
             assert "error" in result
             assert result["error"]["code"] == "INVALID_INPUT"
-    
+
     def test_git_status_not_in_git_repo(self):
         """Test error when trying to use git status outside git repository."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -82,11 +82,11 @@ class TestGetTargetFiles:
                 status="working",
                 project_root=temp_dir
             )
-            
+
             assert "error" in result
             assert result["error"]["code"] == "INVALID_INPUT"
             assert "Not in a git repository" in result["error"]["message"]
-    
+
     def test_invalid_status_mode(self):
         """Test error for invalid status mode."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -94,35 +94,35 @@ class TestGetTargetFiles:
                 status="invalid_mode",
                 project_root=temp_dir
             )
-            
+
             assert "error" in result
             assert result["error"]["code"] == "INVALID_INPUT"
             assert "Invalid status" in result["error"]["message"]
-    
+
     def test_multiple_patterns(self):
         """Test multiple glob patterns."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create diverse file structure
             files = [
-                "src/main.py", "src/utils.js", "tests/test.py", 
+                "src/main.py", "src/utils.js", "tests/test.py",
                 "docs/readme.md", "config.json", "style.css"
             ]
             for file_path in files:
                 full_path = Path(temp_dir) / file_path
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 full_path.write_text("content")
-            
+
             result = get_target_files_impl(
                 status="pattern",
                 patterns=["**/*.py", "**/*.js", "*.json"],
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             file_paths = {f["path"] for f in result["data"]["files"]}
             expected = {"src/main.py", "src/utils.js", "tests/test.py", "config.json"}
             assert file_paths == expected
-    
+
     def test_absolute_patterns(self):
         """Test absolute patterns within project."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -132,13 +132,13 @@ class TestGetTargetFiles:
                 full_path = Path(temp_dir) / file_path
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 full_path.write_text("content")
-            
+
             result = get_target_files_impl(
                 status="pattern",
                 patterns=["/src/*.py"],  # Absolute pattern
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             file_paths = {f["path"] for f in result["data"]["files"]}
             assert file_paths == {"src/main.py"}

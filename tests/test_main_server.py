@@ -32,7 +32,10 @@ class TestMainServer:
             "write_files_batch",
             "extract_method_signatures",
             "find_imports_for_files",
-            "scan_project_structure"
+            "load_documents_by_pattern",
+            "apply_file_diffs",
+            "preview_file_changes",
+            "validate_diffs"
         ]
 
         state_tools = [
@@ -78,7 +81,7 @@ class TestMainServer:
         tool_names = [tool for tool in tools]
 
         # Check each category has tools
-        filesystem_present = any("files" in name or "imports" in name or "structure" in name for name in tool_names)
+        filesystem_present = any("files" in name or "imports" in name or "documents" in name or "diffs" in name for name in tool_names)
         state_present = any("process" in name for name in tool_names)
         build_present = any("command" in name or "test" in name or "dependencies" in name for name in tool_names)
         analysis_present = any("duplicates" in name or "complexity" in name for name in tool_names)

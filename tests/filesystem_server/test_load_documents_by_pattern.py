@@ -74,44 +74,44 @@ class TestLoadDocumentsByPattern:
             assert len(result["data"]["documents"]) == 0
             assert "errors" in result["data"]
             assert any("binary" in error["error"] for error in result["data"]["errors"])
-    
+
     def test_encoding_auto_detection(self):
         """Test automatic encoding detection."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create files with different encodings
             utf8_file = Path(temp_dir) / "utf8.md"
             utf8_file.write_text("# 标题\n\n内容", encoding="utf-8")
-            
+
             ascii_file = Path(temp_dir) / "ascii.txt"
             ascii_file.write_text("Hello World", encoding="ascii")
-            
+
             result = load_documents_by_pattern_impl(
                 patterns=["*.md", "*.txt"],
                 project_root=temp_dir,
                 encoding="auto"
             )
-            
+
             assert "data" in result
             assert len(result["data"]["documents"]) == 2
             assert result["data"]["documents"]["utf8.md"]["content"] == "# 标题\n\n内容"
             assert result["data"]["documents"]["ascii.txt"]["content"] == "Hello World"
-    
+
     def test_explicit_encoding(self):
         """Test explicit encoding specification."""
         with tempfile.TemporaryDirectory() as temp_dir:
             test_file = Path(temp_dir) / "test.txt"
             test_file.write_text("Hello World", encoding="utf-8")
-            
+
             result = load_documents_by_pattern_impl(
                 patterns=["*.txt"],
                 project_root=temp_dir,
                 encoding="utf-8"
             )
-            
+
             assert "data" in result
             assert len(result["data"]["documents"]) == 1
             assert result["data"]["documents"]["test.txt"]["encoding"] == "utf-8"
-    
+
     def test_empty_patterns(self):
         """Test behavior with empty patterns list."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -119,12 +119,12 @@ class TestLoadDocumentsByPattern:
                 patterns=[],
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             assert len(result["data"]["documents"]) == 0
             assert result["data"]["summary"]["total_matched"] == 0
             assert result["data"]["summary"]["patterns_used"] == []
-    
+
     def test_document_type_classification(self):
         """Test document type classification."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -138,18 +138,18 @@ class TestLoadDocumentsByPattern:
                 "package.json": '{"name": "test"}',
                 ".env": "SECRET=value"
             }
-            
+
             for path, content in files.items():
                 (Path(temp_dir) / path).write_text(content)
-            
+
             result = load_documents_by_pattern_impl(
                 patterns=["*"],
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             documents = result["data"]["documents"]
-            
+
             # Check type classification
             assert documents["script.py"]["type"] == "python"
             assert documents["config.json"]["type"] == "json"
@@ -158,43 +158,43 @@ class TestLoadDocumentsByPattern:
             assert documents["Dockerfile"]["type"] == "dockerfile"
             assert documents["package.json"]["type"] == "json"  # Extension takes precedence over filename
             assert documents[".env"]["type"] == "environment"
-    
+
     def test_document_metadata(self):
         """Test document metadata extraction."""
         with tempfile.TemporaryDirectory() as temp_dir:
             content = "Line 1\nLine 2\nHello world test"
             test_file = Path(temp_dir) / "test.txt"
             test_file.write_text(content)
-            
+
             result = load_documents_by_pattern_impl(
                 patterns=["*.txt"],
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             doc = result["data"]["documents"]["test.txt"]
-            
+
             assert doc["lines"] == 3
             assert doc["words"] == 7  # "Line", "1", "Line", "2", "Hello", "world", "test"
             assert doc["size"] == len(content.encode())
             assert "modified" in doc
             assert "patterns" in doc and "*.txt" in doc["patterns"]
-    
+
     def test_multiple_pattern_matches(self):
         """Test files matching multiple patterns."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a file that matches multiple patterns
             test_file = Path(temp_dir) / "test.py"
             test_file.write_text("print('hello')")
-            
+
             result = load_documents_by_pattern_impl(
                 patterns=["*.py", "test.*", "**/*.py"],
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             assert len(result["data"]["documents"]) == 1  # Should not duplicate
-            
+
             doc = result["data"]["documents"]["test.py"]
             assert len(doc["patterns"]) == 3  # Should track all matching patterns
             assert set(doc["patterns"]) == {"*.py", "test.*", "**/*.py"}

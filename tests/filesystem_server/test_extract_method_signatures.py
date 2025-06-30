@@ -100,7 +100,7 @@ class MyClass {
 
             assert "error" in result
             assert result["error"]["code"] == "UNSUPPORTED"
-    
+
     def test_parameter_variations(self):
         """Test include_docstrings and include_decorators parameters."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -116,10 +116,10 @@ class TestClass:
         """Property with docstring."""
         return "value"
 '''
-            
+
             test_file = Path(temp_dir) / "test.py"
             test_file.write_text(python_code)
-            
+
             # Test without docstrings
             result = extract_method_signatures_impl(
                 file_path="test.py",
@@ -127,30 +127,30 @@ class TestClass:
                 include_docstrings=False,
                 include_decorators=True
             )
-            
+
             assert "data" in result
             signatures = result["data"]["signatures"]
-            
+
             # Find the function signature
             func_sig = next(s for s in signatures if s["name"] == "decorated_function")
             assert func_sig["docstring"] is None
             assert len(func_sig["decorators"]) > 0
-            
+
             # Test without decorators
             result = extract_method_signatures_impl(
-                file_path="test.py", 
+                file_path="test.py",
                 project_root=temp_dir,
                 include_docstrings=True,
                 include_decorators=False
             )
-            
+
             assert "data" in result
             signatures = result["data"]["signatures"]
-            
+
             func_sig = next(s for s in signatures if s["name"] == "decorated_function")
             assert func_sig["docstring"] is not None
             assert len(func_sig["decorators"]) == 0
-    
+
     def test_async_functions(self):
         """Test extraction of async functions."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -164,27 +164,27 @@ class AsyncClass:
         """An async method.""" 
         return True
 '''
-            
+
             test_file = Path(temp_dir) / "test.py"
             test_file.write_text(python_code)
-            
+
             result = extract_method_signatures_impl(
                 file_path="test.py",
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             signatures = result["data"]["signatures"]
-            
+
             # Find async function
             async_func = next(s for s in signatures if s["name"] == "async_function")
             assert async_func["is_async"] is True
             assert "async def" in async_func["signature"]
-            
+
             # Find async method
             async_method = next(s for s in signatures if s["name"] == "async_method")
             assert async_method["is_async"] is True
-    
+
     def test_complex_type_annotations(self):
         """Test complex type annotations extraction."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -199,19 +199,19 @@ def complex_function(
     """Function with complex types."""
     pass
 '''
-            
+
             test_file = Path(temp_dir) / "test.py"
             test_file.write_text(python_code)
-            
+
             result = extract_method_signatures_impl(
                 file_path="test.py",
                 project_root=temp_dir
             )
-            
+
             assert "data" in result
             signatures = result["data"]["signatures"]
             func_sig = signatures[0]
-            
+
             # Check that parameters have type annotations
             params = func_sig["parameters"]
             # Note: Complex type annotations might be simplified by AST parsing
