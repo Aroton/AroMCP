@@ -12,13 +12,14 @@ The project has a functional MCP server architecture with **Phase 1: FileSystem 
 
 **Implementation Status:**
 - ✅ Server architecture and tool signatures complete
-- ✅ FastMCP integration working
+- ✅ FastMCP integration working with JSON parameter middleware
 - ✅ **Phase 1: FileSystem Tools - FULLY IMPLEMENTED**
-  - ✅ All 6 filesystem tools implemented with full functionality
+  - ✅ All 9 filesystem tools implemented with full functionality
   - ✅ Comprehensive input validation, error handling, and security measures
-  - ✅ 46 comprehensive tests with 100% pass rate
   - ✅ Path traversal protection and encoding safety
   - ✅ Batch operations and atomic file writing with backup support
+  - ✅ Diff operations (apply, preview, validate) with rollback support
+  - ✅ JSON parameter middleware for automatic type conversion
 - ⚠️ Phases 2-6: Other tool categories are stub implementations (return empty/placeholder data)
 
 ## Planned Architecture
@@ -43,11 +44,14 @@ The project consists of six main tool categories:
 ## Development Commands
 
 - **Install dependencies**: `uv sync --dev` (uses uv package manager)
-- **Run server**: `python main.py` or `python -m src.aromcp.main_server`
-- **Run tests**: `pytest` 
-- **Code formatting**: `black src/ tests/`
-- **Linting**: `ruff check src/ tests/`
-- **Fix linting**: `ruff check --fix src/ tests/`
+- **Run server**: `uv run python main.py` or `uv run python -m src.aromcp.main_server`
+- **Run tests**: `uv run pytest` 
+- **Run single test**: `uv run pytest tests/filesystem_server/test_get_target_files.py::TestGetTargetFiles::test_basic_functionality`
+- **Code formatting**: `uv run black src/ tests/`
+- **Linting**: `uv run ruff check src/ tests/`
+- **Fix linting**: `uv run ruff check --fix src/ tests/`
+
+**Note**: Always use `uv run` prefix for all Python commands to ensure proper virtual environment and dependency resolution.
 
 ## Project Structure
 
@@ -84,6 +88,8 @@ The project consists of six main tool categories:
 3. **Project Agnostic** - Work with any project structure
 4. **Stateless Operations** - Most operations stateless except state server
 5. **Batch Operations** - Support batch operations to reduce round trips
+6. **Unified Server Architecture** - Single FastMCP server hosts all tools for simplified deployment
+7. **Parameter Flexibility** - JSON parameter middleware handles type conversion automatically
 
 ## Environment Variables
 
@@ -118,6 +124,41 @@ The project follows a structured documentation approach with the main README.md 
 
 - We use FastMCP server for this project. Always load the documentation index: https://gofastmcp.com/llms.txt - Only load documentation through *.md files located in llms.txt. DO NOT LOAD HTML PAGES.
 
+## Key Architectural Components
+
+### JSON Parameter Middleware (`src/aromcp/utils/json_parameter_middleware.py`)
+
+**Critical for MCP integration**: This middleware automatically converts JSON string parameters from MCP clients (like Claude Code) to proper Python types. This solves the common issue where list/dict parameters are passed as JSON strings instead of native types.
+
+**Usage in tools**:
+```python
+from ...utils.json_parameter_middleware import json_convert
+
+@mcp.tool
+@json_convert  # Automatically converts JSON strings to Python types
+def my_tool(patterns: list[str]) -> dict[str, Any]:
+    # patterns will be a proper list, even if passed as JSON string
+    return {"result": patterns}
+```
+
+**Key benefits**:
+- Automatic type conversion based on function signatures
+- Handles Union types (e.g., `str | list[str]`, `list[str] | None`)
+- Structured error responses for invalid JSON
+- Debug mode available for troubleshooting
+
+### Security Module (`src/aromcp/filesystem_server/_security.py`)
+
+**Path validation and project root management**:
+- `validate_file_path()` - Modern validation with structured error responses
+- `validate_file_path_legacy()` - Backward-compatible validation for existing tools
+- `get_project_root()` - Environment-based project root resolution from `MCP_FILE_ROOT`
+
+**Security features**:
+- Directory traversal protection
+- Path resolution validation
+- Project root boundary enforcement
+
 ## Implementation Conventions
 
 ### Code Organization
@@ -130,6 +171,31 @@ The project follows a structured documentation approach with the main README.md 
 - **Registration Functions**: `register_[category]_tools(mcp)` in `tools/__init__.py` files
 - **Implementation Functions**: `[tool_name]_impl(...)` for actual implementation
 - **Helper Functions**: Private functions prefixed with `_` (e.g., `_validate_file_path()`)
+
+### Parameter Handling Patterns
+**All FileSystem tools follow this pattern**:
+```python
+@mcp.tool
+@json_convert  # Always use for list/dict parameters
+def tool_name(
+    # Core parameters first
+    file_paths: str | list[str],  # Support both single and multiple
+    project_root: str | None = None,  # Auto-resolve to MCP_FILE_ROOT if None
+    # Feature flags
+    expand_patterns: bool = True,  # Enable glob pattern expansion
+    # Tool-specific parameters
+    ...
+) -> dict[str, Any]:
+    if project_root is None:
+        project_root = get_project_root()
+    # Implementation...
+```
+
+**Key patterns**:
+- Always default `project_root` to `None` and resolve using `get_project_root()`
+- Support both single strings and lists for file paths where appropriate
+- Use `expand_patterns=True` for glob pattern support
+- Apply `@json_convert` decorator for all tools accepting lists/dicts
 
 ### Error Handling Standards
 All tools must follow consistent error response format:
@@ -217,12 +283,68 @@ The FileSystem tools are fully implemented and provide comprehensive file operat
 # Common workflow: Find, Read, Analyze, Write
 files = get_target_files(status="pattern", patterns=["**/*.py"])
 content = read_files_batch(file_paths=[f["path"] for f in files["data"]["files"]])
-signatures = extract_method_signatures(file_path="src/main.py")
-write_files_batch(files={"output/analysis.json": json.dumps(signatures)})
+
+# Multi-file signature extraction with pattern support
+signatures = extract_method_signatures(file_paths=["src/**/*.py"])
+
+# Batch operations for efficiency
+write_files_batch(files={
+    "output/analysis.json": json.dumps(signatures),
+    "output/files.json": json.dumps(files)
+})
+
+# Diff workflow with validation
+diffs = [{"file_path": "src/main.py", "diff_content": "..."}]
+validation = validate_diffs(diffs)  # Pre-validate
+if validation["data"]["valid"]:
+    preview = preview_file_changes(diffs)  # Preview changes
+    result = apply_file_diffs(diffs, create_backup=True)  # Apply with backup
 ```
+
+**Modern tool capabilities**:
+- All tools support glob patterns (e.g., `**/*.py`, `src/**/test_*.py`)
+- Multi-file operations are batch-optimized
+- Tools auto-resolve project root from environment
+- JSON parameters are automatically converted from strings
 
 See `documentation/usage/filesystem_tools.md` for detailed usage examples and parameter documentation.
 
+## Testing Architecture
+
+**Modular test structure** - Each tool has its own test file matching the pattern `test_[tool_name].py`:
+- Tests organized in classes like `TestGetTargetFiles` 
+- One test class per file for better organization
+- Comprehensive coverage including happy path, edge cases, and security validation
+- Isolated tests using temporary directories and cleanup
+
+**Key test utilities**:
+- `pytest` fixtures for temporary directories and sample files
+- Security validation tests in dedicated `test_security_validation.py`
+- Cross-tool integration tests for workflows
+- Performance tests for large file operations
+
+**Running tests**:
+```bash
+# All tests
+uv run pytest
+
+# Specific test file
+uv run pytest tests/filesystem_server/test_get_target_files.py
+
+# Specific test method
+uv run pytest tests/filesystem_server/test_get_target_files.py::TestGetTargetFiles::test_basic_functionality
+
+# With verbose output
+uv run pytest -v
+
+# With coverage
+uv run pytest --cov=src/aromcp
+```
+
 ## Development Memories
 
-- Always use `uv` to run python commands
+- Always use `uv run` prefix for all Python commands to ensure proper virtual environment
+- Apply `@json_convert` decorator to all tools that accept list/dict parameters
+- Default `project_root` parameters to `None` and resolve using `get_project_root()`
+- Use `validate_file_path_legacy()` for consistent path security validation
+- Implement comprehensive error handling with structured error responses
