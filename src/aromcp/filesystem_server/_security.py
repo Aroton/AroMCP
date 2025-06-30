@@ -1,16 +1,27 @@
 """Security validation utilities for filesystem operations."""
 
+import os
 from pathlib import Path
 from typing import Any
 
 
+def get_project_root() -> str:
+    """Get project root from environment or default.
+
+    Returns:
+        Project root directory path from MCP_FILE_ROOT environment variable,
+        or current directory as fallback
+    """
+    return os.getenv('MCP_FILE_ROOT', '.')
+
+
 def validate_file_path(file_path: str, project_root: str) -> dict[str, Any]:
     """Validate file path to prevent directory traversal attacks.
-    
+
     Args:
         file_path: File path to validate
         project_root: Root directory of the project
-        
+
     Returns:
         Dictionary with validation result and error message if invalid
     """
@@ -47,14 +58,14 @@ def validate_file_path(file_path: str, project_root: str) -> dict[str, Any]:
 
 def validate_file_path_legacy(file_path: str, project_root: Path) -> Path:
     """Legacy validation function for backward compatibility with existing tools.
-    
+
     Args:
         file_path: File path to validate
         project_root: Root directory of the project as Path object
-        
+
     Returns:
         Validated absolute path
-        
+
     Raises:
         ValueError: If path is invalid or outside project root
     """

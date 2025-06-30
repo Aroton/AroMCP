@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from ...utils.json_parameter_middleware import json_convert
+from .._security import get_project_root
 from .apply_file_diffs import apply_file_diffs_impl
 from .extract_method_signatures import extract_method_signatures_impl
 from .find_imports_for_files import find_imports_for_files_impl
@@ -17,150 +19,203 @@ def register_filesystem_tools(mcp):
     """Register filesystem tools with the MCP server."""
 
     @mcp.tool
+    @json_convert
     def get_target_files(
         status: str = "working",
         patterns: list[str] | None = None,
-        project_root: str = "."
+        project_root: str | None = None
     ) -> dict[str, Any]:
-        """List files based on git status or path patterns.
-        
+        """List files based on git status or glob patterns.
+
         Args:
-            status: Git status filter - "working", "staged", "branch", "commit", or "pattern"
-            patterns: File patterns to match (used when status="pattern")
-            project_root: Root directory of the project
+            status: Git status filter - "working", "staged", "branch", "commit", or
+                "pattern" (for glob pattern matching)
+            patterns: Glob patterns to match files (e.g., "**/*.py", "src/**/*.js")
+                     Used only when status="pattern"
+            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
         """
+        if project_root is None:
+            project_root = get_project_root()
         return get_target_files_impl(status, patterns, project_root)
 
     @mcp.tool
+    @json_convert
     def read_files_batch(
         file_paths: list[str],
-        project_root: str = ".",
-        encoding: str = "auto"
+        project_root: str | None = None,
+        encoding: str = "auto",
+        expand_patterns: bool = True
     ) -> dict[str, Any]:
         """Read multiple files in one operation.
-        
+
         Args:
-            file_paths: List of file paths to read (relative to project_root)
-            project_root: Root directory of the project
+            file_paths: List of file paths or glob patterns to read
+                       (relative to project_root)
+            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             encoding: File encoding ("auto", "utf-8", "ascii", etc.)
+            expand_patterns: Whether to expand glob patterns in file_paths
+                            (default: True)
         """
-        return read_files_batch_impl(file_paths, project_root, encoding)
+        if project_root is None:
+            project_root = get_project_root()
+        return read_files_batch_impl(
+            file_paths, project_root, encoding, expand_patterns
+        )
 
     @mcp.tool
     def write_files_batch(
         files: dict[str, str],
-        project_root: str = ".",
+        project_root: str | None = None,
         encoding: str = "utf-8",
         create_backup: bool = True
     ) -> dict[str, Any]:
         """Write multiple files atomically with automatic directory creation.
-        
+
         Args:
-            files: Dictionary mapping file paths to content
-            project_root: Root directory of the project
+            files: Dictionary mapping static file paths to content (no pattern support)
+            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             encoding: File encoding to use
             create_backup: Whether to create backups of existing files
         """
+        if project_root is None:
+            project_root = get_project_root()
         return write_files_batch_impl(files, project_root, encoding, create_backup)
 
     @mcp.tool
     def extract_method_signatures(
-        file_path: str,
-        project_root: str = ".",
+        file_paths: str | list[str],
+        project_root: str | None = None,
         include_docstrings: bool = True,
-        include_decorators: bool = True
+        include_decorators: bool = True,
+        expand_patterns: bool = True
     ) -> dict[str, Any]:
         """Parse code files to extract function/method signatures programmatically.
-        
+
         Args:
-            file_path: Path to the code file
-            project_root: Root directory of the project
+            file_paths: Path to code file(s) or glob pattern(s) - can be string or list
+            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             include_docstrings: Whether to include function docstrings
             include_decorators: Whether to include function decorators
+            expand_patterns: Whether to expand glob patterns in file_paths
+                            (default: True)
         """
-        return extract_method_signatures_impl(file_path, project_root, include_docstrings, include_decorators)
+        if project_root is None:
+            project_root = get_project_root()
+        return extract_method_signatures_impl(
+            file_paths, project_root, include_docstrings, include_decorators,
+            expand_patterns
+        )
 
     @mcp.tool
+    @json_convert
     def find_imports_for_files(
         file_paths: list[str],
-        project_root: str = ".",
-        search_patterns: list[str] | None = None
+        project_root: str | None = None,
+        search_patterns: list[str] | None = None,
+        expand_patterns: bool = True
     ) -> dict[str, Any]:
         """Identify which files import the given files (dependency analysis).
-        
+
         Args:
-            file_paths: List of files to find importers for
-            project_root: Root directory of the project
+            file_paths: List of files or glob patterns to find importers for
+            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             search_patterns: File patterns to search in (defaults to common code files)
+            expand_patterns: Whether to expand glob patterns in file_paths
+                            (default: True)
         """
-        return find_imports_for_files_impl(file_paths, project_root, search_patterns)
+        if project_root is None:
+            project_root = get_project_root()
+        return find_imports_for_files_impl(
+            file_paths, project_root, search_patterns, expand_patterns
+        )
 
     @mcp.tool
+    @json_convert
     def load_documents_by_pattern(
         patterns: list[str],
-        project_root: str = ".",
+        project_root: str | None = None,
         max_file_size: int = 1024 * 1024,
         encoding: str = "auto"
     ) -> dict[str, Any]:
         """Load multiple documents matching glob patterns (for standards, configs).
-        
+
         Args:
-            patterns: List of glob patterns to match files
-            project_root: Root directory of the project
+            patterns: List of glob patterns to match files (e.g., "**/*.md", "*.json")
+            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             max_file_size: Maximum file size to load (bytes)
             encoding: File encoding ("auto", "utf-8", etc.)
         """
-        return load_documents_by_pattern_impl(patterns, project_root, max_file_size, encoding)
+        if project_root is None:
+            project_root = get_project_root()
+        return load_documents_by_pattern_impl(
+            patterns, project_root, max_file_size, encoding
+        )
 
     @mcp.tool
+    @json_convert
     def apply_file_diffs(
         diffs: list[dict[str, Any]],
-        project_root: str = ".",
+        project_root: str | None = None,
         create_backup: bool = True,
         validate_before_apply: bool = True
     ) -> dict[str, Any]:
         """Apply multiple diffs to files with validation and rollback support.
-        
+
         Args:
             diffs: List of diff objects with 'file_path' and 'diff_content' keys
-            project_root: Root directory of the project
+                  (file_path must be static path, no pattern support)
+            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             create_backup: Whether to create backups before applying diffs
             validate_before_apply: Whether to validate all diffs before applying any
         """
-        return apply_file_diffs_impl(diffs, project_root, create_backup, validate_before_apply)
+        if project_root is None:
+            project_root = get_project_root()
+        return apply_file_diffs_impl(
+            diffs, project_root, create_backup, validate_before_apply
+        )
 
     @mcp.tool
+    @json_convert
     def preview_file_changes(
         diffs: list[dict[str, Any]],
-        project_root: str = ".",
+        project_root: str | None = None,
         include_full_preview: bool = True,
         max_preview_lines: int = 50
     ) -> dict[str, Any]:
         """Show consolidated preview of all pending changes.
-        
+
         Args:
             diffs: List of diff objects with 'file_path' and 'diff_content' keys
-            project_root: Root directory of the project
+                  (file_path must be static path, no pattern support)
+            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             include_full_preview: Whether to include full diff preview for each file
             max_preview_lines: Maximum lines to show in preview
         """
-        return preview_file_changes_impl(diffs, project_root, include_full_preview, max_preview_lines)
+        if project_root is None:
+            project_root = get_project_root()
+        return preview_file_changes_impl(
+            diffs, project_root, include_full_preview, max_preview_lines
+        )
 
     @mcp.tool
+    @json_convert
     def validate_diffs(
         diffs: list[dict[str, Any]],
-        project_root: str = ".",
+        project_root: str | None = None,
         check_conflicts: bool = True,
         check_syntax: bool = True
     ) -> dict[str, Any]:
         """Pre-validate diffs for conflicts and applicability.
-        
+
         Args:
             diffs: List of diff objects with 'file_path' and 'diff_content' keys
-            project_root: Root directory of the project
+                  (file_path must be static path, no pattern support)
+            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             check_conflicts: Whether to check for conflicts between diffs
             check_syntax: Whether to validate diff syntax
         """
+        if project_root is None:
+            project_root = get_project_root()
         return validate_diffs_impl(diffs, project_root, check_conflicts, check_syntax)
 
 

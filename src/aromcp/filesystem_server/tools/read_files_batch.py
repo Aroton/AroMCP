@@ -6,18 +6,22 @@ from typing import Any
 
 import chardet
 
+from .._security import validate_file_path_legacy
+
 
 def read_files_batch_impl(
     file_paths: list[str],
     project_root: str = ".",
-    encoding: str = "auto"
+    encoding: str = "auto",
+    expand_patterns: bool = True
 ) -> dict[str, Any]:
     """Read multiple files in one operation.
     
     Args:
-        file_paths: List of file paths to read (relative to project_root)
+        file_paths: List of file paths or glob patterns to read (relative to project_root)
         project_root: Root directory of the project
         encoding: File encoding ("auto", "utf-8", "ascii", etc.)
+        expand_patterns: Whether to expand glob patterns in file_paths (default: True)
         
     Returns:
         Dictionary with file contents and metadata
@@ -35,14 +39,49 @@ def read_files_batch_impl(
                 }
             }
 
+        # Expand patterns if requested
+        if expand_patterns:
+            expanded_paths = []
+            for file_path in file_paths:
+                if any(char in file_path for char in ['*', '?', '[', ']']):
+                    # This looks like a glob pattern
+                    matches = list(project_path.glob(file_path))
+                    if matches:
+                        for match in matches:
+                            if match.is_file():
+                                try:
+                                    rel_path = match.relative_to(project_path)
+                                    expanded_paths.append(str(rel_path))
+                                except ValueError:
+                                    # Skip files outside project root
+                                    continue
+                    else:
+                        # No matches found, keep original path for error reporting
+                        expanded_paths.append(file_path)
+                else:
+                    # Not a pattern, use as-is
+                    expanded_paths.append(file_path)
+
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_paths = []
+            for path in expanded_paths:
+                if path not in seen:
+                    seen.add(path)
+                    unique_paths.append(path)
+
+            actual_file_paths = unique_paths
+        else:
+            actual_file_paths = file_paths
+
         files_data = {}
         errors = []
         total_size = 0
 
-        for file_path in file_paths:
+        for file_path in actual_file_paths:
             try:
                 # Security: Validate file path to prevent directory traversal
-                abs_file_path = _validate_file_path(file_path, project_path)
+                abs_file_path = validate_file_path_legacy(file_path, project_path)
 
                 if not abs_file_path.exists():
                     errors.append({
@@ -95,10 +134,13 @@ def read_files_batch_impl(
             "data": {
                 "files": files_data,
                 "summary": {
-                    "total_files": len(file_paths),
+                    "total_files": len(actual_file_paths),
+                    "input_patterns": len(file_paths),
                     "successful": len(files_data),
                     "failed": len(errors),
-                    "total_size": total_size
+                    "total_size": total_size,
+                    "patterns_expanded": expand_patterns,
+                    "duration_ms": duration_ms
                 }
             }
         }
@@ -117,24 +159,6 @@ def read_files_batch_impl(
         }
 
 
-def _validate_file_path(file_path: str, project_root: Path) -> Path:
-    """Validate file path to prevent directory traversal attacks."""
-    # Convert to Path and resolve
-    path = Path(file_path)
-
-    # If it's absolute, it should be within project_root
-    if path.is_absolute():
-        abs_path = path.resolve()
-    else:
-        abs_path = (project_root / path).resolve()
-
-    # Security check: ensure the resolved path is within project_root
-    try:
-        abs_path.relative_to(project_root)
-    except ValueError:
-        raise ValueError(f"File path outside project root: {file_path}")
-
-    return abs_path
 
 
 def _read_file_content(file_path: Path, encoding: str = "auto") -> tuple[str, str]:

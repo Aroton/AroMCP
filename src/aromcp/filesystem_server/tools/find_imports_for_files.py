@@ -7,18 +7,22 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .._security import validate_file_path_legacy
+
 
 def find_imports_for_files_impl(
     file_paths: list[str],
     project_root: str = ".",
-    search_patterns: list[str] = None
+    search_patterns: list[str] | None = None,
+    expand_patterns: bool = True
 ) -> dict[str, Any]:
     """Identify which files import the given files (dependency analysis).
     
     Args:
-        file_paths: List of files to find importers for
+        file_paths: List of files or glob patterns to find importers for
         project_root: Root directory of the project
         search_patterns: File patterns to search in (defaults to common code files)
+        expand_patterns: Whether to expand glob patterns in file_paths (default: True)
         
     Returns:
         Dictionary with import analysis results
@@ -46,10 +50,43 @@ def find_imports_for_files_impl(
                 "**/*.cpp", "**/*.c", "**/*.h", "**/*.hpp"
             ]
 
+        # Expand patterns in file_paths if requested
+        if expand_patterns:
+            expanded_paths = []
+            for file_path in file_paths:
+                if any(char in file_path for char in ['*', '?', '[', ']']):
+                    # This looks like a glob pattern
+                    matches = list(project_path.glob(file_path))
+                    if matches:
+                        for match in matches:
+                            if match.is_file():
+                                try:
+                                    rel_path = match.relative_to(project_path)
+                                    expanded_paths.append(str(rel_path))
+                                except ValueError:
+                                    # Skip files outside project root
+                                    continue
+                    else:
+                        # No matches found, keep original path for error reporting
+                        expanded_paths.append(file_path)
+                else:
+                    # Not a pattern, use as-is
+                    expanded_paths.append(file_path)
+
+            # Remove duplicates while preserving order
+            seen = set()
+            actual_file_paths = []
+            for path in expanded_paths:
+                if path not in seen:
+                    seen.add(path)
+                    actual_file_paths.append(path)
+        else:
+            actual_file_paths = file_paths
+
         # Validate target files
         target_files = {}
-        for file_path in file_paths:
-            abs_path = _validate_file_path(file_path, project_path)
+        for file_path in actual_file_paths:
+            abs_path = validate_file_path_legacy(file_path, project_path)
             if abs_path.exists():
                 target_files[file_path] = {
                     "abs_path": abs_path,
@@ -61,11 +98,12 @@ def find_imports_for_files_impl(
 
         # Analyze imports in each search file
         import_results = {}
-        for target_file in file_paths:
+        for target_file in actual_file_paths:
             import_results[target_file] = {
                 "importers": [],
                 "import_count": 0,
-                "module_names": target_files.get(target_file, {}).get("module_names", [])
+                "module_names": target_files.get(target_file, {}).get("module_names", []),
+                "file_exists": target_file in target_files
             }
 
         for search_file in search_files:
@@ -97,10 +135,13 @@ def find_imports_for_files_impl(
             "data": {
                 "imports": import_results,
                 "summary": {
-                    "target_files": len(file_paths),
+                    "target_files": len(actual_file_paths),
+                    "input_patterns": len(file_paths),
                     "searched_files": len(search_files),
                     "total_importers": sum(len(r["importers"]) for r in import_results.values()),
-                    "total_imports": sum(r["import_count"] for r in import_results.values())
+                    "total_imports": sum(r["import_count"] for r in import_results.values()),
+                    "patterns_expanded": expand_patterns,
+                    "duration_ms": duration_ms
                 }
             }
         }
@@ -114,21 +155,6 @@ def find_imports_for_files_impl(
         }
 
 
-def _validate_file_path(file_path: str, project_root: Path) -> Path:
-    """Validate file path to prevent directory traversal attacks."""
-    path = Path(file_path)
-
-    if path.is_absolute():
-        abs_path = path.resolve()
-    else:
-        abs_path = (project_root / path).resolve()
-
-    try:
-        abs_path.relative_to(project_root)
-    except ValueError:
-        raise ValueError(f"File path outside project root: {file_path}")
-
-    return abs_path
 
 
 def _generate_module_names(file_path: str, abs_path: Path, project_root: Path) -> list[str]:

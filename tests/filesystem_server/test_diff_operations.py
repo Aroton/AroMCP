@@ -399,7 +399,7 @@ def main():
 
     def test_strict_unified_diff_format_validation(self, temp_project):
         """Test strict validation of unified diff format requirements."""
-        
+
         # Test missing file headers
         diff_no_headers = {
             "file_path": "test.py",
@@ -410,14 +410,14 @@ def main():
      return "world"
 """
         }
-        
+
         result = validate_diffs_impl([diff_no_headers], temp_project)
         assert result["data"]["overall_valid"] is False
         assert any("file headers" in error for error in result["data"]["individual_results"][0]["errors"])
-        
+
         # Test invalid hunk header format (single @ instead of double @@)
         diff_invalid_hunk = {
-            "file_path": "test.py", 
+            "file_path": "test.py",
             "diff_content": """--- test.py
 +++ test.py
 @ -1,3 +1,4 @
@@ -427,11 +427,11 @@ def main():
      return "world"
 """
         }
-        
+
         result = validate_diffs_impl([diff_invalid_hunk], temp_project)
         assert result["data"]["overall_valid"] is False
         assert any("No hunk headers found" in error for error in result["data"]["individual_results"][0]["errors"])
-        
+
         # Test proper unified diff format (should pass)
         diff_valid = {
             "file_path": "test.py",
@@ -444,10 +444,10 @@ def main():
      return "world"
 """
         }
-        
+
         result = validate_diffs_impl([diff_valid], temp_project)
         assert result["data"]["overall_valid"] is True
-        
+
         # Verify metadata is populated correctly
         individual_result = result["data"]["individual_results"][0]
         assert individual_result["metadata"]["hunk_count"] == 1

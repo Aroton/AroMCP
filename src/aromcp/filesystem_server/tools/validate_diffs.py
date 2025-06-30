@@ -191,7 +191,7 @@ def _validate_diff_syntax(diff_content: str, file_path: str, full_path: Path) ->
     if not has_file_header:
         result["valid"] = False
         result["errors"].append("No file headers found - not a valid unified diff (missing --- and +++ lines)")
-    
+
     if not has_hunk_header:
         result["valid"] = False
         result["errors"].append("No hunk headers found - not a valid unified diff")

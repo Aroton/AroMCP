@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .._security import validate_file_path_legacy
+
 
 def write_files_batch_impl(
     files: dict[str, str],
@@ -53,7 +55,7 @@ def write_files_batch_impl(
         # Validate all file paths first
         validated_files = {}
         for file_path, content in files.items():
-            abs_file_path = _validate_file_path(file_path, project_path)
+            abs_file_path = validate_file_path_legacy(file_path, project_path)
             validated_files[file_path] = {
                 "abs_path": abs_file_path,
                 "content": content,
@@ -150,24 +152,6 @@ def write_files_batch_impl(
         }
 
 
-def _validate_file_path(file_path: str, project_root: Path) -> Path:
-    """Validate file path to prevent directory traversal attacks."""
-    # Convert to Path and resolve
-    path = Path(file_path)
-
-    # If it's absolute, it should be within project_root
-    if path.is_absolute():
-        abs_path = path.resolve()
-    else:
-        abs_path = (project_root / path).resolve()
-
-    # Security check: ensure the resolved path is within project_root
-    try:
-        abs_path.relative_to(project_root)
-    except ValueError:
-        raise ValueError(f"File path outside project root: {file_path}")
-
-    return abs_path
 
 
 def _create_backup(validated_files: dict[str, dict[str, Any]], project_path: Path) -> Path:

@@ -43,7 +43,28 @@ uv run ruff check src/ tests/
 uv run ruff check --fix src/ tests/
 ```
 
+## Integration
+
+### Claude Code Integration
+
+AroMCP integrates seamlessly with Claude Code to provide enhanced filesystem operations and code analysis capabilities during AI-driven development sessions.
+
+**[Complete Claude Code Integration Guide →](documentation/claude_code.md)**
+
+Quick setup:
+```bash
+# Start AroMCP server
+uv run python main.py
+
+# Configure in Claude Code MCP settings
+# Set MCP_FILE_ROOT to your project directory
+# Available tools: file operations, code analysis, diff management
+```
+
 ## Documentation
+
+### Integration Guides
+- [Claude Code Integration](documentation/claude_code.md) - Complete setup guide for Claude Code integration
 
 ### Usage Guides
 - [FileSystem Tools Usage](documentation/usage/filesystem_tools.md) - Comprehensive guide for all filesystem operations

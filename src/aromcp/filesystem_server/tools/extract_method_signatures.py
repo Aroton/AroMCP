@@ -2,85 +2,171 @@
 
 import ast
 import re
-import time
 from pathlib import Path
 from typing import Any
 
+from .._security import validate_file_path_legacy
+
 
 def extract_method_signatures_impl(
-    file_path: str,
+    file_paths: str | list[str],
     project_root: str = ".",
     include_docstrings: bool = True,
-    include_decorators: bool = True
+    include_decorators: bool = True,
+    expand_patterns: bool = True
 ) -> dict[str, Any]:
     """Parse code files to extract function/method signatures programmatically.
-    
+
     Args:
-        file_path: Path to the code file
+        file_paths: Path to code file(s) or glob pattern(s) - can be string or list
         project_root: Root directory of the project
         include_docstrings: Whether to include function docstrings
         include_decorators: Whether to include function decorators
-        
+        expand_patterns: Whether to expand glob patterns in file_paths (default: True)
+
     Returns:
         Dictionary with extracted signatures and metadata
     """
+    import time
     start_time = time.time()
 
     try:
-        # Validate and normalize paths
+        # Validate and normalize project root
         project_path = Path(project_root).resolve()
-        abs_file_path = _validate_file_path(file_path, project_path)
-
-        if not abs_file_path.exists():
+        if not project_path.exists():
             return {
                 "error": {
                     "code": "NOT_FOUND",
-                    "message": f"File not found: {file_path}"
+                    "message": f"Project root does not exist: {project_root}"
                 }
             }
 
-        if not abs_file_path.is_file():
-            return {
-                "error": {
-                    "code": "INVALID_INPUT",
-                    "message": f"Path is not a file: {file_path}"
-                }
-            }
-
-        # Determine file type and parse accordingly
-        file_extension = abs_file_path.suffix.lower()
-
-        if file_extension == '.py':
-            signatures = _extract_python_signatures(
-                abs_file_path, include_docstrings, include_decorators
-            )
-        elif file_extension in ['.js', '.ts', '.jsx', '.tsx']:
-            signatures = _extract_javascript_signatures(
-                abs_file_path, include_docstrings, include_decorators
-            )
+        # Normalize file_paths to a list
+        if isinstance(file_paths, str):
+            input_paths = [file_paths]
         else:
-            return {
-                "error": {
-                    "code": "UNSUPPORTED",
-                    "message": f"Unsupported file type: {file_extension}"
+            input_paths = file_paths
+
+        # Expand patterns if requested
+        if expand_patterns:
+            expanded_paths = []
+            for file_path in input_paths:
+                if any(char in file_path for char in ['*', '?', '[', ']']):
+                    # This looks like a glob pattern
+                    matches = list(project_path.glob(file_path))
+                    if matches:
+                        for match in matches:
+                            if match.is_file() and match.suffix.lower() in ['.py', '.js', '.ts', '.jsx', '.tsx']:
+                                try:
+                                    rel_path = match.relative_to(project_path)
+                                    expanded_paths.append(str(rel_path))
+                                except ValueError:
+                                    # Skip files outside project root
+                                    continue
+                    else:
+                        # No matches found, keep original path for error reporting
+                        expanded_paths.append(file_path)
+                else:
+                    # Not a pattern, use as-is
+                    expanded_paths.append(file_path)
+
+            # Remove duplicates while preserving order
+            seen = set()
+            actual_file_paths = []
+            for path in expanded_paths:
+                if path not in seen:
+                    seen.add(path)
+                    actual_file_paths.append(path)
+        else:
+            actual_file_paths = input_paths
+
+        # Process all files
+        files_results = {}
+        errors = []
+        total_signatures = 0
+
+        for file_path in actual_file_paths:
+            try:
+                # Validate and normalize paths
+                abs_file_path = validate_file_path_legacy(file_path, project_path)
+
+                if not abs_file_path.exists():
+                    errors.append({
+                        "file": file_path,
+                        "error": "File not found"
+                    })
+                    continue
+
+                if not abs_file_path.is_file():
+                    errors.append({
+                        "file": file_path,
+                        "error": "Path is not a file"
+                    })
+                    continue
+
+                # Determine file type and parse accordingly
+                file_extension = abs_file_path.suffix.lower()
+
+                if file_extension == '.py':
+                    signatures = _extract_python_signatures(
+                        abs_file_path, include_docstrings, include_decorators
+                    )
+                elif file_extension in ['.js', '.ts', '.jsx', '.tsx']:
+                    signatures = _extract_javascript_signatures(
+                        abs_file_path, include_docstrings, include_decorators
+                    )
+                else:
+                    errors.append({
+                        "file": file_path,
+                        "error": f"Unsupported file type: {file_extension}"
+                    })
+                    continue
+
+                files_results[file_path] = {
+                    "file_type": file_extension[1:],  # Remove the dot
+                    "signatures": signatures,
+                    "summary": {
+                        "total_functions": len([
+                            s for s in signatures if s["type"] == "function"
+                        ]),
+                        "total_methods": len([
+                            s for s in signatures if s["type"] == "method"
+                        ]),
+                        "total_classes": len([
+                            s for s in signatures if s["type"] == "class"
+                        ]),
+                        "total_items": len(signatures)
+                    }
                 }
-            }
+                total_signatures += len(signatures)
+
+            except Exception as e:
+                errors.append({
+                    "file": file_path,
+                    "error": str(e)
+                })
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        return {
+        result = {
             "data": {
-                "file_path": file_path,
-                "file_type": file_extension[1:],  # Remove the dot
-                "signatures": signatures,
+                "files": files_results,
                 "summary": {
-                    "total_functions": len([s for s in signatures if s["type"] == "function"]),
-                    "total_methods": len([s for s in signatures if s["type"] == "method"]),
-                    "total_classes": len([s for s in signatures if s["type"] == "class"]),
-                    "total_items": len(signatures)
+                    "total_files": len(actual_file_paths),
+                    "input_patterns": len(input_paths),
+                    "successful": len(files_results),
+                    "failed": len(errors),
+                    "total_signatures": total_signatures,
+                    "patterns_expanded": expand_patterns,
+                    "duration_ms": duration_ms
                 }
             }
         }
+
+        if errors:
+            result["data"]["errors"] = errors
+
+        return result
 
     except Exception as e:
         return {
@@ -91,21 +177,6 @@ def extract_method_signatures_impl(
         }
 
 
-def _validate_file_path(file_path: str, project_root: Path) -> Path:
-    """Validate file path to prevent directory traversal attacks."""
-    path = Path(file_path)
-
-    if path.is_absolute():
-        abs_path = path.resolve()
-    else:
-        abs_path = (project_root / path).resolve()
-
-    try:
-        abs_path.relative_to(project_root)
-    except ValueError:
-        raise ValueError(f"File path outside project root: {file_path}")
-
-    return abs_path
 
 
 def _extract_python_signatures(
@@ -134,8 +205,13 @@ def _extract_python_signatures(
                     "line": node.lineno,
                     "end_line": getattr(node, 'end_lineno', None),
                     "signature": f"class {node.name}",
-                    "docstring": ast.get_docstring(node) if include_docstrings else None,
-                    "decorators": [self._get_decorator_name(d) for d in node.decorator_list] if include_decorators else [],
+                    "docstring": (
+                        ast.get_docstring(node) if include_docstrings else None
+                    ),
+                    "decorators": (
+                        [self._get_decorator_name(d) for d in node.decorator_list]
+                        if include_decorators else []
+                    ),
                     "bases": [self._get_base_name(base) for base in node.bases],
                     "methods": []
                 }
@@ -304,29 +380,69 @@ def _extract_javascript_signatures(
         signatures = []
         lines = content.split('\n')
 
+        # JavaScript/TypeScript keywords that should not be considered as methods
+        control_keywords = {
+            'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default',
+            'try', 'catch', 'finally', 'throw', 'return', 'break', 'continue',
+            'typeof', 'instanceof', 'new', 'delete', 'void', 'this', 'super',
+            'with', 'debugger', 'var', 'let', 'const', 'import', 'export',
+            'from', 'as', 'yield', 'await', 'async', 'function', 'class',
+            'extends', 'implements', 'interface', 'type', 'enum', 'namespace',
+            'module', 'declare', 'abstract', 'public', 'private', 'protected',
+            'static', 'readonly', 'get', 'set'
+        }
+
+        # Track class context to properly identify methods
+        class_depth = 0
+        brace_depth = 0
+
         # Patterns for different function types
         patterns = [
-            # Regular function declarations
-            (r'^\s*function\s+(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{', 'function'),
-            # Arrow functions
-            (r'^\s*(?:const|let|var)\s+(\w+)\s*=\s*(?:\((.*?)\)|(\w+))\s*=>\s*', 'arrow_function'),
-            # Method definitions in classes
-            (r'^\s*(?:(async)\s+)?(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{', 'method'),
+            # Regular function declarations (top-level only)
+            (r'^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{', 'function'),
+            # Arrow functions (top-level assignments)
+            (r'^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\((.*?)\)|(\w+))\s*=>\s*', 'arrow_function'),
             # Class declarations
-            (r'^\s*(?:export\s+)?(?:default\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?\s*{', 'class'),
+            (r'^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?(?:\s+implements\s+([^{]+))?\s*{', 'class'),
             # Interface declarations (TypeScript)
             (r'^\s*(?:export\s+)?interface\s+(\w+)(?:\s+extends\s+([^{]+))?\s*{', 'interface'),
             # Type declarations (TypeScript)
             (r'^\s*(?:export\s+)?type\s+(\w+)\s*=\s*([^;]+);?', 'type'),
+            # Method definitions (only when inside a class)
+            (r'^\s*(?:(async|static|private|protected|public|readonly)\s+)*(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{', 'method'),
         ]
 
         for line_num, line in enumerate(lines, 1):
+            # Track brace depth to understand class context
+            brace_depth += line.count('{') - line.count('}')
+
             for pattern, sig_type in patterns:
                 match = re.match(pattern, line)
                 if match:
-                    signature_info = _parse_js_signature(match, sig_type, line, line_num)
+                    # Special handling for method pattern
+                    if sig_type == 'method':
+                        # Extract method name - it's group 2 in our method pattern
+                        method_name = match.group(2)
+
+                        # Skip if this is a control structure keyword
+                        if method_name in control_keywords:
+                            continue
+
+                        # Only process methods if we're inside a class or interface
+                        if class_depth == 0:
+                            continue
+
+                    signature_info = _parse_js_signature(match, sig_type, line, line_num, class_depth > 0)
                     if signature_info:
                         signatures.append(signature_info)
+
+                        # Update class context tracking
+                        if sig_type in ['class', 'interface']:
+                            class_depth += 1
+
+            # Update class context when we exit a class
+            if class_depth > 0 and brace_depth <= 0:
+                class_depth = 0
 
         return signatures
 
@@ -334,7 +450,7 @@ def _extract_javascript_signatures(
         raise Exception(f"Failed to parse JavaScript/TypeScript file: {e}")
 
 
-def _parse_js_signature(match, sig_type, line, line_num):
+def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
     """Parse JavaScript/TypeScript signature from regex match."""
 
     if sig_type == 'function':
@@ -364,16 +480,31 @@ def _parse_js_signature(match, sig_type, line, line_num):
         }
 
     elif sig_type == 'method':
-        is_async = match.group(1) is not None
+        # New pattern: (async|static|private|protected|public|readonly)\s+)*(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?
+        # Group 1: modifiers (could be None if no modifiers)
+        # Group 2: method name
+        # Group 3: parameters
+        # Group 4: return type (optional)
+
+        modifiers = match.group(1) if match.group(1) else ""
         name = match.group(2)
         params = match.group(3)
-        return_type = match.group(4)
+        return_type = match.group(4) if len(match.groups()) >= 4 else None
 
-        signature = f"{'async ' if is_async else ''}{name}({params})"
+        is_async = 'async' in modifiers
+        is_static = 'static' in modifiers
+
+        # Build signature with modifiers
+        signature_parts = []
+        if modifiers.strip():
+            signature_parts.append(modifiers.strip())
+        signature_parts.append(f"{name}({params})")
+
+        signature = " ".join(signature_parts)
         if return_type:
             signature += f": {return_type.strip()}"
 
-        return {
+        method_info = {
             "name": name,
             "type": "method",
             "line": line_num,
@@ -382,6 +513,11 @@ def _parse_js_signature(match, sig_type, line, line_num):
             "return_type": return_type.strip() if return_type else None,
             "is_async": is_async
         }
+
+        if is_static:
+            method_info["is_static"] = True
+
+        return method_info
 
     elif sig_type == 'class':
         name = match.group(1)

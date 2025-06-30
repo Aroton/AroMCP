@@ -1,6 +1,5 @@
 """Get target files implementation."""
 
-import os
 import subprocess
 import time
 from pathlib import Path
@@ -35,7 +34,6 @@ def get_target_files_impl(
                 }
             }
 
-        os.chdir(project_path)
 
         files = []
 
@@ -56,7 +54,8 @@ def get_target_files_impl(
                     ["git", "rev-parse", "--git-dir"],
                     check=True,
                     capture_output=True,
-                    text=True
+                    text=True,
+                    cwd=project_path
                 )
             except subprocess.CalledProcessError:
                 return {
@@ -66,7 +65,7 @@ def get_target_files_impl(
                     }
                 }
 
-            files = _get_files_by_git_status(status)
+            files = _get_files_by_git_status(status, project_path)
 
         else:
             return {
@@ -133,7 +132,7 @@ def _get_files_by_pattern(patterns: list[str], project_path: Path) -> list[dict[
     return sorted(unique_files, key=lambda x: x["path"])
 
 
-def _get_files_by_git_status(status: str) -> list[dict[str, Any]]:
+def _get_files_by_git_status(status: str, project_path: Path) -> list[dict[str, Any]]:
     """Get files based on git status."""
     files = []
 
@@ -144,7 +143,8 @@ def _get_files_by_git_status(status: str) -> list[dict[str, Any]]:
                 ["git", "status", "--porcelain"],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                cwd=project_path
             )
 
             for line in result.stdout.strip().split('\n'):
@@ -177,7 +177,8 @@ def _get_files_by_git_status(status: str) -> list[dict[str, Any]]:
                 ["git", "diff", "--cached", "--name-status"],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                cwd=project_path
             )
 
             for line in result.stdout.strip().split('\n'):
@@ -203,7 +204,8 @@ def _get_files_by_git_status(status: str) -> list[dict[str, Any]]:
                     ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
                     capture_output=True,
                     text=True,
-                    check=True
+                    check=True,
+                    cwd=project_path
                 )
                 default_branch = result.stdout.strip().split('/')[-1]
             except subprocess.CalledProcessError:
@@ -213,7 +215,8 @@ def _get_files_by_git_status(status: str) -> list[dict[str, Any]]:
                         subprocess.run(
                             ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
                             capture_output=True,
-                            check=True
+                            check=True,
+                            cwd=project_path
                         )
                         default_branch = branch
                         break
@@ -226,7 +229,8 @@ def _get_files_by_git_status(status: str) -> list[dict[str, Any]]:
                 ["git", "diff", "--name-status", default_branch],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
+                cwd=project_path
             )
 
             for line in result.stdout.strip().split('\n'):
