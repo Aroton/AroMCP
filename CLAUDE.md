@@ -18,12 +18,14 @@ The project has a functional MCP server architecture with all tool signatures im
 
 ## Planned Architecture
 
-The project will consist of four main MCP servers:
+The project consists of six main tool categories:
 
-1. **FileSystem Server** (`filesystem-server`) - File I/O operations, git operations, code parsing
-2. **Process State Server** (`state-server`) - Persistent state management for long-running processes
-3. **Build Tools Server** (`build-server`) - Build, lint, test, and validation commands
-4. **Code Analysis Server** (`analysis-server`) - Deterministic code analysis operations
+1. **FileSystem Tools** - File I/O operations, git operations, code parsing, diff validation
+2. **State Management Tools** - Persistent state management for long-running processes
+3. **Build Tools** - Build, lint, test, and validation commands
+4. **Code Analysis Tools** - Deterministic code analysis operations
+5. **Context Window Management Tools** - Token usage tracking and optimization
+6. **Interactive Debugging Tools** - Debugging utilities and error investigation
 
 ## Development Guidelines
 
