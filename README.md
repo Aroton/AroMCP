@@ -4,9 +4,9 @@ A comprehensive suite of MCP (Model Context Protocol) servers designed as utilit
 
 ## Features
 
-- **FileSystem Tools** - File I/O operations, git integration, code parsing, and document loading
+- **FileSystem Tools** - File I/O operations, git integration, code parsing, and document loading ✅
+- **Build Tools** - Build, lint, test, and validation commands ✅
 - **State Management Tools** - Persistent state management for long-running processes (planned)
-- **Build Tools** - Build, lint, test, and validation commands (planned)
 - **Code Analysis Tools** - Deterministic code analysis operations (planned)
 - **Context Window Management Tools** - Token usage tracking and optimization (planned)
 - **Interactive Debugging Tools** - Debugging utilities and error investigation (planned)
@@ -68,6 +68,7 @@ uv run python main.py
 
 ### Usage Guides
 - [FileSystem Tools Usage](documentation/usage/filesystem_tools.md) - Comprehensive guide for all filesystem operations
+- [Build Tools Usage](documentation/usage/build_tools.md) - Complete guide for build, lint, test, and validation tools
 
 ### Technical Documentation
 - [Simplify Workflow](documentation/simplify-workflow.md) - Detailed technical design and architecture
@@ -90,8 +91,17 @@ src/aromcp/
 │       ├── extract_method_signatures.py
 │       ├── find_imports_for_files.py
 │       └── load_documents_by_pattern.py
+├── build_server/                      # Build, lint, test, and validation tools
+│   ├── tools.py                       # FastMCP tool registration  
+│   └── tools/                         # Individual tool implementations
+│       ├── run_command.py
+│       ├── get_build_config.py
+│       ├── check_dependencies.py
+│       ├── parse_typescript_errors.py
+│       ├── parse_lint_results.py
+│       ├── run_test_suite.py
+│       └── run_nextjs_build.py
 ├── state_server/                      # Planned: State management tools
-├── build_server/                      # Planned: Build and test tools
 └── analysis_server/                   # Planned: Code analysis tools
 ```
 
