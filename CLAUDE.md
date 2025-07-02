@@ -26,7 +26,14 @@ The project has a functional MCP server architecture with **Phase 1: FileSystem 
   - ✅ Structured output parsing for TypeScript, ESLint, tests
   - ✅ Multi-package manager support (npm, yarn, pnpm)
   - ✅ Specialized Next.js build handling with categorized error reporting
-- ⚠️ Phases 3-6: Other tool categories are stub implementations (return empty/placeholder data)
+- ✅ **Phase 4: Code Analysis Tools - FULLY IMPLEMENTED**
+  - ✅ All 8 analysis tools implemented with full functionality
+  - ✅ Standards management and pattern-based matching
+  - ✅ Context-aware standard loading based on file patterns
+  - ✅ Security vulnerability detection (SQL injection, hardcoded secrets, etc.)
+  - ✅ Code quality analysis (dead code, import cycles, component usage)
+  - ✅ Standards parsing for AI-driven ESLint rule generation
+- ⚠️ Phases 3, 5-6: Other tool categories are stub implementations (return empty/placeholder data)
 
 ## Planned Architecture
 
@@ -75,7 +82,7 @@ The project consists of six main tool categories:
   - `validate_diffs.py` - Pre-validate diffs for conflicts and syntax
 - `src/aromcp/state_server/tools.py` - Persistent state management tools (planned)
 - `src/aromcp/build_server/tools.py` - Build, lint, test execution tools (planned)
-- `src/aromcp/analysis_server/tools.py` - Code analysis and metrics tools (planned)
+- `src/aromcp/analysis_server/tools/` - Code analysis tools with registration and implementations
 - `main.py` - Entry point that imports and runs the main server
 - `tests/filesystem_server/` - Modular test suite with separate files per test class:
   - `test_get_target_files.py` - Tests for file listing and pattern matching
@@ -118,6 +125,8 @@ The project follows a structured documentation approach with the main README.md 
 
 ### Usage Documentation
 - `documentation/usage/filesystem_tools.md` - Comprehensive usage guide for all FileSystem tools with examples
+- `documentation/usage/analysis_tools.md` - Comprehensive usage guide for all Code Analysis tools with examples
+- `documentation/commands/` - Claude Code command documentation for AI-driven features
 - Additional usage guides will be added as new tool categories are implemented
 
 ### Documentation Standards
@@ -125,6 +134,20 @@ The project follows a structured documentation approach with the main README.md 
 - **Usage Guides**: Detailed examples, parameters, and practical usage patterns for each tool category
 - **Technical Documentation**: Architecture, design decisions, and implementation specifications
 - **Cross-References**: All documentation should link to related files to create a connected knowledge base
+
+## Claude Code Commands
+
+Some advanced features are implemented as Claude Code commands rather than MCP tools:
+
+- **ESLint Rule Generation**: Use the command at `documentation/commands/generate-eslint-rules.md` 
+  for AI-driven rule generation from your coding standards. This provides more intelligent 
+  rule creation than deterministic pattern matching.
+
+Commands offer several advantages:
+- AI understanding of standards intent and context
+- Complex semantic rule generation beyond pattern matching
+- Better handling of edge cases and nuanced requirements
+- Dynamic adaptation to project-specific patterns
 
 ## Server Configuration
 
@@ -315,6 +338,75 @@ if validation["data"]["valid"]:
 
 See `documentation/usage/filesystem_tools.md` for detailed usage examples and parameter documentation.
 
+## Code Analysis Tools (Phase 4) - Production Ready
+
+The Code Analysis Tools are fully implemented and provide comprehensive code analysis operations with a focus on standards-driven development. All tools include:
+
+### Available Tools
+1. **load_coding_standards** - Load all coding standards from the project with metadata
+2. **get_relevant_standards** - Get coding standards relevant to a specific file based on patterns
+3. **parse_standard_to_rules** - Parse markdown standards to extract enforceable rules
+4. **detect_security_patterns** - Detect security vulnerabilities (SQL injection, hardcoded secrets)
+5. **find_dead_code** - Find unused exports, functions, and orphaned files
+6. **find_import_cycles** - Detect circular import dependencies
+7. **analyze_component_usage** - Track component/function usage across codebase
+8. **extract_api_endpoints** - Extract and document API endpoints from route files
+
+### Key Features
+- **Standards Management**: Load and organize coding standards with metadata
+- **Context-Aware**: Automatically load relevant standards based on file patterns
+- **Security Analysis**: Detect common vulnerabilities with severity levels
+- **Code Quality**: Find dead code, circular dependencies, and usage patterns
+- **Rule Parsing**: Structure standards for AI-driven ESLint generation
+- **Performance**: Caching, batch operations, incremental processing
+
+### Usage Patterns
+```python
+# Common workflow: Load standards, parse for structure
+standards = load_coding_standards()
+rules = parse_standard_to_rules(standard_content, standard_id)
+# ESLint rule generation now uses Claude Code commands (see documentation/commands/)
+
+# Security and quality analysis
+detect_security_patterns(file_paths=["src/**/*.ts"], severity_threshold="medium")
+find_dead_code(confidence_threshold=0.9)
+find_import_cycles()
+
+# Get relevant standards for a file before editing
+relevant = get_relevant_standards("src/api/routes/user.ts")
+```
+
+### MCP Server Usage Guidelines
+
+When using the Code Analysis Tools in other projects with Claude Code:
+
+```markdown
+## Code Analysis Tools Usage
+
+The AroMCP server includes Code Analysis Tools for standards-driven development:
+
+### When to use:
+- **Before editing files**: Use `get_relevant_standards(file_path)` to load applicable coding standards
+- **After making changes**: Run `run_eslint` from Build Tools to validate against standards
+- **For security checks**: Use `detect_security_patterns` on modified files
+- **For cleanup**: Use `find_dead_code` and `find_import_cycles` periodically
+
+### Workflow pattern:
+1. When starting work on a file, get its standards: `get_relevant_standards("path/to/file.ts")`
+2. Cache the standards for the session to avoid repeated lookups
+3. For ESLint rule generation: Use Claude Code command (see documentation/commands/generate-eslint-rules.md)
+4. After completing changes, run linting: `run_eslint(file_paths=["path/to/file.ts"])`
+5. For new features, check security: `detect_security_patterns(file_paths=["path/to/file.ts"])`
+
+### Standards location:
+- Standards should be in `.aromcp/standards/` as markdown files with YAML frontmatter
+- Standards are matched to files using glob patterns in the frontmatter
+- More specific patterns take precedence over general ones
+- For ESLint rule generation, use the AI-driven Claude Code command approach
+```
+
+See `documentation/usage/analysis_tools.md` for detailed usage examples and parameter documentation.
+
 ## Testing Architecture
 
 **Modular test structure** - Each tool has its own test file matching the pattern `test_[tool_name].py`:
@@ -354,3 +446,5 @@ uv run pytest --cov=src/aromcp
 - Default `project_root` parameters to `None` and resolve using `get_project_root()`
 - Use `validate_file_path_legacy()` for consistent path security validation
 - Implement comprehensive error handling with structured error responses
+- ESLint rule generation is now handled via Claude Code commands for better AI-driven rule creation
+- The command documentation is at `documentation/commands/generate-eslint-rules.md`

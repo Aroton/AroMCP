@@ -117,19 +117,19 @@ process:
   name: "code-simplification"
   description: "Simplify complex code while maintaining functionality"
   category: "refactoring"
-  
+
   steps:
     - id: "identify_complex_code"
       description: "Find code with high complexity metrics"
       tools: ["analyze_complexity", "detect_code_smells"]
       state_checkpoint: true
-      
+
     - id: "analyze_dependencies"
       description: "Understand code dependencies before simplification"
       depends_on: ["identify_complex_code"]
       tools: ["extract_dependencies", "find_import_cycles"]
       state_checkpoint: true
-      
+
     - id: "create_simplification_plan"
       description: "Plan simplification approach"
       depends_on: ["analyze_dependencies"]
@@ -145,18 +145,18 @@ process:
   name: "technical-design"
   description: "Create technical design documentation"
   category: "documentation"
-  
+
   steps:
     - id: "analyze_requirements"
       description: "Analyze feature requirements and constraints"
       tools: ["extract_api_endpoints", "analyze_component_usage"]
       state_checkpoint: true
-      
+
     - id: "research_patterns"
       description: "Research applicable design patterns"
       depends_on: ["analyze_requirements"]
       state_checkpoint: true
-      
+
     - id: "draft_design"
       description: "Create initial technical design"
       depends_on: ["research_patterns"]
@@ -247,7 +247,7 @@ process:
   - Scans for API keys, passwords, connection strings in code
   - Identifies SQL concatenation, eval usage, command injection risks
   - Returns categorized findings with severity levels
-  
+
 - `find_import_cycles`: Detect circular dependencies between modules
   - Builds module dependency graph
   - Identifies cycles with full import chains
@@ -259,7 +259,7 @@ process:
   - Unreachable code paths
   - Orphaned files with no imports
   - Returns actionable removal suggestions
-  
+
 - `analyze_component_usage`: Track component/function usage across codebase
   - Where each component/function is imported and used
   - Usage frequency statistics
@@ -270,7 +270,7 @@ process:
   - Extracts HTTP methods, paths, parameters
   - Identifies middleware and authentication
   - Generates OpenAPI-compatible structure
-  
+
 **Additional Tools**:
 - `detect_code_smells`: Find long methods, high complexity, parameter overload
 - `analyze_test_coverage`: Parse coverage reports, identify untested paths
@@ -294,18 +294,18 @@ process:
   - Tracks tokens used per tool call
   - Maintains running total for current session
   - Warns when approaching context limits
-  
+
 - `suggest_context_checkpoint`: Recommend optimal points to create summaries
   - Analyzes token usage patterns
   - Identifies natural breakpoints in work
   - Suggests what information to preserve
-  
+
 - `compress_context`: Create condensed summaries of completed work
   - Generates structured summaries of file changes
   - Preserves key decisions and rationale
   - Maintains critical state information
   - Returns token-efficient representation
-  
+
 - `estimate_token_budget`: Calculate remaining context for planned operations
   - Estimates tokens needed for upcoming tasks
   - Provides recommendations for context management
@@ -346,19 +346,19 @@ process:
   - Creates restore points for experimentation
   - Includes relevant logs and error traces
   - Minimal overhead for quick snapshots
-  
+
 - `trace_execution_path`: Track code execution flow
   - Instruments code with lightweight tracing
   - Captures function calls and returns
   - Records variable values at key points
   - Returns execution graph
-  
+
 - `analyze_error_context`: Extract relevant context around errors
   - Parses stack traces to identify error locations
   - Extracts surrounding code context
   - Identifies recent changes that might be related
   - Suggests relevant files to investigate
-  
+
 - `suggest_debug_steps`: Provide debugging strategies
   - Analyzes error patterns
   - Suggests specific debugging approaches
@@ -509,8 +509,8 @@ Remember: These tools are utilities that provide efficient, deterministic operat
 The implementation is organized into six phases, each focusing on a single tool category. This approach allows for incremental development, testing, and validation.
 
 ### Phase 1: FileSystem Tools (Foundation)
-**Complexity**: Low-Medium  
-**Dependencies**: None  
+**Complexity**: Low-Medium
+**Dependencies**: None
 **Timeline**: 1-2 weeks
 
 **Tools to implement**:
@@ -533,8 +533,8 @@ The implementation is organized into six phases, each focusing on a single tool 
 - Security validation tests (path traversal, encoding)
 
 ### Phase 2: Build Tools
-**Complexity**: Low  
-**Dependencies**: FileSystem Tools (for reading config files)  
+**Complexity**: Low
+**Dependencies**: FileSystem Tools (for reading config files)
 **Timeline**: 1 week
 
 **Tools to implement**:
@@ -552,26 +552,9 @@ The implementation is organized into six phases, each focusing on a single tool 
 - README with command whitelist configuration
 - Example parsers for common tools (ESLint, Jest, tsc)
 
-### Phase 3: Context Window Management Tools
-**Complexity**: Low  
-**Dependencies**: None  
-**Timeline**: 3-4 days
-
-**Tools to implement**:
-- `track_context_usage` - Token counting implementation
-- `estimate_token_budget` - Budget calculation
-- `suggest_context_checkpoint` - Checkpoint recommendation logic
-- `compress_context` - Context summarization
-
-**Deliverables**:
-- Tool implementations in `src/aromcp/context_management/tools.py`
-- Token counting tests with various content types
-- README with context management strategies
-- Integration examples with state management
-
 ### Phase 4: Code Analysis Tools
-**Complexity**: Medium-High  
-**Dependencies**: FileSystem Tools (for code reading)  
+**Complexity**: Medium-High
+**Dependencies**: FileSystem Tools (for code reading)
 **Timeline**: 2 weeks
 
 **Priority tools to implement first**:
@@ -596,8 +579,8 @@ The implementation is organized into six phases, each focusing on a single tool 
 - Performance benchmarks for large codebases
 
 ### Phase 5: State Management Tools
-**Complexity**: Medium-High  
-**Dependencies**: FileSystem Tools (for YAML loading)  
+**Complexity**: Medium-High
+**Dependencies**: FileSystem Tools (for YAML loading)
 **Timeline**: 2 weeks
 
 **Tools to implement**:
@@ -622,8 +605,8 @@ The implementation is organized into six phases, each focusing on a single tool 
 - Migration guide for existing TODO lists
 
 ### Phase 6: Interactive Debugging Tools
-**Complexity**: High  
-**Dependencies**: FileSystem Tools, Code Analysis Tools  
+**Complexity**: High
+**Dependencies**: FileSystem Tools, Code Analysis Tools
 **Timeline**: 1-2 weeks
 
 **Tools to implement**:
