@@ -6,13 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from ...filesystem_server._security import get_project_root, validate_file_path
+from ...utils.pagination import paginate_list
 
 
 def parse_typescript_errors_impl(
     project_root: str | None = None,
     tsconfig_path: str = "tsconfig.json",
     include_warnings: bool = True,
-    timeout: int = 120
+    timeout: int = 120,
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Run tsc and return structured error data.
     
@@ -21,9 +24,11 @@ def parse_typescript_errors_impl(
         tsconfig_path: Path to tsconfig.json relative to project_root
         include_warnings: Whether to include TypeScript warnings
         timeout: Maximum execution time in seconds
+        page: Page number for pagination (1-based, default: 1)
+        max_tokens: Maximum tokens per page (default: 20000)
         
     Returns:
-        Dictionary with structured TypeScript error data
+        Dictionary with paginated structured TypeScript error data
     """
     try:
         # Resolve project root
@@ -83,15 +88,23 @@ def parse_typescript_errors_impl(
                 "compilation_success": result.returncode == 0
             }
             
-            return {
-                "data": {
-                    "errors": errors,
-                    "summary": summary,
-                    "categories": error_categories,
-                    "tsconfig_path": str(tsconfig_full_path),
-                    "command": " ".join(cmd)
-                }
+            # Create metadata for pagination
+            metadata = {
+                "summary": summary,
+                "categories": error_categories,
+                "tsconfig_path": str(tsconfig_full_path),
+                "command": " ".join(cmd)
             }
+            
+            # Apply pagination with deterministic sorting
+            # Sort by file, then by line, then by column for consistent ordering
+            return paginate_list(
+                items=errors,
+                page=page,
+                max_tokens=max_tokens,
+                sort_key=lambda x: (x.get("file", ""), x.get("line", 0), x.get("column", 0)),
+                metadata=metadata
+            )
             
         except subprocess.TimeoutExpired:
             return {

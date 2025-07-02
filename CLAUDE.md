@@ -8,43 +8,21 @@ AroMCP is a suite of MCP (Model Context Protocol) servers designed as utilities 
 
 ## Current State
 
-The project has a functional MCP server architecture with **Phase 1: FileSystem Tools** fully implemented. The main server (`src/aromcp/main_server.py`) unifies all MCP servers into a single FastMCP instance. FileSystem tools are production-ready with comprehensive functionality.
-
 **Implementation Status:**
-- ✅ Server architecture and tool signatures complete
-- ✅ FastMCP integration working with JSON parameter middleware
-- ✅ **Phase 1: FileSystem Tools - FULLY IMPLEMENTED**
-  - ✅ All 9 filesystem tools implemented with full functionality
-  - ✅ Comprehensive input validation, error handling, and security measures
-  - ✅ Path traversal protection and encoding safety
-  - ✅ Batch operations and atomic file writing with backup support
-  - ✅ Diff operations (apply, preview, validate) with rollback support
-  - ✅ JSON parameter middleware for automatic type conversion
-- ✅ **Phase 2: Build Tools - FULLY IMPLEMENTED**
-  - ✅ All 7 build tools implemented with full functionality
-  - ✅ Command whitelisting and security validation
-  - ✅ Structured output parsing for TypeScript, ESLint, tests
-  - ✅ Multi-package manager support (npm, yarn, pnpm)
-  - ✅ Specialized Next.js build handling with categorized error reporting
-- ✅ **Phase 4: Code Analysis Tools - FULLY IMPLEMENTED**
-  - ✅ All 8 analysis tools implemented with full functionality
-  - ✅ Standards management and pattern-based matching
-  - ✅ Context-aware standard loading based on file patterns
-  - ✅ Security vulnerability detection (SQL injection, hardcoded secrets, etc.)
-  - ✅ Code quality analysis (dead code, import cycles, component usage)
-  - ✅ Standards parsing for AI-driven ESLint rule generation
-- ⚠️ Phases 3, 5-6: Other tool categories are stub implementations (return empty/placeholder data)
+- ✅ **Phase 1: FileSystem Tools** - 9 tools with file I/O, git operations, diff validation, batch operations
+- ✅ **Phase 2: Build Tools** - 7 tools with command execution, output parsing, multi-package manager support  
+- ✅ **Phase 4: Code Analysis Tools** - 8 tools plus V2 rule generation (standards management, security detection, code quality)
+- ⚠️ Phases 3, 5-6: Other tool categories are stub implementations
 
-## Planned Architecture
+## Architecture
 
-The project consists of six main tool categories:
-
-1. **FileSystem Tools** - File I/O operations, git operations, code parsing, diff validation
-2. **Build Tools** - Build, lint, test, and validation commands (COMPLETED)
-3. **State Management Tools** - Persistent state management for long-running processes
-4. **Code Analysis Tools** - Deterministic code analysis operations
-5. **Context Window Management Tools** - Token usage tracking and optimization
-6. **Interactive Debugging Tools** - Debugging utilities and error investigation
+Six main tool categories:
+1. **FileSystem Tools** - File operations, git integration, code parsing, diff validation
+2. **Build Tools** - Build, lint, test execution with structured output parsing
+3. **State Management Tools** - Persistent state management (planned)
+4. **Code Analysis Tools** - Standards-driven analysis, security detection, quality checks
+5. **Context Window Management Tools** - Token optimization (planned)
+6. **Interactive Debugging Tools** - Debugging utilities (planned)
 
 ## Development Guidelines
 
@@ -104,54 +82,10 @@ The project consists of six main tool categories:
 6. **Unified Server Architecture** - Single FastMCP server hosts all tools for simplified deployment
 7. **Parameter Flexibility** - JSON parameter middleware handles type conversion automatically
 
-## Environment Variables
-
-```
-MCP_STATE_BACKEND=file|redis|postgres
-MCP_STATE_PATH=/path/to/state/storage
-MCP_FILE_ROOT=/path/to/project/root
-MCP_SECURITY_LEVEL=strict|standard|permissive
-MCP_LOG_LEVEL=debug|info|warn|error
-```
-
-## Documentation Structure
-
-The project follows a structured documentation approach with the main README.md serving as an index to detailed documentation:
-
-### Main Documentation Files
-- `README.md` - Project overview, installation, quick start, and index to detailed documentation
-- `CLAUDE.md` - Development guidelines and instructions for Claude Code (this file)
-- `documentation/simplify-workflow.md` - Main technical design and architecture specifications
-
-### Usage Documentation
-- `documentation/usage/filesystem_tools.md` - Comprehensive usage guide for all FileSystem tools with examples
-- `documentation/usage/analysis_tools.md` - Comprehensive usage guide for all Code Analysis tools with examples
-- `documentation/commands/` - Claude Code command documentation for AI-driven features
-- Additional usage guides will be added as new tool categories are implemented
-
-### Documentation Standards
-- **README.md**: Keep concise with overview and links to detailed documentation
-- **Usage Guides**: Detailed examples, parameters, and practical usage patterns for each tool category
-- **Technical Documentation**: Architecture, design decisions, and implementation specifications
-- **Cross-References**: All documentation should link to related files to create a connected knowledge base
-
-## Claude Code Commands
-
-Some advanced features are implemented as Claude Code commands rather than MCP tools:
-
-- **ESLint Rule Generation**: Use the command at `documentation/commands/generate-eslint-rules.md` 
-  for AI-driven rule generation from your coding standards. This provides more intelligent 
-  rule creation than deterministic pattern matching.
-
-Commands offer several advantages:
-- AI understanding of standards intent and context
-- Complex semantic rule generation beyond pattern matching
-- Better handling of edge cases and nuanced requirements
-- Dynamic adaptation to project-specific patterns
-
 ## Server Configuration
 
-- We use FastMCP server for this project. Always load the documentation index: https://gofastmcp.com/llms.txt - Only load documentation through *.md files located in llms.txt. DO NOT LOAD HTML PAGES.
+- Uses FastMCP server for this project
+- ESLint rule generation handled via Claude Code commands at `documentation/commands/generate-eslint-rules.md`
 
 ## Key Architectural Components
 
@@ -202,7 +136,7 @@ def my_tool(patterns: list[str]) -> dict[str, Any]:
 - **Helper Functions**: Private functions prefixed with `_` (e.g., `_validate_file_path()`)
 
 ### Parameter Handling Patterns
-**All FileSystem tools follow this pattern**:
+**All tools that return lists follow this pattern**:
 ```python
 @mcp.tool
 @json_convert  # Always use for list/dict parameters
@@ -214,10 +148,26 @@ def tool_name(
     expand_patterns: bool = True,  # Enable glob pattern expansion
     # Tool-specific parameters
     ...
+    # Pagination parameters (for tools returning lists)
+    page: int = 1,  # Page number (1-based)
+    max_tokens: int = 20000  # Maximum tokens per page
 ) -> dict[str, Any]:
     if project_root is None:
         project_root = get_project_root()
-    # Implementation...
+    
+    # Implementation that collects items...
+    items = collect_items()
+    
+    # For list-returning tools, use pagination
+    from ...utils.pagination import paginate_list
+    metadata = {"summary": summary_data}
+    return paginate_list(
+        items=items,
+        page=page,
+        max_tokens=max_tokens,
+        sort_key=lambda x: x.get("sort_field"),  # Deterministic sorting
+        metadata=metadata
+    )
 ```
 
 **Key patterns**:
@@ -225,6 +175,9 @@ def tool_name(
 - Support both single strings and lists for file paths where appropriate
 - Use `expand_patterns=True` for glob pattern support
 - Apply `@json_convert` decorator for all tools accepting lists/dicts
+- **Add pagination parameters** (`page`, `max_tokens`) for tools returning lists
+- **Use `paginate_list()`** with appropriate sort key for deterministic ordering
+- **Preserve metadata** in pagination response
 
 ### Error Handling Standards
 All tools must follow consistent error response format:
@@ -283,129 +236,6 @@ All tools must follow consistent error response format:
 - **Usage Examples**: README.md should contain practical examples for each tool
 - **Implementation Notes**: Complex logic should include inline comments explaining the approach
 
-## FileSystem Tools (Phase 1) - Production Ready
-
-The FileSystem tools are fully implemented and provide comprehensive file operations optimized for AI-driven workflows. All tools include:
-
-### Available Tools
-1. **get_target_files** - File listing with git integration and glob pattern matching
-2. **read_files_batch** - Multi-file reading with automatic encoding detection
-3. **write_files_batch** - Atomic multi-file writing with backup support and directory creation
-4. **extract_method_signatures** - AST-based code parsing for Python and regex for JavaScript/TypeScript
-5. **find_imports_for_files** - Import dependency analysis across multiple languages
-6. **load_documents_by_pattern** - Pattern-based document loading with automatic type classification
-7. **apply_file_diffs** - Apply unified diffs with validation and rollback support
-8. **preview_file_changes** - Preview diff changes before applying with impact analysis
-9. **validate_diffs** - Pre-validate diffs for conflicts, syntax, and applicability
-
-### Key Features
-- **Security**: Path traversal protection, input validation, file size limits
-- **Performance**: Batch operations, atomic transactions, efficient encoding detection
-- **Multi-language**: Python AST parsing, JavaScript/TypeScript regex parsing, generic text analysis
-- **Error Resilience**: Structured error responses, graceful failure handling
-- **Automation**: Automatic directory creation, backup management, encoding detection
-- **Metadata**: Rich file metadata (size, modification time, line/word counts, file types)
-- **Diff Operations**: Unified diff format support with validation, preview, and rollback capabilities
-
-### Usage Patterns
-```python
-# Common workflow: Find, Read, Analyze, Write
-files = get_target_files(status="pattern", patterns=["**/*.py"])
-content = read_files_batch(file_paths=[f["path"] for f in files["data"]["files"]])
-
-# Multi-file signature extraction with pattern support
-signatures = extract_method_signatures(file_paths=["src/**/*.py"])
-
-# Batch operations for efficiency
-write_files_batch(files={
-    "output/analysis.json": json.dumps(signatures),
-    "output/files.json": json.dumps(files)
-})
-
-# Diff workflow with validation
-diffs = [{"file_path": "src/main.py", "diff_content": "..."}]
-validation = validate_diffs(diffs)  # Pre-validate
-if validation["data"]["valid"]:
-    preview = preview_file_changes(diffs)  # Preview changes
-    result = apply_file_diffs(diffs, create_backup=True)  # Apply with backup
-```
-
-**Modern tool capabilities**:
-- All tools support glob patterns (e.g., `**/*.py`, `src/**/test_*.py`)
-- Multi-file operations are batch-optimized
-- Tools auto-resolve project root from environment
-- JSON parameters are automatically converted from strings
-
-See `documentation/usage/filesystem_tools.md` for detailed usage examples and parameter documentation.
-
-## Code Analysis Tools (Phase 4) - Production Ready
-
-The Code Analysis Tools are fully implemented and provide comprehensive code analysis operations with a focus on standards-driven development. All tools include:
-
-### Available Tools
-1. **load_coding_standards** - Load all coding standards from the project with metadata
-2. **get_relevant_standards** - Get coding standards relevant to a specific file based on patterns
-3. **parse_standard_to_rules** - Parse markdown standards to extract enforceable rules
-4. **detect_security_patterns** - Detect security vulnerabilities (SQL injection, hardcoded secrets)
-5. **find_dead_code** - Find unused exports, functions, and orphaned files
-6. **find_import_cycles** - Detect circular import dependencies
-7. **analyze_component_usage** - Track component/function usage across codebase
-8. **extract_api_endpoints** - Extract and document API endpoints from route files
-
-### Key Features
-- **Standards Management**: Load and organize coding standards with metadata
-- **Context-Aware**: Automatically load relevant standards based on file patterns
-- **Security Analysis**: Detect common vulnerabilities with severity levels
-- **Code Quality**: Find dead code, circular dependencies, and usage patterns
-- **Rule Parsing**: Structure standards for AI-driven ESLint generation
-- **Performance**: Caching, batch operations, incremental processing
-
-### Usage Patterns
-```python
-# Common workflow: Load standards, parse for structure
-standards = load_coding_standards()
-rules = parse_standard_to_rules(standard_content, standard_id)
-# ESLint rule generation now uses Claude Code commands (see documentation/commands/)
-
-# Security and quality analysis
-detect_security_patterns(file_paths=["src/**/*.ts"], severity_threshold="medium")
-find_dead_code(confidence_threshold=0.9)
-find_import_cycles()
-
-# Get relevant standards for a file before editing
-relevant = get_relevant_standards("src/api/routes/user.ts")
-```
-
-### MCP Server Usage Guidelines
-
-When using the Code Analysis Tools in other projects with Claude Code:
-
-```markdown
-## Code Analysis Tools Usage
-
-The AroMCP server includes Code Analysis Tools for standards-driven development:
-
-### When to use:
-- **Before editing files**: Use `get_relevant_standards(file_path)` to load applicable coding standards
-- **After making changes**: Run `run_eslint` from Build Tools to validate against standards
-- **For security checks**: Use `detect_security_patterns` on modified files
-- **For cleanup**: Use `find_dead_code` and `find_import_cycles` periodically
-
-### Workflow pattern:
-1. When starting work on a file, get its standards: `get_relevant_standards("path/to/file.ts")`
-2. Cache the standards for the session to avoid repeated lookups
-3. For ESLint rule generation: Use Claude Code command (see documentation/commands/generate-eslint-rules.md)
-4. After completing changes, run linting: `run_eslint(file_paths=["path/to/file.ts"])`
-5. For new features, check security: `detect_security_patterns(file_paths=["path/to/file.ts"])`
-
-### Standards location:
-- Standards should be in `.aromcp/standards/` as markdown files with YAML frontmatter
-- Standards are matched to files using glob patterns in the frontmatter
-- More specific patterns take precedence over general ones
-- For ESLint rule generation, use the AI-driven Claude Code command approach
-```
-
-See `documentation/usage/analysis_tools.md` for detailed usage examples and parameter documentation.
 
 ## Testing Architecture
 
@@ -439,6 +269,17 @@ uv run pytest -v
 uv run pytest --cov=src/aromcp
 ```
 
+## Pagination Support
+
+All list-returning tools support pagination to stay under 20k token limits:
+
+**Implementation (`src/aromcp/utils/pagination.py`)**:
+- Token-based sizing (1 token ≈ 4 characters)  
+- Deterministic ordering via sort keys
+- Binary search optimization for page size
+
+**Parameters**: All paginated tools accept `page` (default: 1) and `max_tokens` (default: 20000)
+
 ## Development Memories
 
 - Always use `uv run` prefix for all Python commands to ensure proper virtual environment
@@ -448,3 +289,6 @@ uv run pytest --cov=src/aromcp
 - Implement comprehensive error handling with structured error responses
 - ESLint rule generation is now handled via Claude Code commands for better AI-driven rule creation
 - The command documentation is at `documentation/commands/generate-eslint-rules.md`
+- **All list-returning tools now support pagination** - Use `page` and `max_tokens` parameters for large result sets
+- Pagination maintains deterministic ordering and includes comprehensive metadata
+- Token estimation uses conservative 4:1 character ratio to stay under 20k token limit

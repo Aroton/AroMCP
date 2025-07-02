@@ -85,7 +85,9 @@ def register_build_tools(mcp):
         project_root: str | None = None,
         tsconfig_path: str = "tsconfig.json",
         include_warnings: bool = True,
-        timeout: int = 120
+        timeout: int = 120,
+        page: int = 1,
+        max_tokens: int = 20000
     ) -> dict[str, Any]:
         """Run tsc and return structured error data.
 
@@ -94,11 +96,13 @@ def register_build_tools(mcp):
             tsconfig_path: Path to tsconfig.json relative to project_root
             include_warnings: Whether to include TypeScript warnings
             timeout: Maximum execution time in seconds
+            page: Page number for pagination (1-based, default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
         """
         if project_root is None:
             project_root = get_project_root()
         return parse_typescript_errors_impl(
-            project_root, tsconfig_path, include_warnings, timeout
+            project_root, tsconfig_path, include_warnings, timeout, page, max_tokens
         )
 
     @mcp.tool
@@ -109,7 +113,9 @@ def register_build_tools(mcp):
         target_files: list[str] | None = None,
         config_file: str | None = None,
         include_warnings: bool = True,
-        timeout: int = 120
+        timeout: int = 120,
+        page: int = 1,
+        max_tokens: int = 20000
     ) -> dict[str, Any]:
         """Run linters and return categorized issues.
 
@@ -120,11 +126,13 @@ def register_build_tools(mcp):
             config_file: Path to linter config file
             include_warnings: Whether to include warnings
             timeout: Maximum execution time in seconds
+            page: Page number for pagination (1-based, default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
         """
         if project_root is None:
             project_root = get_project_root()
         return parse_lint_results_impl(
-            linter, project_root, target_files, config_file, include_warnings, timeout
+            linter, project_root, target_files, config_file, include_warnings, timeout, page, max_tokens
         )
 
     @mcp.tool

@@ -8,13 +8,16 @@ from pathlib import Path
 from typing import Any
 
 from .._security import validate_file_path_legacy
+from ...utils.pagination import paginate_list
 
 
 def find_imports_for_files_impl(
     file_paths: list[str],
     project_root: str = ".",
     search_patterns: list[str] | None = None,
-    expand_patterns: bool = True
+    expand_patterns: bool = True,
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Identify which files import the given files (dependency analysis).
     
@@ -23,9 +26,11 @@ def find_imports_for_files_impl(
         project_root: Root directory of the project
         search_patterns: File patterns to search in (defaults to common code files)
         expand_patterns: Whether to expand glob patterns in file_paths (default: True)
+        page: Page number for pagination (1-based, default: 1)
+        max_tokens: Maximum tokens per page (default: 20000)
         
     Returns:
-        Dictionary with import analysis results
+        Dictionary with paginated import analysis results
     """
     start_time = time.time()
 
@@ -131,20 +136,37 @@ def find_imports_for_files_impl(
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        return {
-            "data": {
-                "imports": import_results,
-                "summary": {
-                    "target_files": len(actual_file_paths),
-                    "input_patterns": len(file_paths),
-                    "searched_files": len(search_files),
-                    "total_importers": sum(len(r["importers"]) for r in import_results.values()),
-                    "total_imports": sum(r["import_count"] for r in import_results.values()),
-                    "patterns_expanded": expand_patterns,
-                    "duration_ms": duration_ms
-                }
+        # Create a flat list of all importers for pagination
+        all_importers = []
+        for target_file, result in import_results.items():
+            for importer in result["importers"]:
+                importer_with_target = importer.copy()
+                importer_with_target["target_file"] = target_file
+                all_importers.append(importer_with_target)
+
+        # Create metadata for pagination
+        metadata = {
+            "imports_by_file": import_results,  # Include the original structure for reference
+            "summary": {
+                "target_files": len(actual_file_paths),
+                "input_patterns": len(file_paths),
+                "searched_files": len(search_files),
+                "total_importers": sum(len(r["importers"]) for r in import_results.values()),
+                "total_imports": sum(r["import_count"] for r in import_results.values()),
+                "patterns_expanded": expand_patterns,
+                "duration_ms": duration_ms
             }
         }
+
+        # Apply pagination with deterministic sorting
+        # Sort by target_file, then by importer file path
+        return paginate_list(
+            items=all_importers,
+            page=page,
+            max_tokens=max_tokens,
+            sort_key=lambda x: (x.get("target_file", ""), x.get("file", "")),
+            metadata=metadata
+        )
 
     except Exception as e:
         return {

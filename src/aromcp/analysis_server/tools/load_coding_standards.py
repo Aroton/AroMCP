@@ -1,6 +1,10 @@
-"""Load coding standards tool implementation."""
+"""Load coding standards tool implementation.
+
+Enhanced in V2 to include generation status and metadata from manifest.json.
+"""
 
 import os
+import json
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -145,6 +149,29 @@ def load_coding_standards_impl(
         except Exception as e:
             all_warnings.append(f"Pattern analysis failed: {str(e)}")
     
+    # Load V2 generation status from manifest.json
+    generation_status = _load_generation_status(project_root)
+    
+    # Enhance standards with generation information
+    if generation_status:
+        for standard in standards:
+            standard_id = standard["id"]
+            if standard_id in generation_status.get("rules", {}):
+                rule_info = generation_status["rules"][standard_id]
+                standard["generation_status"] = {
+                    "generated": True,
+                    "type": rule_info.get("type", "unknown"),
+                    "last_updated": rule_info.get("updated"),
+                    "severity": rule_info.get("severity")
+                }
+            else:
+                standard["generation_status"] = {
+                    "generated": False,
+                    "type": None,
+                    "last_updated": None,
+                    "severity": None
+                }
+
     # Build response data
     response_data = {
         "standards": standards,
@@ -153,6 +180,21 @@ def load_coding_standards_impl(
         "files_processed": len(markdown_files),
         "files_with_errors": len(processing_errors)
     }
+    
+    # Add V2 generation information
+    if generation_status:
+        response_data["v2_generation"] = {
+            "manifest_found": True,
+            "manifest_version": generation_status.get("version"),
+            "last_generation": generation_status.get("last_updated"),
+            "total_generated_rules": len(generation_status.get("rules", {})),
+            "statistics": generation_status.get("statistics", {})
+        }
+    else:
+        response_data["v2_generation"] = {
+            "manifest_found": False,
+            "suggestion": "Run ESLint rule generation to create V2 generated rules"
+        }
     
     # Add warnings if any
     if all_warnings:
@@ -205,3 +247,15 @@ def load_coding_standards_impl(
         }
     
     return {"data": response_data}
+
+
+def _load_generation_status(project_root: str) -> dict[str, Any] | None:
+    """Load V2 generation status from manifest.json."""
+    try:
+        manifest_path = os.path.join(project_root, ".aromcp", "generated-rules", "manifest.json")
+        if os.path.exists(manifest_path):
+            with open(manifest_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except (json.JSONDecodeError, IOError, OSError):
+        pass
+    return None

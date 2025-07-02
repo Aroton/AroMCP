@@ -5,11 +5,15 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ...utils.pagination import paginate_list
+
 
 def get_target_files_impl(
     status: str = "working",
     patterns: list[str] | None = None,
-    project_root: str = "."
+    project_root: str = ".",
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """List files based on git status or path patterns.
     
@@ -17,9 +21,11 @@ def get_target_files_impl(
         status: Git status filter - "working", "staged", "branch", "commit", or "pattern"
         patterns: File patterns to match (used when status="pattern")
         project_root: Root directory of the project
+        page: Page number for pagination (1-based, default: 1)
+        max_tokens: Maximum tokens per page (default: 20000)
         
     Returns:
-        Dictionary with file list and metadata
+        Dictionary with paginated file list and metadata
     """
     start_time = time.time()
 
@@ -77,14 +83,20 @@ def get_target_files_impl(
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        return {
-            "data": {
-                "files": files,
-                "count": len(files),
-                "status_filter": status,
-                "patterns": patterns
-            }
+        # Apply pagination with deterministic sorting by path
+        metadata = {
+            "status_filter": status,
+            "patterns": patterns,
+            "duration_ms": duration_ms
         }
+        
+        return paginate_list(
+            items=files,
+            page=page,
+            max_tokens=max_tokens,
+            sort_key=lambda x: x["path"],  # Deterministic sorting by path
+            metadata=metadata
+        )
 
     except Exception as e:
         return {
@@ -103,7 +115,6 @@ def _get_files_by_pattern(patterns: list[str], project_path: Path) -> list[dict[
         # Use pathlib's glob for pattern matching
         if pattern.startswith('/'):
             # Absolute pattern within project
-            glob_path = project_path / pattern[1:]
             matches = list(project_path.glob(pattern[1:]))
         else:
             # Relative pattern

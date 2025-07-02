@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ...filesystem_server._security import get_project_root, validate_file_path
+from ...utils.pagination import paginate_list
 
 
 def parse_lint_results_impl(
@@ -14,7 +15,9 @@ def parse_lint_results_impl(
     target_files: list[str] | None = None,
     config_file: str | None = None,
     include_warnings: bool = True,
-    timeout: int = 120
+    timeout: int = 120,
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Run linters and return categorized issues.
     
@@ -25,9 +28,11 @@ def parse_lint_results_impl(
         config_file: Path to linter config file
         include_warnings: Whether to include warnings
         timeout: Maximum execution time in seconds
+        page: Page number for pagination (1-based, default: 1)
+        max_tokens: Maximum tokens per page (default: 20000)
         
     Returns:
-        Dictionary with categorized lint issues
+        Dictionary with paginated categorized lint issues
     """
     try:
         # Resolve project root
@@ -46,11 +51,11 @@ def parse_lint_results_impl(
             
         # Build linter command based on type
         if linter == "eslint":
-            result = _run_eslint(project_root, target_files, config_file, include_warnings, timeout)
+            result = _run_eslint(project_root, target_files, config_file, include_warnings, timeout, page, max_tokens)
         elif linter == "prettier":
-            result = _run_prettier(project_root, target_files, config_file, timeout)
+            result = _run_prettier(project_root, target_files, config_file, timeout, page, max_tokens)
         elif linter == "stylelint":
-            result = _run_stylelint(project_root, target_files, config_file, include_warnings, timeout)
+            result = _run_stylelint(project_root, target_files, config_file, include_warnings, timeout, page, max_tokens)
         else:
             return {
                 "error": {
@@ -75,7 +80,9 @@ def _run_eslint(
     target_files: list[str] | None,
     config_file: str | None,
     include_warnings: bool,
-    timeout: int
+    timeout: int,
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Run ESLint and parse results."""
     cmd = ["npx", "eslint", "--format", "json"]
@@ -150,15 +157,23 @@ def _run_eslint(
             "exit_code": result.returncode
         }
         
-        return {
-            "data": {
-                "linter": "eslint",
-                "issues": issues,
-                "summary": summary,
-                "categories": categories,
-                "command": " ".join(cmd)
-            }
+        # Create metadata for pagination
+        metadata = {
+            "linter": "eslint",
+            "summary": summary,
+            "categories": categories,
+            "command": " ".join(cmd)
         }
+        
+        # Apply pagination with deterministic sorting
+        # Sort by file, then by line, then by column for consistent ordering
+        return paginate_list(
+            items=issues,
+            page=page,
+            max_tokens=max_tokens,
+            sort_key=lambda x: (x.get("file", ""), x.get("line", 0), x.get("column", 0)),
+            metadata=metadata
+        )
         
     except subprocess.TimeoutExpired:
         return {
@@ -180,7 +195,9 @@ def _run_prettier(
     project_root: str,
     target_files: list[str] | None,
     config_file: str | None,
-    timeout: int
+    timeout: int,
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Run Prettier and parse results."""
     cmd = ["npx", "prettier", "--check", "--list-different"]
@@ -235,15 +252,22 @@ def _run_prettier(
         
         categories = {"formatting": {"count": len(issues), "fixable": len(issues)}}
         
-        return {
-            "data": {
-                "linter": "prettier",
-                "issues": issues,
-                "summary": summary,
-                "categories": categories,
-                "command": " ".join(cmd)
-            }
+        # Create metadata for pagination
+        metadata = {
+            "linter": "prettier",
+            "summary": summary,
+            "categories": categories,
+            "command": " ".join(cmd)
         }
+        
+        # Apply pagination with deterministic sorting by file path
+        return paginate_list(
+            items=issues,
+            page=page,
+            max_tokens=max_tokens,
+            sort_key=lambda x: x.get("file", ""),
+            metadata=metadata
+        )
         
     except subprocess.TimeoutExpired:
         return {
@@ -266,7 +290,9 @@ def _run_stylelint(
     target_files: list[str] | None,
     config_file: str | None,
     include_warnings: bool,
-    timeout: int
+    timeout: int,
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Run Stylelint and parse results."""
     cmd = ["npx", "stylelint", "--formatter", "json"]
@@ -339,15 +365,23 @@ def _run_stylelint(
             "exit_code": result.returncode
         }
         
-        return {
-            "data": {
-                "linter": "stylelint",
-                "issues": issues,
-                "summary": summary,
-                "categories": categories,
-                "command": " ".join(cmd)
-            }
+        # Create metadata for pagination
+        metadata = {
+            "linter": "stylelint",
+            "summary": summary,
+            "categories": categories,
+            "command": " ".join(cmd)
         }
+        
+        # Apply pagination with deterministic sorting
+        # Sort by file, then by line, then by column for consistent ordering
+        return paginate_list(
+            items=issues,
+            page=page,
+            max_tokens=max_tokens,
+            sort_key=lambda x: (x.get("file", ""), x.get("line", 0), x.get("column", 0)),
+            metadata=metadata
+        )
         
     except subprocess.TimeoutExpired:
         return {

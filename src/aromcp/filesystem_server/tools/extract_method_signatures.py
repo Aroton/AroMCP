@@ -3,9 +3,10 @@
 import ast
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 from .._security import validate_file_path_legacy
+from ...utils.pagination import paginate_list
 
 
 def extract_method_signatures_impl(
@@ -13,7 +14,9 @@ def extract_method_signatures_impl(
     project_root: str = ".",
     include_docstrings: bool = True,
     include_decorators: bool = True,
-    expand_patterns: bool = True
+    expand_patterns: bool = True,
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Parse code files to extract function/method signatures programmatically.
 
@@ -23,9 +26,11 @@ def extract_method_signatures_impl(
         include_docstrings: Whether to include function docstrings
         include_decorators: Whether to include function decorators
         expand_patterns: Whether to expand glob patterns in file_paths (default: True)
+        page: Page number for pagination (1-based, default: 1)
+        max_tokens: Maximum tokens per page (default: 20000)
 
     Returns:
-        Dictionary with extracted signatures and metadata
+        Dictionary with paginated extracted signatures and metadata
     """
     import time
     start_time = time.time()
@@ -80,10 +85,10 @@ def extract_method_signatures_impl(
         else:
             actual_file_paths = input_paths
 
-        # Process all files
-        files_results = {}
+        # Process all files and collect signatures in a flat list
+        all_signatures = []
         errors = []
-        total_signatures = 0
+        files_processed = 0
 
         for file_path in actual_file_paths:
             try:
@@ -122,23 +127,13 @@ def extract_method_signatures_impl(
                     })
                     continue
 
-                files_results[file_path] = {
-                    "file_type": file_extension[1:],  # Remove the dot
-                    "signatures": signatures,
-                    "summary": {
-                        "total_functions": len([
-                            s for s in signatures if s["type"] == "function"
-                        ]),
-                        "total_methods": len([
-                            s for s in signatures if s["type"] == "method"
-                        ]),
-                        "total_classes": len([
-                            s for s in signatures if s["type"] == "class"
-                        ]),
-                        "total_items": len(signatures)
-                    }
-                }
-                total_signatures += len(signatures)
+                # Add file information to each signature and collect in flat list
+                for signature in signatures:
+                    signature["file_path"] = file_path
+                    signature["file_type"] = file_extension[1:]  # Remove the dot
+                    all_signatures.append(signature)
+                
+                files_processed += 1
 
             except Exception as e:
                 errors.append({
@@ -148,25 +143,30 @@ def extract_method_signatures_impl(
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        result = {
-            "data": {
-                "files": files_results,
-                "summary": {
-                    "total_files": len(actual_file_paths),
-                    "input_patterns": len(input_paths),
-                    "successful": len(files_results),
-                    "failed": len(errors),
-                    "total_signatures": total_signatures,
-                    "patterns_expanded": expand_patterns,
-                    "duration_ms": duration_ms
-                }
+        # Create metadata for pagination
+        metadata: Dict[str, Any] = {
+            "summary": {
+                "total_files": len(actual_file_paths),
+                "input_patterns": len(input_paths),
+                "successful": files_processed,
+                "failed": len(errors),
+                "patterns_expanded": expand_patterns,
+                "duration_ms": duration_ms
             }
         }
-
+        
         if errors:
-            result["data"]["errors"] = errors
+            metadata["errors"] = errors
 
-        return result
+        # Apply pagination with deterministic sorting
+        # Sort by file_path, then by name for consistent ordering
+        return paginate_list(
+            items=all_signatures,
+            page=page,
+            max_tokens=max_tokens,
+            sort_key=lambda x: (x.get("file_path", ""), x.get("name", "")),
+            metadata=metadata
+        )
 
     except Exception as e:
         return {

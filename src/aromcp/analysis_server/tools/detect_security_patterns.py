@@ -6,13 +6,16 @@ from typing import Any
 
 from ...filesystem_server.tools.get_target_files import get_target_files_impl
 from .._security import validate_file_path_legacy
+from ...utils.pagination import paginate_list
 
 
 def detect_security_patterns_impl(
     file_paths: str | list[str],
     project_root: str,
-    patterns: list[str] = None,
-    severity_threshold: str = "low"
+    patterns: list[str] | None = None,
+    severity_threshold: str = "low",
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Detect security vulnerability patterns in code files.
     
@@ -21,9 +24,11 @@ def detect_security_patterns_impl(
         project_root: Root directory of the project
         patterns: Security patterns to check (uses defaults if None)
         severity_threshold: Minimum severity to report (low|medium|high|critical)
+        page: Page number for pagination (1-based, default: 1)
+        max_tokens: Maximum tokens per page (default: 20000)
         
     Returns:
-        Dictionary containing detected security issues
+        Dictionary containing paginated detected security issues
     """
     try:
         # Convert single string to list
@@ -106,16 +111,29 @@ def detect_security_patterns_impl(
         # Generate summary statistics
         summary = _generate_security_summary(filtered_issues, files_analyzed)
 
-        return {
-            "data": {
-                "security_issues": filtered_issues,
-                "categorized_issues": categorized_issues,
-                "summary": summary,
-                "files_analyzed": files_analyzed,
-                "patterns_checked": len(security_patterns),
-                "severity_threshold": severity_threshold
-            }
+        # Create metadata for pagination
+        metadata = {
+            "categorized_issues": categorized_issues,
+            "summary": summary,
+            "files_analyzed": files_analyzed,
+            "patterns_checked": len(security_patterns),
+            "severity_threshold": severity_threshold
         }
+
+        # Apply pagination with deterministic sorting
+        # Sort by severity (critical > high > medium > low), then by file, then by line
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        return paginate_list(
+            items=filtered_issues,
+            page=page,
+            max_tokens=max_tokens,
+            sort_key=lambda x: (
+                severity_order.get(x.get("severity", "low"), 3),
+                x.get("file", ""),
+                x.get("line", 0)
+            ),
+            metadata=metadata
+        )
 
     except Exception as e:
         import traceback

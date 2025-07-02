@@ -23,7 +23,9 @@ def register_filesystem_tools(mcp):
     def get_target_files(
         status: str = "working",
         patterns: list[str] | None = None,
-        project_root: str | None = None
+        project_root: str | None = None,
+        page: int = 1,
+        max_tokens: int = 20000
     ) -> dict[str, Any]:
         """List files based on git status or glob patterns.
 
@@ -33,10 +35,12 @@ def register_filesystem_tools(mcp):
             patterns: Glob patterns to match files (e.g., "**/*.py", "src/**/*.js")
                      Used only when status="pattern"
             project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
+            page: Page number for pagination (1-based, default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
         """
         if project_root is None:
             project_root = get_project_root()
-        return get_target_files_impl(status, patterns, project_root)
+        return get_target_files_impl(status, patterns, project_root, page, max_tokens)
 
     @mcp.tool
     @json_convert
@@ -87,7 +91,9 @@ def register_filesystem_tools(mcp):
         project_root: str | None = None,
         include_docstrings: bool = True,
         include_decorators: bool = True,
-        expand_patterns: bool = True
+        expand_patterns: bool = True,
+        page: int = 1,
+        max_tokens: int = 20000
     ) -> dict[str, Any]:
         """Parse code files to extract function/method signatures programmatically.
 
@@ -98,12 +104,14 @@ def register_filesystem_tools(mcp):
             include_decorators: Whether to include function decorators
             expand_patterns: Whether to expand glob patterns in file_paths
                             (default: True)
+            page: Page number for pagination (1-based, default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
         """
         if project_root is None:
             project_root = get_project_root()
         return extract_method_signatures_impl(
             file_paths, project_root, include_docstrings, include_decorators,
-            expand_patterns
+            expand_patterns, page, max_tokens
         )
 
     @mcp.tool
@@ -112,7 +120,9 @@ def register_filesystem_tools(mcp):
         file_paths: list[str],
         project_root: str | None = None,
         search_patterns: list[str] | None = None,
-        expand_patterns: bool = True
+        expand_patterns: bool = True,
+        page: int = 1,
+        max_tokens: int = 20000
     ) -> dict[str, Any]:
         """Identify which files import the given files (dependency analysis).
 
@@ -122,11 +132,13 @@ def register_filesystem_tools(mcp):
             search_patterns: File patterns to search in (defaults to common code files)
             expand_patterns: Whether to expand glob patterns in file_paths
                             (default: True)
+            page: Page number for pagination (1-based, default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
         """
         if project_root is None:
             project_root = get_project_root()
         return find_imports_for_files_impl(
-            file_paths, project_root, search_patterns, expand_patterns
+            file_paths, project_root, search_patterns, expand_patterns, page, max_tokens
         )
 
     @mcp.tool

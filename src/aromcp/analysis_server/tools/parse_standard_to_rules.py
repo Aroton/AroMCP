@@ -1,4 +1,8 @@
-"""Parse a coding standard to extract enforceable rules."""
+"""Parse a coding standard to extract enforceable rules.
+
+DEPRECATED: This tool is deprecated in favor of the V2 workflow.
+Use extract_templates_from_standards for better structure extraction.
+"""
 
 import re
 from typing import Any, List, Dict
@@ -14,14 +18,36 @@ def parse_standard_to_rules_impl(
 ) -> dict[str, Any]:
     """Parse a coding standard to extract enforceable rules.
     
+    DEPRECATED: This tool is deprecated in favor of the V2 workflow.
+    Use extract_templates_from_standards for better AI-driven rule generation.
+    
     Args:
         standard_content: Markdown content of the coding standard
         standard_id: Unique identifier for the standard
         extract_examples: Whether to extract good/bad code examples
         
     Returns:
-        Dict with extracted rules and examples
+        Dict with extracted rules and examples, plus deprecation warning
     """
+    
+    # Return deprecation warning
+    return {
+        "error": {
+            "code": "DEPRECATED",
+            "message": "parse_standard_to_rules is deprecated in favor of V2 workflow",
+            "replacement": "extract_templates_from_standards",
+            "details": {
+                "reason": "Template extraction provides better structure for AI-driven rule generation",
+                "migration_guide": "Use extract_templates_from_standards to extract structured data, then use AI to generate ESLint rules",
+                "v2_workflow": [
+                    "1. Run extract_templates_from_standards() to extract structured data",
+                    "2. Run analyze_standards_for_rules() to get generation recipe", 
+                    "3. Use AI (Claude Code) to generate rules from templates and context",
+                    "4. Use write_generated_rule() and update_rule_manifest() to save results"
+                ]
+            }
+        }
+    }
     try:
         # Parse markdown structure
         lines = standard_content.split('\n')

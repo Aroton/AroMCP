@@ -15,6 +15,11 @@ from .find_dead_code import find_dead_code_impl
 from .find_import_cycles import find_import_cycles_impl
 from .analyze_component_usage import analyze_component_usage_impl
 from .extract_api_endpoints import extract_api_endpoints_impl
+from .extract_templates_from_standards import register_extract_templates_from_standards
+from .analyze_standards_for_rules import register_analyze_standards_for_rules
+from .write_generated_rule import register_write_generated_rule
+from .update_rule_manifest import register_update_rule_manifest
+from .write_ai_context_section import register_write_ai_context_section
 
 
 def register_analysis_tools(mcp):
@@ -81,7 +86,9 @@ def register_analysis_tools(mcp):
         file_paths: str | list[str],
         project_root: str | None = None,
         patterns: list[str] | None = None,
-        severity_threshold: str = "low"
+        severity_threshold: str = "low",
+        page: int = 1,
+        max_tokens: int = 20000
     ) -> dict[str, Any]:
         """Detect security vulnerability patterns in code files.
 
@@ -90,10 +97,12 @@ def register_analysis_tools(mcp):
             project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             patterns: Security patterns to check (uses defaults if None)
             severity_threshold: Minimum severity to report (low|medium|high|critical)
+            page: Page number for pagination (1-based, default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
         """
         if project_root is None:
             project_root = get_project_root()
-        return detect_security_patterns_impl(file_paths, project_root, patterns, severity_threshold)
+        return detect_security_patterns_impl(file_paths, project_root, patterns, severity_threshold, page, max_tokens)
 
     @mcp.tool
     @json_convert
@@ -168,6 +177,13 @@ def register_analysis_tools(mcp):
         if project_root is None:
             project_root = get_project_root()
         return extract_api_endpoints_impl(project_root, route_patterns, include_middleware)
+
+    # V2 Rule Generation Tools
+    register_extract_templates_from_standards(mcp)
+    register_analyze_standards_for_rules(mcp)
+    register_write_generated_rule(mcp)
+    register_update_rule_manifest(mcp)
+    register_write_ai_context_section(mcp)
 
 
 __all__ = [
