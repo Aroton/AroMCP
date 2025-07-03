@@ -64,16 +64,16 @@ aromcp.write_files_batch(files={"output.json": json.dumps(analysis)})
 ### Build & Quality Automation
 ```python
 # Integrated build, lint, and test workflows
-aromcp.run_eslint(file_paths=["src/**/*.ts"])
-aromcp.parse_typescript_errors(run_tsc_first=True)
-aromcp.run_test_suite(test_pattern="**/*.test.ts")
+aromcp.parse_lint_results(target_files=["src/**/*.ts"])
+aromcp.parse_typescript_errors()
+aromcp.run_test_suite(pattern="**/*.test.ts")
 ```
 
 ### Standards-Driven Development
 ```python
 # Context-aware coding standards
-standards = aromcp.get_relevant_standards("src/api/routes/user.ts")
-aromcp.detect_security_patterns(file_paths=["src/**/*.ts"])
+standards = aromcp.hints_for_file("src/api/routes/user.ts")
+aromcp.extract_api_endpoints(route_patterns=["src/**/*.ts"])
 aromcp.find_dead_code()
 ```
 
@@ -93,10 +93,44 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 
 ### Workflow Patterns
 - **File Operations**: Use `get_target_files` → `read_files_batch` → `write_files_batch`
-- **Code Quality**: After changes run `run_eslint` and `parse_typescript_errors`
-- **Standards**: Load with `get_relevant_standards` before editing files
+- **Code Quality**: After changes run `parse_lint_results` and `parse_typescript_errors`
+- **Standards**: Load with `hints_for_file` before editing files
 - **ESLint Generation**: Use orchestrated `generate_eslint_rules` for project-specific rules
 ```
+
+### Async Editing Flow
+
+For complex multi-file editing tasks, leverage parallel Task agents to maximize efficiency while respecting token limits:
+
+**Phase 1: Discovery & Planning**
+- Use AroMCP file discovery tools to identify all relevant files
+- Analyze the scope and complexity of changes needed
+- Determine optimal parallelization strategy based on file relationships and dependencies
+- Do not ever use "hints_for_file" tool during discovery
+
+**Phase 2: Parallel Editing**
+- Launch multiple Task agents simultaneously, each responsible for editing a subset of files
+- Let each agent decide how many files to handle based on their complexity and token constraints
+- Agents should use AroMCP tools exclusively for all file operations (read, write, create)
+- Allow agents to create new files as needed during the editing process
+- **ALWAYS** use hints_for_file tool before editing a file
+
+**Phase 3: Quality Assurance**
+- After editing completes, run comprehensive quality checks using `parse_lint_results`
+- Identify any linting errors, type errors, or other issues introduced during editing
+- Launch additional Task agents to fix specific errors, with each agent focusing on particular files or error types
+
+**Decision Points for AI:**
+- **Batch Size**: Agents decide optimal file grouping based on file size, complexity, and relationships
+- **Parallelization**: Determine how many parallel agents to launch based on task complexity
+- **Error Handling**: Choose appropriate strategies for fixing different types of errors
+- **File Dependencies**: Consider import relationships and dependencies when organizing work
+
+**Key Principles:**
+- **Token Efficiency**: Each Task agent works within manageable token limits
+- **Quality First**: Always validate changes before considering work complete
+- **Atomic Operations**: Each agent completes their assigned files entirely
+- **Flexible Coordination**: Allow agents to adapt their approach based on encountered challenges
 
 **[Complete Integration Guide →](documentation/claude_code.md)**
 
