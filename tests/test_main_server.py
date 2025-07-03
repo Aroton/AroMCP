@@ -25,7 +25,7 @@ class TestMainServer:
         tools = await mcp.get_tools()
         tool_names = [tool for tool in tools]
 
-        # Expected tool names from each module
+        # Expected tool names from each module (based on actual registrations)
         filesystem_tools = [
             "get_target_files",
             "read_files_batch",
@@ -49,20 +49,18 @@ class TestMainServer:
 
         build_tools = [
             "run_command",
+            "get_build_config",
+            "check_dependencies",
             "parse_typescript_errors",
             "parse_lint_results",
             "run_test_suite",
-            "check_dependencies",
-            "get_build_config"
+            "run_nextjs_build"
         ]
 
         analysis_tools = [
-            "find_duplicates",
-            "analyze_complexity",
-            "extract_dependencies",
-            "find_unused_exports",
-            "analyze_naming_patterns",
-            "generate_file_map"
+            "find_dead_code",
+            "find_import_cycles",
+            "extract_api_endpoints"
         ]
 
         all_expected_tools = filesystem_tools + state_tools + build_tools + analysis_tools
@@ -84,7 +82,7 @@ class TestMainServer:
         filesystem_present = any("files" in name or "imports" in name or "documents" in name or "diffs" in name for name in tool_names)
         state_present = any("process" in name for name in tool_names)
         build_present = any("command" in name or "test" in name or "dependencies" in name for name in tool_names)
-        analysis_present = any("duplicates" in name or "complexity" in name for name in tool_names)
+        analysis_present = any("dead_code" in name or "import_cycles" in name or "api_endpoints" in name for name in tool_names)
 
         assert filesystem_present, "No filesystem tools found"
         assert state_present, "No state management tools found"
@@ -99,7 +97,7 @@ class TestMainServer:
             "get_target_files",
             "initialize_process",
             "run_command",
-            "find_duplicates"
+            "find_dead_code"
         ]
 
         for tool_name in test_tools:

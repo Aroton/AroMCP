@@ -1,8 +1,5 @@
 """Tests for find_dead_code tool."""
 
-import json
-from pathlib import Path
-import pytest
 
 from aromcp.analysis_server.tools.find_dead_code import find_dead_code_impl
 
@@ -92,7 +89,7 @@ if __name__ == "__main__":
 
         assert "data" in result
         entry_points = result["data"]["entry_points"]
-        
+
         # Should detect both files as entry points
         assert len(entry_points) >= 2
         assert any("main.py" in ep for ep in entry_points)
@@ -125,7 +122,7 @@ def unused_utility():
         )
 
         assert "data" in result
-        
+
         # Should use the specified entry point
         entry_points = result["data"]["entry_points"]
         assert len(entry_points) == 1
@@ -165,7 +162,7 @@ def production_function():
         # Should have different entry points
         entry_points1 = result1["data"]["entry_points"]
         entry_points2 = result2["data"]["entry_points"]
-        
+
         assert len(entry_points2) >= len(entry_points1)
 
     def test_confidence_threshold_filtering(self, tmp_path):
@@ -202,7 +199,7 @@ if __name__ == "__main__":
         # High threshold should find fewer candidates
         candidates_high = result_high["data"]["dead_code_candidates"]
         candidates_low = result_low["data"]["dead_code_candidates"]
-        
+
         assert len(candidates_high) <= len(candidates_low)
 
     def test_javascript_dead_code_detection(self, tmp_path):
@@ -239,7 +236,7 @@ if (require.main === module) {
 
         assert "data" in result
         candidates = result["data"]["dead_code_candidates"]
-        
+
         # Should detect some unused JavaScript code
         assert len(candidates) > 0
 
@@ -288,8 +285,8 @@ console.log(tsFunction());
         )
 
         assert "data" in result
-        candidates = result["data"]["dead_code_candidates"]
-        
+        result["data"]["dead_code_candidates"]
+
         # Should analyze all supported file types
         usage_analysis = result["data"]["usage_analysis"]
         assert usage_analysis["total_files_analyzed"] >= 3
@@ -320,7 +317,7 @@ console.log(tsFunction());
 
         assert "error" in result1
         assert result1["error"]["code"] == "INVALID_INPUT"
-        
+
         assert "error" in result2
         assert result2["error"]["code"] == "INVALID_INPUT"
 
@@ -358,7 +355,7 @@ def unused_function_{i}():
 class Class{i}:
     def method(self):
         return "method_{i}"
-    
+
     def unused_method(self):
         return "unused_{i}"
 ''')
@@ -380,7 +377,7 @@ if __name__ == "__main__":
         )
 
         assert "data" in result
-        
+
         # Should process all files
         summary = result["data"]["summary"]
         assert summary["total_files_analyzed"] >= 10
@@ -406,7 +403,7 @@ def function_c():
 class TestClass:
     def method_a(self):
         return "used"
-    
+
     def method_b(self):
         return "unused"
 
@@ -423,7 +420,7 @@ if __name__ == "__main__":
 
         assert "data" in result
         usage_analysis = result["data"]["usage_analysis"]
-        
+
         # Check structure
         assert "definitions" in usage_analysis
         assert "usages" in usage_analysis
@@ -431,7 +428,7 @@ if __name__ == "__main__":
         assert "total_files_analyzed" in usage_analysis
 
         # Check usage stats structure
-        for identifier, stats in usage_analysis["usage_stats"].items():
+        for _identifier, stats in usage_analysis["usage_stats"].items():
             assert "definitions" in stats
             assert "usages" in stats
             assert "used_in_entry_points" in stats
@@ -463,15 +460,15 @@ if __name__ == "__main__":
 
         assert "data" in result
         recommendations = result["data"]["recommendations"]
-        
+
         # Should provide actionable recommendations
         assert isinstance(recommendations, list)
         assert len(recommendations) > 0
-        
+
         # Should mention high-confidence candidates if they exist
         candidates = result["data"]["dead_code_candidates"]
         high_confidence = [c for c in candidates if c["confidence"] >= 0.9]
-        
+
         if high_confidence:
             assert any("high-confidence" in rec.lower() for rec in recommendations)
 
@@ -542,13 +539,13 @@ if __name__ == "__main__":
 
         assert "data" in result
         usage_analysis = result["data"]["usage_analysis"]
-        
+
         # Check that imports are tracked
         assert "imports" in usage_analysis
-        
+
         # Should find unused exports
         candidates = result["data"]["dead_code_candidates"]
         unused_names = [c["identifier"] for c in candidates]
-        
+
         # Should identify unused exports with high confidence
         assert any("unused" in name.lower() for name in unused_names)

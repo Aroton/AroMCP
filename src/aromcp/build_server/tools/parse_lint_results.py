@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-from pathlib import Path
 from typing import Any
 
 from ...filesystem_server._security import get_project_root, validate_file_path
@@ -38,7 +37,7 @@ def parse_lint_results_impl(
         # Resolve project root
         if project_root is None:
             project_root = get_project_root()
-            
+
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
         if not validation_result.get("valid", False):
@@ -48,7 +47,7 @@ def parse_lint_results_impl(
                     "message": validation_result.get("error", "Invalid project root path")
                 }
             }
-            
+
         # Build linter command based on type
         if linter == "eslint":
             result = _run_eslint(project_root, target_files, config_file, include_warnings, timeout, page, max_tokens)
@@ -63,9 +62,9 @@ def parse_lint_results_impl(
                     "message": f"Unsupported linter: {linter}. Supported: eslint, prettier, stylelint"
                 }
             }
-            
+
         return result
-        
+
     except Exception as e:
         return {
             "error": {
@@ -86,16 +85,16 @@ def _run_eslint(
 ) -> dict[str, Any]:
     """Run ESLint and parse results."""
     cmd = ["npx", "eslint", "--format", "json"]
-    
+
     if config_file:
         cmd.extend(["--config", config_file])
-        
+
     if target_files:
         cmd.extend(target_files)
     else:
         # Default ESLint patterns
         cmd.extend([".", "--ext", ".js,.jsx,.ts,.tsx"])
-        
+
     try:
         result = subprocess.run(
             cmd,
@@ -104,27 +103,27 @@ def _run_eslint(
             text=True,
             timeout=timeout
         )
-        
+
         # ESLint returns exit code 1 when issues are found, which is expected
         issues = []
-        
+
         if result.stdout:
             try:
                 eslint_results = json.loads(result.stdout)
-                
+
                 for file_result in eslint_results:
                     file_path = file_result.get("filePath", "")
                     # Make path relative to project root
                     if file_path.startswith(project_root):
                         file_path = file_path[len(project_root):].lstrip("/")
-                    
+
                     for message in file_result.get("messages", []):
                         severity = "error" if message.get("severity") == 2 else "warning"
-                        
+
                         # Skip warnings if not requested
                         if severity == "warning" and not include_warnings:
                             continue
-                            
+
                         issues.append({
                             "file": file_path,
                             "line": message.get("line", 0),
@@ -134,7 +133,7 @@ def _run_eslint(
                             "message": message.get("message", ""),
                             "fixable": message.get("fix") is not None
                         })
-                        
+
             except json.JSONDecodeError:
                 # Fallback to stderr if JSON parsing fails
                 return {
@@ -143,10 +142,10 @@ def _run_eslint(
                         "message": f"Failed to parse ESLint output: {result.stderr}"
                     }
                 }
-                
+
         # Categorize issues
         categories = _categorize_lint_issues(issues)
-        
+
         # Generate summary
         summary = {
             "total_errors": len([i for i in issues if i["severity"] == "error"]),
@@ -156,7 +155,7 @@ def _run_eslint(
             "fixable_issues": len([i for i in issues if i["fixable"]]),
             "exit_code": result.returncode
         }
-        
+
         # Create metadata for pagination
         metadata = {
             "linter": "eslint",
@@ -164,7 +163,7 @@ def _run_eslint(
             "categories": categories,
             "command": " ".join(cmd)
         }
-        
+
         # Apply pagination with deterministic sorting
         # Sort by file, then by line, then by column for consistent ordering
         return paginate_list(
@@ -174,7 +173,7 @@ def _run_eslint(
             sort_key=lambda x: (x.get("file", ""), x.get("line", 0), x.get("column", 0)),
             metadata=metadata
         )
-        
+
     except subprocess.TimeoutExpired:
         return {
             "error": {
@@ -201,16 +200,16 @@ def _run_prettier(
 ) -> dict[str, Any]:
     """Run Prettier and parse results."""
     cmd = ["npx", "prettier", "--check", "--list-different"]
-    
+
     if config_file:
         cmd.extend(["--config", config_file])
-        
+
     if target_files:
         cmd.extend(target_files)
     else:
         # Default Prettier patterns
         cmd.extend(["**/*.{js,jsx,ts,tsx,json,css,scss,md}"])
-        
+
     try:
         result = subprocess.run(
             cmd,
@@ -219,9 +218,9 @@ def _run_prettier(
             text=True,
             timeout=timeout
         )
-        
+
         issues = []
-        
+
         # Prettier lists files that need formatting
         if result.stdout:
             for line in result.stdout.strip().split("\n"):
@@ -230,7 +229,7 @@ def _run_prettier(
                     # Make path relative to project root
                     if file_path.startswith(project_root):
                         file_path = file_path[len(project_root):].lstrip("/")
-                        
+
                     issues.append({
                         "file": file_path,
                         "line": 0,
@@ -240,7 +239,7 @@ def _run_prettier(
                         "message": "File is not formatted according to Prettier rules",
                         "fixable": True
                     })
-                    
+
         summary = {
             "total_errors": 0,
             "total_warnings": len(issues),
@@ -249,9 +248,9 @@ def _run_prettier(
             "fixable_issues": len(issues),
             "exit_code": result.returncode
         }
-        
+
         categories = {"formatting": {"count": len(issues), "fixable": len(issues)}}
-        
+
         # Create metadata for pagination
         metadata = {
             "linter": "prettier",
@@ -259,7 +258,7 @@ def _run_prettier(
             "categories": categories,
             "command": " ".join(cmd)
         }
-        
+
         # Apply pagination with deterministic sorting by file path
         return paginate_list(
             items=issues,
@@ -268,7 +267,7 @@ def _run_prettier(
             sort_key=lambda x: x.get("file", ""),
             metadata=metadata
         )
-        
+
     except subprocess.TimeoutExpired:
         return {
             "error": {
@@ -296,16 +295,16 @@ def _run_stylelint(
 ) -> dict[str, Any]:
     """Run Stylelint and parse results."""
     cmd = ["npx", "stylelint", "--formatter", "json"]
-    
+
     if config_file:
         cmd.extend(["--config", config_file])
-        
+
     if target_files:
         cmd.extend(target_files)
     else:
         # Default Stylelint patterns
         cmd.extend(["**/*.{css,scss,sass,less}"])
-        
+
     try:
         result = subprocess.run(
             cmd,
@@ -314,26 +313,26 @@ def _run_stylelint(
             text=True,
             timeout=timeout
         )
-        
+
         issues = []
-        
+
         if result.stdout:
             try:
                 stylelint_results = json.loads(result.stdout)
-                
+
                 for file_result in stylelint_results:
                     file_path = file_result.get("source", "")
                     # Make path relative to project root
                     if file_path.startswith(project_root):
                         file_path = file_path[len(project_root):].lstrip("/")
-                    
+
                     for warning in file_result.get("warnings", []):
                         severity = warning.get("severity", "warning")
-                        
+
                         # Skip warnings if not requested
                         if severity == "warning" and not include_warnings:
                             continue
-                            
+
                         issues.append({
                             "file": file_path,
                             "line": warning.get("line", 0),
@@ -343,7 +342,7 @@ def _run_stylelint(
                             "message": warning.get("text", ""),
                             "fixable": False  # Stylelint doesn't provide fix info in JSON
                         })
-                        
+
             except json.JSONDecodeError:
                 return {
                     "error": {
@@ -351,10 +350,10 @@ def _run_stylelint(
                         "message": f"Failed to parse Stylelint output: {result.stderr}"
                     }
                 }
-                
+
         # Categorize issues
         categories = _categorize_lint_issues(issues)
-        
+
         # Generate summary
         summary = {
             "total_errors": len([i for i in issues if i["severity"] == "error"]),
@@ -364,7 +363,7 @@ def _run_stylelint(
             "fixable_issues": len([i for i in issues if i["fixable"]]),
             "exit_code": result.returncode
         }
-        
+
         # Create metadata for pagination
         metadata = {
             "linter": "stylelint",
@@ -372,7 +371,7 @@ def _run_stylelint(
             "categories": categories,
             "command": " ".join(cmd)
         }
-        
+
         # Apply pagination with deterministic sorting
         # Sort by file, then by line, then by column for consistent ordering
         return paginate_list(
@@ -382,7 +381,7 @@ def _run_stylelint(
             sort_key=lambda x: (x.get("file", ""), x.get("line", 0), x.get("column", 0)),
             metadata=metadata
         )
-        
+
     except subprocess.TimeoutExpired:
         return {
             "error": {
@@ -402,12 +401,12 @@ def _run_stylelint(
 def _categorize_lint_issues(issues: list[dict[str, Any]]) -> dict[str, Any]:
     """Categorize lint issues by rule type."""
     categories = {}
-    
+
     for issue in issues:
         rule = issue.get("rule", "unknown")
         if not rule:
             rule = "unknown"
-            
+
         if rule not in categories:
             categories[rule] = {
                 "count": 0,
@@ -416,20 +415,20 @@ def _categorize_lint_issues(issues: list[dict[str, Any]]) -> dict[str, Any]:
                 "fixable": 0,
                 "files": set()
             }
-            
+
         categories[rule]["count"] += 1
         categories[rule][issue["severity"] + "s"] += 1
-        
+
         if issue.get("fixable", False):
             categories[rule]["fixable"] += 1
-            
+
         if issue["file"]:
             categories[rule]["files"].add(issue["file"])
-            
+
     # Convert sets to lists and sort by count
     for rule_data in categories.values():
         rule_data["files"] = list(rule_data["files"])
-        
+
     # Sort categories by count (most common first)
     return dict(
         sorted(

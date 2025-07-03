@@ -1,1 +1,0 @@
-"""Tests for ESLint metadata parsing modules."""

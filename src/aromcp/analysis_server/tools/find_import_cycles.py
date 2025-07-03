@@ -14,12 +14,12 @@ def find_import_cycles_impl(
     include_node_modules: bool = False
 ) -> dict[str, Any]:
     """Detect circular import dependencies in the codebase.
-    
+
     Args:
         project_root: Root directory of the project
         max_depth: Maximum cycle depth to search for
         include_node_modules: Whether to include node_modules in analysis
-        
+
     Returns:
         Dictionary containing detected import cycles and analysis results
     """
@@ -101,12 +101,12 @@ def find_import_cycles_impl(
 
 def _get_project_files(project_root: str, patterns: list[str], include_node_modules: bool) -> list[dict[str, Any]]:
     """Get all project files matching the patterns.
-    
+
     Args:
         project_root: Root directory of the project
         patterns: File patterns to match
         include_node_modules: Whether to include node_modules
-        
+
     Returns:
         List of file information dictionaries
     """
@@ -114,13 +114,12 @@ def _get_project_files(project_root: str, patterns: list[str], include_node_modu
 
     for pattern in patterns:
         result = get_target_files_impl(
-            project_root=project_root,
-            status="pattern",
-            patterns=[pattern]
+            patterns=[pattern],
+            project_root=project_root
         )
 
         if "data" in result:
-            files = result["data"]["files"]
+            files = result["data"]["items"]
 
             # Filter out node_modules if not included
             if not include_node_modules:
@@ -142,11 +141,11 @@ def _get_project_files(project_root: str, patterns: list[str], include_node_modu
 
 def _build_dependency_graph(project_files: list[dict[str, Any]], project_root: str) -> dict[str, list[str]]:
     """Build a dependency graph from import statements.
-    
+
     Args:
         project_files: List of project files
         project_root: Project root directory
-        
+
     Returns:
         Dictionary representing the dependency graph
     """
@@ -175,11 +174,11 @@ def _build_dependency_graph(project_files: list[dict[str, Any]], project_root: s
 
 def _extract_imports_from_file(file_path: str, project_root: str) -> list[str]:
     """Extract import statements from a file.
-    
+
     Args:
         file_path: Path to the file
         project_root: Project root directory
-        
+
     Returns:
         List of import module names
     """
@@ -199,10 +198,10 @@ def _extract_imports_from_file(file_path: str, project_root: str) -> list[str]:
 
 def _extract_python_imports(content: str) -> list[str]:
     """Extract imports from Python code using AST.
-    
+
     Args:
         content: Python file content
-        
+
     Returns:
         List of imported module names
     """
@@ -228,10 +227,10 @@ def _extract_python_imports(content: str) -> list[str]:
 
 def _extract_python_imports_regex(content: str) -> list[str]:
     """Extract Python imports using regex as fallback.
-    
+
     Args:
         content: Python file content
-        
+
     Returns:
         List of imported module names
     """
@@ -257,10 +256,10 @@ def _extract_python_imports_regex(content: str) -> list[str]:
 
 def _extract_javascript_imports(content: str) -> list[str]:
     """Extract imports from JavaScript/TypeScript code.
-    
+
     Args:
         content: JavaScript/TypeScript file content
-        
+
     Returns:
         List of imported module names
     """
@@ -295,12 +294,12 @@ def _extract_javascript_imports(content: str) -> list[str]:
 
 def _resolve_import_paths(imports: list[str], current_file: str, project_root: str) -> list[str]:
     """Resolve import paths to actual file paths.
-    
+
     Args:
         imports: List of import module names
         current_file: Current file path
         project_root: Project root directory
-        
+
     Returns:
         List of resolved file paths
     """
@@ -332,51 +331,99 @@ def _resolve_import_paths(imports: list[str], current_file: str, project_root: s
 
 def _resolve_relative_import(import_path: str, current_dir: Path, project_path: Path) -> Path | None:
     """Resolve relative import path.
-    
+
     Args:
         import_path: Relative import path
         current_dir: Directory of current file
         project_path: Project root path
-        
+
     Returns:
         Resolved file path or None
     """
-    # Remove leading dots and replace with directory traversal
-    parts = import_path.split('.')
-    up_levels = len([p for p in parts if p == ''])
+    # Handle JavaScript-style imports (e.g., './module.js', '../utils/helper.ts')
+    if '/' in import_path:
+        # JavaScript/TypeScript style import
+        if import_path.startswith('./'):
+            # Same directory
+            target_path = current_dir / import_path[2:]  # Remove './'
+        elif import_path.startswith('../'):
+            # Parent directory(ies)
+            parts = import_path.split('/')
+            target_dir = current_dir
+            # Count the number of '../' parts
+            up_count = 0
+            remaining_parts = []
+            for part in parts:
+                if part == '..':
+                    up_count += 1
+                elif part:  # Skip empty parts
+                    remaining_parts.append(part)
 
-    # Start from current directory and go up
-    target_dir = current_dir
-    for _ in range(up_levels - 1):
-        target_dir = target_dir.parent
-        if not target_dir.is_relative_to(project_path):
-            return None
+            # Go up the specified number of directories
+            for _ in range(up_count):
+                target_dir = target_dir.parent
+                if not target_dir.is_relative_to(project_path):
+                    return None
 
-    # Add remaining path parts
-    remaining_parts = [p for p in parts if p != '']
-    if remaining_parts:
-        target_path = target_dir / '/'.join(remaining_parts)
+            # Add remaining path
+            if remaining_parts:
+                target_path = target_dir / '/'.join(remaining_parts)
+            else:
+                target_path = target_dir
+        else:
+            # Treat as direct path from current directory
+            target_path = current_dir / import_path
+
+        # Check if the exact path exists
+        if target_path.exists() and target_path.is_relative_to(project_path):
+            return target_path
+
+        # If not, try adding common extensions
+        extensions = ['.js', '.ts', '.jsx', '.tsx', '.py']
+        for ext in extensions:
+            candidate = Path(str(target_path) + ext)
+            if candidate.exists() and candidate.is_relative_to(project_path):
+                return candidate
+
+        return None
+
     else:
-        target_path = target_dir
+        # Python-style import (e.g., '..module.submodule')
+        parts = import_path.split('.')
+        up_levels = len([p for p in parts if p == ''])
 
-    # Try different file extensions
-    extensions = ['.py', '.js', '.ts', '.jsx', '.tsx', '/__init__.py', '/index.js', '/index.ts']
+        # Start from current directory and go up
+        target_dir = current_dir
+        for _ in range(up_levels - 1):
+            target_dir = target_dir.parent
+            if not target_dir.is_relative_to(project_path):
+                return None
 
-    for ext in extensions:
-        candidate = Path(str(target_path) + ext)
-        if candidate.exists() and candidate.is_relative_to(project_path):
-            return candidate
+        # Add remaining path parts
+        remaining_parts = [p for p in parts if p != '']
+        if remaining_parts:
+            target_path = target_dir / '/'.join(remaining_parts)
+        else:
+            target_path = target_dir
 
-    return None
+        # Try different file extensions
+        extensions = ['.py', '.js', '.ts', '.jsx', '.tsx', '/__init__.py', '/index.js', '/index.ts']
+
+        for ext in extensions:
+            candidate = Path(str(target_path) + ext)
+            if candidate.exists() and candidate.is_relative_to(project_path):
+                return candidate
+
+        return None
 
 
 def _resolve_module_import(import_path: str, project_path: Path) -> Path | None:
     """Resolve module import within project.
-    
+
     Args:
         import_path: Module import path
         project_path: Project root path
-        
+
     Returns:
         Resolved file path or None
     """
@@ -407,11 +454,11 @@ def _resolve_module_import(import_path: str, project_path: Path) -> Path | None:
 
 def _find_cycles_in_graph(graph: dict[str, list[str]], max_depth: int) -> list[list[str]]:
     """Find cycles in the dependency graph using DFS.
-    
+
     Args:
         graph: Dependency graph
         max_depth: Maximum cycle depth to search
-        
+
     Returns:
         List of cycles (each cycle is a list of file paths)
     """
@@ -466,11 +513,11 @@ def _find_cycles_in_graph(graph: dict[str, list[str]], max_depth: int) -> list[l
 
 def _analyze_cycles(cycles: list[list[str]], graph: dict[str, list[str]]) -> list[dict[str, Any]]:
     """Analyze cycles for severity and impact.
-    
+
     Args:
         cycles: List of detected cycles
         graph: Dependency graph
-        
+
     Returns:
         List of cycle analysis results
     """
@@ -499,11 +546,11 @@ def _analyze_cycles(cycles: list[list[str]], graph: dict[str, list[str]]) -> lis
 
 def _calculate_cycle_severity(cycle_files: list[str], graph: dict[str, list[str]]) -> int:
     """Calculate severity score for a cycle.
-    
+
     Args:
         cycle_files: Files in the cycle
         graph: Dependency graph
-        
+
     Returns:
         Severity score (1-10)
     """
@@ -525,11 +572,11 @@ def _calculate_cycle_severity(cycle_files: list[str], graph: dict[str, list[str]
 
 def _calculate_cycle_impact(cycle_files: list[str], graph: dict[str, list[str]]) -> str:
     """Calculate impact level of a cycle.
-    
+
     Args:
         cycle_files: Files in the cycle
         graph: Dependency graph
-        
+
     Returns:
         Impact level string
     """
@@ -553,10 +600,10 @@ def _calculate_cycle_impact(cycle_files: list[str], graph: dict[str, list[str]])
 
 def _classify_cycle_type(cycle_files: list[str]) -> str:
     """Classify the type of cycle based on file patterns.
-    
+
     Args:
         cycle_files: Files in the cycle
-        
+
     Returns:
         Cycle type classification
     """
@@ -575,10 +622,10 @@ def _classify_cycle_type(cycle_files: list[str]) -> str:
 
 def _generate_cycle_suggestions(cycle_files: list[str]) -> list[str]:
     """Generate suggestions for breaking a cycle.
-    
+
     Args:
         cycle_files: Files in the cycle
-        
+
     Returns:
         List of suggestions
     """
@@ -601,10 +648,10 @@ def _generate_cycle_suggestions(cycle_files: list[str]) -> list[str]:
 
 def _generate_cycle_recommendations(cycle_analysis: list[dict[str, Any]]) -> list[str]:
     """Generate overall recommendations for dealing with cycles.
-    
+
     Args:
         cycle_analysis: List of analyzed cycles
-        
+
     Returns:
         List of recommendations
     """
@@ -635,17 +682,17 @@ def _generate_cycle_recommendations(cycle_analysis: list[dict[str, Any]]) -> lis
 
 def _calculate_cycle_summary(cycles: list[list[str]], graph: dict[str, list[str]], project_files: list[dict[str, Any]]) -> dict[str, Any]:
     """Calculate summary statistics for cycle analysis.
-    
+
     Args:
         cycles: Detected cycles
         graph: Dependency graph
         project_files: All project files
-        
+
     Returns:
         Summary statistics
     """
     total_files = len(project_files)
-    files_in_cycles = len(set(file for cycle in cycles for file in cycle[:-1]))
+    files_in_cycles = len({file for cycle in cycles for file in cycle[:-1]})
 
     if cycles:
         avg_cycle_length = sum(len(cycle) - 1 for cycle in cycles) / len(cycles)
@@ -668,10 +715,10 @@ def _calculate_cycle_summary(cycles: list[list[str]], graph: dict[str, list[str]
 
 def _simplify_graph_for_output(graph: dict[str, list[str]]) -> dict[str, Any]:
     """Simplify dependency graph for JSON output.
-    
+
     Args:
         graph: Full dependency graph
-        
+
     Returns:
         Simplified graph with statistics
     """

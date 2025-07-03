@@ -7,7 +7,6 @@ from typing import Any
 
 from ...filesystem_server._security import get_project_root, validate_file_path
 
-
 # Default whitelisted commands for security
 DEFAULT_WHITELISTED_COMMANDS = [
     "npm", "yarn", "pnpm", "node", "npx",
@@ -42,12 +41,12 @@ def run_command_impl(
         Dictionary with command results and metadata
     """
     start_time = time.time()
-    
+
     try:
         # Resolve project root
         if project_root is None:
             project_root = get_project_root()
-            
+
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
         if not validation_result.get("valid", False):
@@ -57,11 +56,11 @@ def run_command_impl(
                     "message": validation_result.get("error", "Invalid project root path")
                 }
             }
-            
+
         # Validate command against whitelist
         if allowed_commands is None:
             allowed_commands = DEFAULT_WHITELISTED_COMMANDS
-            
+
         if command not in allowed_commands:
             return {
                 "error": {
@@ -69,17 +68,17 @@ def run_command_impl(
                     "message": f"Command '{command}' not in whitelist. Allowed: {', '.join(allowed_commands)}"
                 }
             }
-            
+
         # Build command list
         cmd_list = [command]
         if args:
             cmd_list.extend(args)
-            
+
         # Set up environment
         env = os.environ.copy()
         if env_vars:
             env.update(env_vars)
-            
+
         # Execute command
         try:
             result = subprocess.run(
@@ -90,9 +89,9 @@ def run_command_impl(
                 timeout=timeout,
                 env=env
             )
-            
+
             duration_ms = int((time.time() - start_time) * 1000)
-            
+
             return {
                 "data": {
                     "command": " ".join(cmd_list),
@@ -108,7 +107,7 @@ def run_command_impl(
                     "timeout_seconds": timeout
                 }
             }
-            
+
         except subprocess.TimeoutExpired:
             duration_ms = int((time.time() - start_time) * 1000)
             return {
@@ -122,7 +121,7 @@ def run_command_impl(
                     "timeout_seconds": timeout
                 }
             }
-            
+
         except subprocess.SubprocessError as e:
             duration_ms = int((time.time() - start_time) * 1000)
             return {
@@ -135,7 +134,7 @@ def run_command_impl(
                     "duration_ms": duration_ms
                 }
             }
-            
+
     except Exception as e:
         duration_ms = int((time.time() - start_time) * 1000)
         return {

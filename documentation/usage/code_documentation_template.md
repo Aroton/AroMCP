@@ -8,6 +8,37 @@ severity: [error|warning|info]
 priority: [required|important|recommended]
 ---
 
+<!--
+ENFORCEMENT TYPE DETECTION:
+The analysis system automatically determines how standards should be enforced based on sections present:
+
+HYBRID (both ESLint + AI guidance):
+- Has "## Pattern" section AND "## Automation" section = can generate ESLint rules
+- Has "## Core Rules" section = requires human judgment/AI context
+- Result: Both automated detection + AI-driven guidance
+
+ESLINT_RULE (pure automation):
+- Has "## Pattern" section OR "## Automation" section = can generate ESLint rules
+- Does NOT have "## Core Rules" section = no human judgment needed
+- Result: Pure ESLint rule generation
+
+AI_CONTEXT (human judgment only):
+- Has "## Core Rules" section = requires human judgment
+- Does NOT have "## Pattern" or "## Automation" sections = cannot automate
+- Result: AI context only, no ESLint rules
+
+UNKNOWN (insufficient information):
+- Missing both automation sections AND core rules
+- Result: Cannot determine enforcement strategy
+
+KEY INSIGHT: Most standards using this template will be HYBRID because:
+- "## Pattern" + "## Automation" = can build ESLint rules
+- "## Core Rules" = needs AI understanding for context and edge cases
+
+To create pure ESLint rules: Remove "## Core Rules", keep "## Pattern"/"## Automation"
+To create AI-only standards: Remove "## Pattern"/"## Automation", keep "## Core Rules"
+-->
+
 # [Standard Name]
 
 ## Why & When

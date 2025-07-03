@@ -1,11 +1,9 @@
 """Tests for run_command tool in Build Tools."""
 
-import json
 import subprocess
 import tempfile
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from aromcp.build_server.tools.run_command import run_command_impl
 
@@ -23,7 +21,7 @@ class TestRunCommand:
                 allowed_commands=["echo", "ls"],  # Add echo to allowed commands
                 timeout=30
             )
-            
+
             assert "data" in result
             assert result["data"]["success"] is True
             assert result["data"]["exit_code"] == 0
@@ -39,7 +37,7 @@ class TestRunCommand:
                 project_root=temp_dir,
                 allowed_commands=["npm", "yarn", "tsc"]
             )
-            
+
             assert "error" in result
             assert result["error"]["code"] == "PERMISSION_DENIED"
             assert "not in whitelist" in result["error"]["message"]
@@ -54,7 +52,7 @@ class TestRunCommand:
                 allowed_commands=["echo", "ls"],
                 timeout=30
             )
-            
+
             assert "data" in result
             assert result["data"]["success"] is True
 
@@ -68,7 +66,7 @@ class TestRunCommand:
                 allowed_commands=["ls"],
                 timeout=30
             )
-            
+
             assert "data" in result
             assert result["data"]["success"] is False
             assert result["data"]["exit_code"] != 0
@@ -85,7 +83,7 @@ class TestRunCommand:
                 env_vars={"TEST_VAR": "test_value"},
                 timeout=30
             )
-            
+
             assert "data" in result
             assert result["data"]["success"] is True
 
@@ -100,7 +98,7 @@ class TestRunCommand:
                 capture_output=False,
                 timeout=30
             )
-            
+
             assert "data" in result
             assert result["data"]["stdout"] == ""
             assert result["data"]["stderr"] == ""
@@ -109,7 +107,7 @@ class TestRunCommand:
     def test_timeout_handling(self, mock_run):
         """Test timeout handling."""
         mock_run.side_effect = subprocess.TimeoutExpired("test", 30)
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             result = run_command_impl(
                 command="echo",
@@ -118,7 +116,7 @@ class TestRunCommand:
                 allowed_commands=["echo"],
                 timeout=30
             )
-            
+
             assert "error" in result
             assert result["error"]["code"] == "TIMEOUT"
 
@@ -129,7 +127,7 @@ class TestRunCommand:
             args=["test"],
             project_root="/../../invalid/path"
         )
-        
+
         assert "error" in result
         # The function checks whitelist before project root, so PERMISSION_DENIED comes first
         assert result["error"]["code"] == "PERMISSION_DENIED"
@@ -144,7 +142,7 @@ class TestRunCommand:
                 allowed_commands=["echo"],
                 timeout=30
             )
-            
+
             assert "metadata" in result
             assert "timestamp" in result["metadata"]
             assert "duration_ms" in result["metadata"]
@@ -157,7 +155,7 @@ class TestRunCommand:
             # Create a test file in the temp directory
             test_file = Path(temp_dir) / "test.txt"
             test_file.write_text("test content")
-            
+
             result = run_command_impl(
                 command="ls",
                 args=["test.txt"],
@@ -165,7 +163,7 @@ class TestRunCommand:
                 allowed_commands=["ls"],
                 timeout=30
             )
-            
+
             assert "data" in result
             assert result["data"]["success"] is True
             assert "test.txt" in result["data"]["stdout"]

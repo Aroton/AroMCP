@@ -16,13 +16,13 @@ def find_dead_code_impl(
     confidence_threshold: float = 0.8
 ) -> dict[str, Any]:
     """Find unused code that can potentially be removed.
-    
+
     Args:
         project_root: Root directory of the project
         entry_points: List of entry point files (auto-detected if None)
         include_tests: Whether to include test files as entry points
         confidence_threshold: Minimum confidence score to report as dead code
-        
+
     Returns:
         Dictionary containing detected dead code and analysis results
     """
@@ -42,7 +42,10 @@ def find_dead_code_impl(
             return {
                 "error": {
                     "code": "INVALID_INPUT",
-                    "message": f"Confidence threshold must be between 0.0 and 1.0, got: {confidence_threshold}"
+                    "message": (
+                        f"Confidence threshold must be between 0.0 and 1.0, "
+                        f"got: {confidence_threshold}"
+                    )
                 }
             }
 
@@ -58,7 +61,9 @@ def find_dead_code_impl(
             validated_entry_points = []
             for entry_point in entry_points:
                 try:
-                    validated_path = validate_file_path_legacy(entry_point, project_path)
+                    validated_path = validate_file_path_legacy(
+                        entry_point, project_path
+                    )
                     if validated_path.exists():
                         validated_entry_points.append(str(validated_path))
                 except Exception:
@@ -116,11 +121,11 @@ def find_dead_code_impl(
 
 def _get_project_files(project_root: str, patterns: list[str]) -> list[dict[str, Any]]:
     """Get all project files matching the patterns.
-    
+
     Args:
         project_root: Root directory of the project
         patterns: File patterns to match
-        
+
     Returns:
         List of file information dictionaries
     """
@@ -128,13 +133,12 @@ def _get_project_files(project_root: str, patterns: list[str]) -> list[dict[str,
 
     for pattern in patterns:
         result = get_target_files_impl(
-            project_root=project_root,
-            status="pattern",
-            patterns=[pattern]
+            patterns=[pattern],
+            project_root=project_root
         )
 
         if "data" in result:
-            all_files.extend(result["data"]["files"])
+            all_files.extend(result["data"]["items"])
 
     # Remove duplicates based on file path
     seen_paths = set()
@@ -148,13 +152,15 @@ def _get_project_files(project_root: str, patterns: list[str]) -> list[dict[str,
     return unique_files
 
 
-def _detect_entry_points(project_files: list[dict[str, Any]], include_tests: bool) -> list[str]:
+def _detect_entry_points(
+    project_files: list[dict[str, Any]], include_tests: bool
+) -> list[str]:
     """Detect entry points in the project.
-    
+
     Args:
         project_files: List of project files
         include_tests: Whether to include test files
-        
+
     Returns:
         List of entry point file paths
     """
@@ -205,11 +211,11 @@ def _detect_entry_points(project_files: list[dict[str, Any]], include_tests: boo
 
 def _analyze_code_usage(project_files: list[dict[str, Any]], entry_points: list[str]) -> dict[str, Any]:
     """Analyze code usage patterns across the project.
-    
+
     Args:
         project_files: List of project files
         entry_points: List of entry point files
-        
+
     Returns:
         Usage analysis results
     """
@@ -279,10 +285,10 @@ def _analyze_code_usage(project_files: list[dict[str, Any]], entry_points: list[
 
 def _analyze_single_file(file_path: str) -> dict[str, Any]:
     """Analyze a single file for definitions and usages.
-    
+
     Args:
         file_path: Path to the file to analyze
-        
+
     Returns:
         Analysis results for the file
     """
@@ -298,10 +304,10 @@ def _analyze_single_file(file_path: str) -> dict[str, Any]:
 
 def _analyze_single_file_safe(file_path: str) -> dict[str, Any] | None:
     """Safely analyze a single file, returning None on error.
-    
+
     Args:
         file_path: Path to the file to analyze
-        
+
     Returns:
         Analysis results or None if error
     """
@@ -313,11 +319,11 @@ def _analyze_single_file_safe(file_path: str) -> dict[str, Any] | None:
 
 def _analyze_python_file(file_path: str, content: str) -> dict[str, Any]:
     """Analyze a Python file using AST.
-    
+
     Args:
         file_path: Path to the file
         content: File content
-        
+
     Returns:
         Analysis results
     """
@@ -331,7 +337,7 @@ def _analyze_python_file(file_path: str, content: str) -> dict[str, Any]:
 
         # Walk the AST
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+            if isinstance(node, ast.FunctionDef | ast.ClassDef | ast.AsyncFunctionDef):
                 # Function/class definitions
                 identifier = node.name
                 location = {
@@ -362,7 +368,7 @@ def _analyze_python_file(file_path: str, content: str) -> dict[str, Any]:
                         usages[identifier] = []
                     usages[identifier].append(location)
 
-            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            elif isinstance(node, ast.Import | ast.ImportFrom):
                 # Import statements
                 if isinstance(node, ast.Import):
                     for alias in node.names:
@@ -386,11 +392,11 @@ def _analyze_python_file(file_path: str, content: str) -> dict[str, Any]:
 
 def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
     """Analyze a JavaScript/TypeScript file using regex patterns.
-    
+
     Args:
         file_path: Path to the file
         content: File content
-        
+
     Returns:
         Analysis results
     """
@@ -474,6 +480,13 @@ def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
                     exports.append(export_text)
 
         # Check for usages (identifiers that aren't part of definitions)
+        # First, collect identifiers defined on this line
+        defined_on_line = set()
+        for pattern in all_patterns:
+            matches = re.finditer(pattern, line)
+            for match in matches:
+                defined_on_line.add(match.group(1))
+
         identifier_pattern = r"\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b"
         matches = re.finditer(identifier_pattern, line)
         for match in matches:
@@ -481,6 +494,10 @@ def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
 
             # Skip keywords
             if identifier in ["function", "class", "const", "let", "var", "if", "else", "for", "while", "return"]:
+                continue
+
+            # Skip identifiers being defined on this same line
+            if identifier in defined_on_line:
                 continue
 
             location = {
@@ -503,11 +520,11 @@ def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
 
 def _find_dead_code_candidates(usage_analysis: dict[str, Any], confidence_threshold: float) -> list[dict[str, Any]]:
     """Find potentially dead code based on usage analysis.
-    
+
     Args:
         usage_analysis: Results from usage analysis
         confidence_threshold: Minimum confidence score
-        
+
     Returns:
         List of dead code candidates
     """
@@ -539,10 +556,10 @@ def _find_dead_code_candidates(usage_analysis: dict[str, Any], confidence_thresh
 
 def _calculate_dead_code_confidence(stats: dict[str, Any]) -> float:
     """Calculate confidence score that code is dead.
-    
+
     Args:
         stats: Usage statistics for an identifier
-        
+
     Returns:
         Confidence score between 0.0 and 1.0
     """
@@ -570,10 +587,10 @@ def _calculate_dead_code_confidence(stats: dict[str, Any]) -> float:
 
 def _get_dead_code_reason(stats: dict[str, Any]) -> str:
     """Get reason why code might be dead.
-    
+
     Args:
         stats: Usage statistics
-        
+
     Returns:
         Human-readable reason
     """
@@ -588,10 +605,10 @@ def _get_dead_code_reason(stats: dict[str, Any]) -> str:
 
 def _generate_dead_code_recommendations(candidates: list[dict[str, Any]]) -> list[str]:
     """Generate recommendations for handling dead code.
-    
+
     Args:
         candidates: List of dead code candidates
-        
+
     Returns:
         List of recommendations
     """
@@ -621,12 +638,12 @@ def _generate_dead_code_recommendations(candidates: list[dict[str, Any]]) -> lis
 
 def _calculate_dead_code_summary(candidates: list[dict[str, Any]], project_files: list[dict[str, Any]], usage_analysis: dict[str, Any]) -> dict[str, Any]:
     """Calculate summary statistics for dead code analysis.
-    
+
     Args:
         candidates: Dead code candidates
         project_files: All project files
         usage_analysis: Usage analysis results
-        
+
     Returns:
         Summary statistics
     """
@@ -641,11 +658,11 @@ def _calculate_dead_code_summary(candidates: list[dict[str, Any]], project_files
     }
 
     # File breakdown
-    files_with_dead_code = len(set(
+    files_with_dead_code = len({
         location["file"]
         for candidate in candidates
         for location in candidate["definition_locations"]
-    ))
+    })
 
     return {
         "total_files_analyzed": len(project_files),

@@ -8,7 +8,7 @@ import chardet
 
 
 def load_documents_by_pattern_impl(
-    patterns: list[str],
+    patterns: str | list[str],
     project_root: str = ".",
     max_file_size: int = 1024 * 1024,  # 1MB default
     encoding: str = "auto"
@@ -27,6 +27,10 @@ def load_documents_by_pattern_impl(
     start_time = time.time()
 
     try:
+        # Normalize patterns to list
+        if isinstance(patterns, str):
+            patterns = [patterns]
+
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
         if not project_path.exists():

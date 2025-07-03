@@ -30,8 +30,9 @@ class TestSecurityValidation:
 
                 # Test extract_method_signatures
                 result = extract_method_signatures_impl(path, temp_dir)
-                assert "error" in result
-                assert "outside project root" in result["error"]["message"]
+                assert "data" in result
+                assert "errors" in result["data"]
+                assert any("outside project root" in error["error"] for error in result["data"]["errors"])
 
     def test_write_files_path_validation(self):
         """Test path validation in write operations."""

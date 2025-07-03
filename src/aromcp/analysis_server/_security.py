@@ -89,45 +89,47 @@ def validate_file_path_legacy(file_path: str, project_root: Path) -> Path:
 
 def validate_pattern_safe(pattern: str) -> dict[str, Any]:
     """Validate that a glob pattern is safe to use.
-    
+
     Args:
         pattern: Glob pattern to validate
-        
+
     Returns:
         Dictionary with validation result and error message if invalid
     """
     # Check for potentially dangerous patterns
     dangerous_patterns = [
         '../',  # Directory traversal
-        '/..',  # Directory traversal  
+        '/..',  # Directory traversal
         '//',   # Double slashes
         '\\',   # Windows path separators that could cause issues
     ]
-    
+
     for dangerous in dangerous_patterns:
         if dangerous in pattern:
             return {
                 "valid": False,
                 "error": f"Potentially unsafe pattern: {pattern}"
             }
-    
+
     # Check for reasonable length
     if len(pattern) > 1000:
         return {
             "valid": False,
             "error": "Pattern too long"
         }
-    
+
     return {"valid": True}
 
 
-def validate_standards_directory(standards_dir: str, project_root: str) -> dict[str, Any]:
+def validate_standards_directory(
+    standards_dir: str, project_root: str
+) -> dict[str, Any]:
     """Validate that a standards directory path is safe and accessible.
-    
+
     Args:
         standards_dir: Directory path to validate (relative to project_root)
         project_root: Project root directory
-        
+
     Returns:
         Dictionary with validation result and resolved path
     """
@@ -136,14 +138,14 @@ def validate_standards_directory(standards_dir: str, project_root: str) -> dict[
             "valid": False,
             "error": "Standards directory cannot be empty"
         }
-    
+
     # Validate the path using existing validation
     full_path = str(Path(project_root) / standards_dir)
     validation = validate_file_path(full_path, project_root)
-    
+
     if not validation["valid"]:
         return validation
-    
+
     return {
         "valid": True,
         "abs_path": validation["abs_path"]

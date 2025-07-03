@@ -3,10 +3,10 @@
 import ast
 import re
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
-from .._security import validate_file_path_legacy
 from ...utils.pagination import paginate_list
+from .._security import validate_file_path_legacy
 
 
 def extract_method_signatures_impl(
@@ -132,7 +132,7 @@ def extract_method_signatures_impl(
                     signature["file_path"] = file_path
                     signature["file_type"] = file_extension[1:]  # Remove the dot
                     all_signatures.append(signature)
-                
+
                 files_processed += 1
 
             except Exception as e:
@@ -144,7 +144,7 @@ def extract_method_signatures_impl(
         duration_ms = int((time.time() - start_time) * 1000)
 
         # Create metadata for pagination
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "summary": {
                 "total_files": len(actual_file_paths),
                 "input_patterns": len(input_paths),
@@ -154,7 +154,7 @@ def extract_method_signatures_impl(
                 "duration_ms": duration_ms
             }
         }
-        
+
         if errors:
             metadata["errors"] = errors
 

@@ -34,7 +34,7 @@ def parse_typescript_errors_impl(
         # Resolve project root
         if project_root is None:
             project_root = get_project_root()
-            
+
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
         if not validation_result.get("valid", False):
@@ -44,10 +44,10 @@ def parse_typescript_errors_impl(
                     "message": validation_result.get("error", "Invalid project root path")
                 }
             }
-            
+
         project_path = Path(project_root)
         tsconfig_full_path = project_path / tsconfig_path
-        
+
         # Check if tsconfig.json exists
         if not tsconfig_full_path.exists():
             return {
@@ -56,12 +56,12 @@ def parse_typescript_errors_impl(
                     "message": f"TypeScript config not found: {tsconfig_path}"
                 }
             }
-            
+
         # Run TypeScript compiler
         cmd = ["npx", "tsc", "--noEmit", "--pretty", "false"]
         if tsconfig_path != "tsconfig.json":
             cmd.extend(["--project", tsconfig_path])
-            
+
         try:
             result = subprocess.run(
                 cmd,
@@ -70,13 +70,13 @@ def parse_typescript_errors_impl(
                 text=True,
                 timeout=timeout
             )
-            
+
             # Parse TypeScript output
             errors = _parse_tsc_output(result.stdout, result.stderr, include_warnings)
-            
+
             # Categorize errors
             error_categories = _categorize_errors(errors)
-            
+
             # Generate summary
             summary = {
                 "total_errors": len([e for e in errors if e["severity"] == "error"]),
@@ -87,7 +87,7 @@ def parse_typescript_errors_impl(
                 "exit_code": result.returncode,
                 "compilation_success": result.returncode == 0
             }
-            
+
             # Create metadata for pagination
             metadata = {
                 "summary": summary,
@@ -95,7 +95,7 @@ def parse_typescript_errors_impl(
                 "tsconfig_path": str(tsconfig_full_path),
                 "command": " ".join(cmd)
             }
-            
+
             # Apply pagination with deterministic sorting
             # Sort by file, then by line, then by column for consistent ordering
             return paginate_list(
@@ -105,7 +105,7 @@ def parse_typescript_errors_impl(
                 sort_key=lambda x: (x.get("file", ""), x.get("line", 0), x.get("column", 0)),
                 metadata=metadata
             )
-            
+
         except subprocess.TimeoutExpired:
             return {
                 "error": {
@@ -113,7 +113,7 @@ def parse_typescript_errors_impl(
                     "message": f"TypeScript compilation timed out after {timeout} seconds"
                 }
             }
-            
+
         except subprocess.SubprocessError as e:
             return {
                 "error": {
@@ -121,7 +121,7 @@ def parse_typescript_errors_impl(
                     "message": f"Failed to run TypeScript compiler: {str(e)}"
                 }
             }
-            
+
     except Exception as e:
         return {
             "error": {
@@ -134,27 +134,27 @@ def parse_typescript_errors_impl(
 def _parse_tsc_output(stdout: str, stderr: str, include_warnings: bool) -> list[dict[str, Any]]:
     """Parse TypeScript compiler output into structured error data."""
     errors = []
-    
+
     # Combine stdout and stderr
     output = stdout + "\n" + stderr
-    
+
     # TypeScript error pattern: file(line,column): error/warning TSxxxx: message
     error_pattern = re.compile(
         r'^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+TS(\d+):\s+(.+)$',
         re.MULTILINE
     )
-    
+
     for match in error_pattern.finditer(output):
         file_path, line, column, severity, code, message = match.groups()
-        
+
         # Skip warnings if not requested
         if severity == "warning" and not include_warnings:
             continue
-            
+
         # Clean up file path (remove leading ./ if present)
         if file_path.startswith("./"):
             file_path = file_path[2:]
-            
+
         errors.append({
             "file": file_path,
             "line": int(line),
@@ -164,16 +164,16 @@ def _parse_tsc_output(stdout: str, stderr: str, include_warnings: bool) -> list[
             "message": message.strip(),
             "category": _get_error_category(code)
         })
-        
+
     # Also look for general compilation errors
     general_error_pattern = re.compile(
         r'^error\s+TS(\d+):\s+(.+)$',
         re.MULTILINE
     )
-    
+
     for match in general_error_pattern.finditer(output):
         code, message = match.groups()
-        
+
         errors.append({
             "file": "",
             "line": 0,
@@ -183,14 +183,14 @@ def _parse_tsc_output(stdout: str, stderr: str, include_warnings: bool) -> list[
             "message": message.strip(),
             "category": _get_error_category(code)
         })
-        
+
     return errors
 
 
 def _get_error_category(code: str) -> str:
     """Categorize TypeScript error by code."""
     code_num = int(code)
-    
+
     # Common TypeScript error categories
     if 1000 <= code_num <= 1999:
         return "syntax"
@@ -213,7 +213,7 @@ def _get_error_category(code: str) -> str:
 def _categorize_errors(errors: list[dict[str, Any]]) -> dict[str, Any]:
     """Categorize and summarize TypeScript errors."""
     categories = {}
-    
+
     # Group by category
     for error in errors:
         category = error["category"]
@@ -225,24 +225,24 @@ def _categorize_errors(errors: list[dict[str, Any]]) -> dict[str, Any]:
                 "common_codes": {},
                 "files": set()
             }
-            
+
         categories[category]["count"] += 1
         categories[category][error["severity"] + "s"] += 1
-        
+
         # Track common error codes
         code = error["code"]
         if code not in categories[category]["common_codes"]:
             categories[category]["common_codes"][code] = 0
         categories[category]["common_codes"][code] += 1
-        
+
         # Track affected files
         if error["file"]:
             categories[category]["files"].add(error["file"])
-            
+
     # Convert sets to lists for JSON serialization
     for category in categories.values():
         category["files"] = list(category["files"])
-        
+
     # Sort common codes by frequency
     for category in categories.values():
         category["common_codes"] = dict(
@@ -252,5 +252,5 @@ def _categorize_errors(errors: list[dict[str, Any]]) -> dict[str, Any]:
                 reverse=True
             )
         )
-        
+
     return categories

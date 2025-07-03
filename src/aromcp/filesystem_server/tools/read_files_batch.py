@@ -10,7 +10,7 @@ from .._security import validate_file_path_legacy
 
 
 def read_files_batch_impl(
-    file_paths: list[str],
+    file_paths: str | list[str],
     project_root: str = ".",
     encoding: str = "auto",
     expand_patterns: bool = True
@@ -29,6 +29,10 @@ def read_files_batch_impl(
     start_time = time.time()
 
     try:
+        # Normalize file_paths to list
+        if isinstance(file_paths, str):
+            file_paths = [file_paths]
+
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
         if not project_path.exists():

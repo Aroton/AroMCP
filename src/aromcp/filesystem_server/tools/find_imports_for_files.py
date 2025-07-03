@@ -7,14 +7,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .._security import validate_file_path_legacy
 from ...utils.pagination import paginate_list
+from .._security import validate_file_path_legacy
 
 
 def find_imports_for_files_impl(
-    file_paths: list[str],
+    file_paths: str | list[str],
     project_root: str = ".",
-    search_patterns: list[str] | None = None,
+    search_patterns: str | list[str] | None = None,
     expand_patterns: bool = True,
     page: int = 1,
     max_tokens: int = 20000
@@ -35,6 +35,14 @@ def find_imports_for_files_impl(
     start_time = time.time()
 
     try:
+        # Normalize file_paths to list
+        if isinstance(file_paths, str):
+            file_paths = [file_paths]
+
+        # Normalize search_patterns to list if string
+        if isinstance(search_patterns, str):
+            search_patterns = [search_patterns]
+
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
         if not project_path.exists():

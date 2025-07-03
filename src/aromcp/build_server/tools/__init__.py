@@ -2,8 +2,8 @@
 
 from typing import Any
 
-from ...utils.json_parameter_middleware import json_convert
 from ...filesystem_server._security import get_project_root
+from ...utils.json_parameter_middleware import json_convert
 from .check_dependencies import check_dependencies_impl
 from .get_build_config import get_build_config_impl
 from .parse_lint_results import parse_lint_results_impl
@@ -20,9 +20,9 @@ def register_build_tools(mcp):
     @json_convert
     def run_command(
         command: str,
-        args: list[str] | None = None,
+        args: str | list[str] | None = None,
         project_root: str | None = None,
-        allowed_commands: list[str] | None = None,
+        allowed_commands: str | list[str] | None = None,
         timeout: int = 300,
         capture_output: bool = True,
         env_vars: dict[str, str] | None = None
@@ -47,7 +47,7 @@ def register_build_tools(mcp):
     @mcp.tool
     def get_build_config(
         project_root: str | None = None,
-        config_files: list[str] | None = None
+        config_files: str | list[str] | None = None
     ) -> dict[str, Any]:
         """Extract build configuration from various sources.
 
@@ -110,7 +110,7 @@ def register_build_tools(mcp):
     def parse_lint_results(
         linter: str = "eslint",
         project_root: str | None = None,
-        target_files: list[str] | None = None,
+        target_files: str | list[str] | None = None,
         config_file: str | None = None,
         include_warnings: bool = True,
         timeout: int = 120,
@@ -186,7 +186,7 @@ def register_build_tools(mcp):
 
 __all__ = [
     "run_command_impl",
-    "get_build_config_impl", 
+    "get_build_config_impl",
     "check_dependencies_impl",
     "parse_typescript_errors_impl",
     "parse_lint_results_impl",

@@ -1,7 +1,6 @@
 """Get build config tool implementation for Build Tools."""
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +24,7 @@ def get_build_config_impl(
         # Resolve project root
         if project_root is None:
             project_root = get_project_root()
-            
+
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
         if not validation_result.get("valid", False):
@@ -35,9 +34,9 @@ def get_build_config_impl(
                     "message": validation_result.get("error", "Invalid project root path")
                 }
             }
-            
+
         project_path = Path(project_root)
-        
+
         # Default config files to check
         if config_files is None:
             config_files = [
@@ -71,18 +70,18 @@ def get_build_config_impl(
                 "pom.xml",
                 "build.gradle"
             ]
-            
+
         configs = {}
         detected_tools = []
-        
+
         # Read each config file that exists
         for config_file in config_files:
             config_path = project_path / config_file
-            
+
             if config_path.exists() and config_path.is_file():
                 try:
                     content = config_path.read_text(encoding='utf-8')
-                    
+
                     # Try to parse JSON files
                     if config_file.endswith('.json'):
                         try:
@@ -104,7 +103,7 @@ def get_build_config_impl(
                             "type": "text",
                             "content": content[:1000] if len(content) > 1000 else content
                         }
-                        
+
                     # Detect tools based on config files
                     if config_file == "package.json":
                         detected_tools.extend(["npm", "node"])
@@ -116,7 +115,7 @@ def get_build_config_impl(
                                 detected_tools.append("react")
                             if any("vue" in script for script in scripts.values()):
                                 detected_tools.append("vue")
-                                
+
                     elif config_file.startswith("next.config"):
                         detected_tools.append("nextjs")
                     elif config_file.startswith("vite.config"):
@@ -139,16 +138,16 @@ def get_build_config_impl(
                         detected_tools.append("go")
                     elif config_file == "pyproject.toml":
                         detected_tools.append("python")
-                        
+
                 except Exception as e:
                     configs[config_file] = {
                         "type": "error",
                         "error": f"Failed to read file: {str(e)}"
                     }
-                    
+
         # Extract key build information
         build_info = {}
-        
+
         # Extract package.json info
         if "package.json" in configs and configs["package.json"]["type"] == "json":
             pkg = configs["package.json"]["content"]
@@ -160,7 +159,7 @@ def get_build_config_impl(
                 "devDependencies": list(pkg.get("devDependencies", {}).keys()),
                 "engines": pkg.get("engines", {})
             })
-            
+
         # Extract TypeScript config
         if "tsconfig.json" in configs and configs["tsconfig.json"]["type"] == "json":
             ts_config = configs["tsconfig.json"]["content"]
@@ -170,10 +169,10 @@ def get_build_config_impl(
                 "strict": ts_config.get("compilerOptions", {}).get("strict"),
                 "outDir": ts_config.get("compilerOptions", {}).get("outDir")
             }
-            
+
         # Remove duplicates from detected tools
         detected_tools = list(set(detected_tools))
-        
+
         return {
             "data": {
                 "config_files": configs,
@@ -182,7 +181,7 @@ def get_build_config_impl(
                 "project_root": str(project_path)
             }
         }
-        
+
     except Exception as e:
         return {
             "error": {

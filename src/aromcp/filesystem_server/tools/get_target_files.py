@@ -1,6 +1,6 @@
 """Get target files implementation."""
 
-import subprocess
+import json
 import time
 from pathlib import Path
 from typing import Any
@@ -9,21 +9,19 @@ from ...utils.pagination import paginate_list
 
 
 def get_target_files_impl(
-    status: str = "working",
-    patterns: list[str] | None = None,
+    patterns: str | list[str],
     project_root: str = ".",
     page: int = 1,
     max_tokens: int = 20000
 ) -> dict[str, Any]:
-    """List files based on git status or path patterns.
-    
+    """List files based on path patterns.
+
     Args:
-        status: Git status filter - "working", "staged", "branch", "commit", or "pattern"
-        patterns: File patterns to match (used when status="pattern")
+        patterns: File patterns to match (glob patterns like "**/*.py", "src/**/*.js")
         project_root: Root directory of the project
         page: Page number for pagination (1-based, default: 1)
         max_tokens: Maximum tokens per page (default: 20000)
-        
+
     Returns:
         Dictionary with paginated file list and metadata
     """
@@ -40,56 +38,44 @@ def get_target_files_impl(
                 }
             }
 
-
-        files = []
-
-        if status == "pattern":
-            if not patterns:
-                return {
-                    "error": {
-                        "code": "INVALID_INPUT",
-                        "message": "Patterns required when status='pattern'"
-                    }
-                }
-            files = _get_files_by_pattern(patterns, project_path)
-
-        elif status in ["working", "staged", "branch", "commit"]:
-            # Check if we're in a git repository
-            try:
-                subprocess.run(
-                    ["git", "rev-parse", "--git-dir"],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    cwd=project_path
-                )
-            except subprocess.CalledProcessError:
-                return {
-                    "error": {
-                        "code": "INVALID_INPUT",
-                        "message": "Not in a git repository"
-                    }
-                }
-
-            files = _get_files_by_git_status(status, project_path)
-
-        else:
+        if not patterns:
             return {
                 "error": {
                     "code": "INVALID_INPUT",
-                    "message": f"Invalid status: {status}. Must be one of: working, staged, branch, commit, pattern"
+                    "message": "Patterns required"
                 }
             }
+
+        # Handle case where patterns is still a JSON string (fallback)
+        processed_patterns: list[str]
+        if isinstance(patterns, str):
+            try:
+                parsed_patterns = json.loads(patterns)
+                if not isinstance(parsed_patterns, list):
+                    return {
+                        "error": {
+                            "code": "INVALID_INPUT",
+                            "message": "Patterns must be a list of strings"
+                        }
+                    }
+                processed_patterns = parsed_patterns
+            except json.JSONDecodeError:
+                # Treat as single pattern
+                processed_patterns = [patterns]
+        else:
+            # patterns is already a list[str]
+            processed_patterns = patterns
+
+        files = _get_files_by_pattern(processed_patterns, project_path)
 
         duration_ms = int((time.time() - start_time) * 1000)
 
         # Apply pagination with deterministic sorting by path
         metadata = {
-            "status_filter": status,
-            "patterns": patterns,
+            "patterns": processed_patterns,
             "duration_ms": duration_ms
         }
-        
+
         return paginate_list(
             items=files,
             page=page,
@@ -107,7 +93,9 @@ def get_target_files_impl(
         }
 
 
-def _get_files_by_pattern(patterns: list[str], project_path: Path) -> list[dict[str, Any]]:
+def _get_files_by_pattern(
+    patterns: list[str], project_path: Path
+) -> list[dict[str, Any]]:
     """Get files matching glob patterns."""
     files = []
 
@@ -143,141 +131,3 @@ def _get_files_by_pattern(patterns: list[str], project_path: Path) -> list[dict[
     return sorted(unique_files, key=lambda x: x["path"])
 
 
-def _get_files_by_git_status(status: str, project_path: Path) -> list[dict[str, Any]]:
-    """Get files based on git status."""
-    files = []
-
-    try:
-        if status == "working":
-            # Get modified, added, deleted files in working directory
-            result = subprocess.run(
-                ["git", "status", "--porcelain"],
-                capture_output=True,
-                text=True,
-                check=True,
-                cwd=project_path
-            )
-
-            for line in result.stdout.strip().split('\n'):
-                if not line:
-                    continue
-
-                git_status = line[:2]
-                file_path = line[3:]
-
-                # Skip renamed files (they have -> in the path)
-                if ' -> ' in file_path:
-                    # Handle renames: "old_path -> new_path"
-                    old_path, new_path = file_path.split(' -> ')
-                    files.append({
-                        "path": new_path.strip(),
-                        "git_status": git_status,
-                        "status_description": _get_git_status_description(git_status),
-                        "renamed_from": old_path.strip()
-                    })
-                else:
-                    files.append({
-                        "path": file_path,
-                        "git_status": git_status,
-                        "status_description": _get_git_status_description(git_status)
-                    })
-
-        elif status == "staged":
-            # Get staged files
-            result = subprocess.run(
-                ["git", "diff", "--cached", "--name-status"],
-                capture_output=True,
-                text=True,
-                check=True,
-                cwd=project_path
-            )
-
-            for line in result.stdout.strip().split('\n'):
-                if not line:
-                    continue
-
-                parts = line.split('\t')
-                if len(parts) >= 2:
-                    git_status = parts[0]
-                    file_path = parts[1]
-                    files.append({
-                        "path": file_path,
-                        "git_status": git_status,
-                        "status_description": _get_git_status_description(git_status),
-                        "staged": True
-                    })
-
-        elif status == "branch":
-            # Get files different from main/master branch
-            try:
-                # Try to find the default branch
-                result = subprocess.run(
-                    ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    cwd=project_path
-                )
-                default_branch = result.stdout.strip().split('/')[-1]
-            except subprocess.CalledProcessError:
-                # Fallback to common branch names
-                for branch in ["main", "master"]:
-                    try:
-                        subprocess.run(
-                            ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
-                            capture_output=True,
-                            check=True,
-                            cwd=project_path
-                        )
-                        default_branch = branch
-                        break
-                    except subprocess.CalledProcessError:
-                        continue
-                else:
-                    default_branch = "HEAD~1"  # Fallback to previous commit
-
-            result = subprocess.run(
-                ["git", "diff", "--name-status", default_branch],
-                capture_output=True,
-                text=True,
-                check=True,
-                cwd=project_path
-            )
-
-            for line in result.stdout.strip().split('\n'):
-                if not line:
-                    continue
-
-                parts = line.split('\t')
-                if len(parts) >= 2:
-                    git_status = parts[0]
-                    file_path = parts[1]
-                    files.append({
-                        "path": file_path,
-                        "git_status": git_status,
-                        "status_description": _get_git_status_description(git_status),
-                        "compared_to": default_branch
-                    })
-
-    except subprocess.CalledProcessError as e:
-        raise Exception(f"Git command failed: {e}")
-
-    return files
-
-
-def _get_git_status_description(status_code: str) -> str:
-    """Convert git status codes to human-readable descriptions."""
-    status_map = {
-        'A': 'Added',
-        'M': 'Modified',
-        'D': 'Deleted',
-        'R': 'Renamed',
-        'C': 'Copied',
-        'U': 'Unmerged',
-        '??': 'Untracked',
-        'AM': 'Added, Modified',
-        'MM': 'Modified, Modified',
-        'AD': 'Added, Deleted',
-        'MD': 'Modified, Deleted'
-    }
-    return status_map.get(status_code, f'Unknown ({status_code})')

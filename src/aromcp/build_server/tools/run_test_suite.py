@@ -34,7 +34,7 @@ def run_test_suite_impl(
         # Resolve project root
         if project_root is None:
             project_root = get_project_root()
-            
+
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
         if not validation_result.get("valid", False):
@@ -44,16 +44,16 @@ def run_test_suite_impl(
                     "message": validation_result.get("error", "Invalid project root path")
                 }
             }
-            
+
         # Auto-detect test framework and command if needed
         if test_framework == "auto" or test_command is None:
             detected_framework, detected_command = _detect_test_setup(project_root)
-            
+
             if test_framework == "auto":
                 test_framework = detected_framework
             if test_command is None:
                 test_command = detected_command
-                
+
         if not test_command:
             return {
                 "error": {
@@ -61,10 +61,10 @@ def run_test_suite_impl(
                     "message": "No test command found. Please specify test_command or ensure test framework is configured."
                 }
             }
-            
+
         # Build test command
         cmd = test_command.split()
-        
+
         # Add framework-specific options
         if test_framework == "jest":
             cmd = _add_jest_options(cmd, pattern, coverage)
@@ -74,7 +74,7 @@ def run_test_suite_impl(
             cmd = _add_mocha_options(cmd, pattern)
         elif test_framework == "pytest":
             cmd = _add_pytest_options(cmd, pattern, coverage)
-            
+
         try:
             result = subprocess.run(
                 cmd,
@@ -83,7 +83,7 @@ def run_test_suite_impl(
                 text=True,
                 timeout=timeout
             )
-            
+
             # Parse test results based on framework
             if test_framework == "jest":
                 parsed_results = _parse_jest_output(result.stdout, result.stderr)
@@ -96,7 +96,7 @@ def run_test_suite_impl(
             else:
                 # Generic parsing for unknown frameworks
                 parsed_results = _parse_generic_output(result.stdout, result.stderr)
-                
+
             # Add metadata
             parsed_results.update({
                 "framework": test_framework,
@@ -105,9 +105,9 @@ def run_test_suite_impl(
                 "success": result.returncode == 0,
                 "project_root": project_root
             })
-            
+
             return {"data": parsed_results}
-            
+
         except subprocess.TimeoutExpired:
             return {
                 "error": {
@@ -122,7 +122,7 @@ def run_test_suite_impl(
                     "message": f"Failed to run tests: {str(e)}"
                 }
             }
-            
+
     except Exception as e:
         return {
             "error": {
@@ -135,30 +135,30 @@ def run_test_suite_impl(
 def _detect_test_setup(project_root: str) -> tuple[str, str | None]:
     """Auto-detect test framework and command."""
     project_path = Path(project_root)
-    
+
     # Check package.json for test scripts and dependencies
     package_json_path = project_path / "package.json"
     if package_json_path.exists():
         try:
             package_json = json.loads(package_json_path.read_text(encoding='utf-8'))
-            
+
             # Check scripts
             scripts = package_json.get("scripts", {})
             test_script = scripts.get("test")
-            
+
             # Check dependencies for frameworks
             all_deps = {
                 **package_json.get("dependencies", {}),
                 **package_json.get("devDependencies", {})
             }
-            
+
             if "jest" in all_deps:
                 return "jest", test_script or "npm test"
             elif "vitest" in all_deps:
                 return "vitest", test_script or "npm test"
             elif "mocha" in all_deps:
                 return "mocha", test_script or "npm test"
-                
+
             # Fallback to script content analysis
             if test_script:
                 if "jest" in test_script:
@@ -167,20 +167,20 @@ def _detect_test_setup(project_root: str) -> tuple[str, str | None]:
                     return "vitest", test_script
                 elif "mocha" in test_script:
                     return "mocha", test_script
-                    
+
         except (json.JSONDecodeError, UnicodeDecodeError):
             pass
-            
+
     # Check for Python test setup
     if (project_path / "pytest.ini").exists() or (project_path / "pyproject.toml").exists():
         return "pytest", "pytest"
-        
+
     # Check for test directories
     if (project_path / "__tests__").exists():
         return "jest", "npm test"
     elif (project_path / "test").exists():
         return "mocha", "npm test"
-        
+
     return "unknown", None
 
 
@@ -228,22 +228,22 @@ def _parse_jest_output(stdout: str, stderr: str) -> dict[str, Any]:
         # Jest outputs JSON to stdout when --json flag is used
         if stdout.strip():
             jest_result = json.loads(stdout)
-            
+
             summary = jest_result.get("testResults", [])
             total_tests = 0
             passed_tests = 0
             failed_tests = 0
             skipped_tests = 0
             test_files = []
-            
+
             for test_file in summary:
                 file_path = test_file.get("name", "")
                 test_results = test_file.get("assertionResults", [])
-                
+
                 file_passed = 0
                 file_failed = 0
                 file_skipped = 0
-                
+
                 for test in test_results:
                     status = test.get("status")
                     if status == "passed":
@@ -255,9 +255,9 @@ def _parse_jest_output(stdout: str, stderr: str) -> dict[str, Any]:
                     elif status == "skipped":
                         file_skipped += 1
                         skipped_tests += 1
-                        
+
                 total_tests += len(test_results)
-                
+
                 test_files.append({
                     "file": file_path,
                     "passed": file_passed,
@@ -265,7 +265,7 @@ def _parse_jest_output(stdout: str, stderr: str) -> dict[str, Any]:
                     "skipped": file_skipped,
                     "duration": test_file.get("endTime", 0) - test_file.get("startTime", 0)
                 })
-                
+
             return {
                 "summary": {
                     "total": total_tests,
@@ -277,10 +277,10 @@ def _parse_jest_output(stdout: str, stderr: str) -> dict[str, Any]:
                 "test_files": test_files,
                 "coverage": jest_result.get("coverageMap", {})
             }
-            
+
     except (json.JSONDecodeError, KeyError, IndexError):
         pass
-        
+
     # Fallback to text parsing
     return _parse_generic_output(stdout, stderr)
 
@@ -291,11 +291,11 @@ def _parse_vitest_output(stdout: str, stderr: str) -> dict[str, Any]:
         # Vitest outputs JSON when --reporter=json is used
         if stdout.strip():
             vitest_result = json.loads(stdout)
-            
+
             # Parse Vitest structure (may vary by version)
             test_results = vitest_result.get("testResults", [])
             total_tests = sum(len(tr.get("assertionResults", [])) for tr in test_results)
-            
+
             summary = {
                 "total": total_tests,
                 "passed": vitest_result.get("numPassedTests", 0),
@@ -303,16 +303,16 @@ def _parse_vitest_output(stdout: str, stderr: str) -> dict[str, Any]:
                 "skipped": vitest_result.get("numSkippedTests", 0),
                 "duration": vitest_result.get("testExecTime", 0)
             }
-            
+
             return {
                 "summary": summary,
                 "test_files": test_results,
                 "coverage": vitest_result.get("coverageMap", {})
             }
-            
+
     except (json.JSONDecodeError, KeyError):
         pass
-        
+
     return _parse_generic_output(stdout, stderr)
 
 
@@ -321,9 +321,9 @@ def _parse_mocha_output(stdout: str, stderr: str) -> dict[str, Any]:
     try:
         if stdout.strip():
             mocha_result = json.loads(stdout)
-            
+
             stats = mocha_result.get("stats", {})
-            
+
             return {
                 "summary": {
                     "total": stats.get("tests", 0),
@@ -335,10 +335,10 @@ def _parse_mocha_output(stdout: str, stderr: str) -> dict[str, Any]:
                 "test_files": mocha_result.get("tests", []),
                 "failures": mocha_result.get("failures", [])
             }
-            
+
     except (json.JSONDecodeError, KeyError):
         pass
-        
+
     return _parse_generic_output(stdout, stderr)
 
 
@@ -346,34 +346,34 @@ def _parse_pytest_output(stdout: str, stderr: str) -> dict[str, Any]:
     """Parse pytest output."""
     # pytest doesn't have built-in JSON output, so we parse text
     output = stdout + "\n" + stderr
-    
+
     # Look for pytest summary line
     summary_pattern = re.compile(r'=+ (.+) in ([\d.]+)s =+')
     match = summary_pattern.search(output)
-    
+
     passed = failed = skipped = 0
     duration = 0
-    
+
     if match:
         summary_text = match.group(1)
         duration = float(match.group(2))
-        
+
         # Parse summary components
         if "passed" in summary_text:
             passed_match = re.search(r'(\d+) passed', summary_text)
             if passed_match:
                 passed = int(passed_match.group(1))
-                
+
         if "failed" in summary_text:
             failed_match = re.search(r'(\d+) failed', summary_text)
             if failed_match:
                 failed = int(failed_match.group(1))
-                
+
         if "skipped" in summary_text:
             skipped_match = re.search(r'(\d+) skipped', summary_text)
             if skipped_match:
                 skipped = int(skipped_match.group(1))
-                
+
     return {
         "summary": {
             "total": passed + failed + skipped,
@@ -390,11 +390,11 @@ def _parse_pytest_output(stdout: str, stderr: str) -> dict[str, Any]:
 def _parse_generic_output(stdout: str, stderr: str) -> dict[str, Any]:
     """Generic parser for unknown test frameworks."""
     output = stdout + "\n" + stderr
-    
+
     # Try to extract basic pass/fail information
     passed = len(re.findall(r'\bpass(ed)?\b', output, re.IGNORECASE))
     failed = len(re.findall(r'\bfail(ed)?\b', output, re.IGNORECASE))
-    
+
     return {
         "summary": {
             "total": passed + failed,

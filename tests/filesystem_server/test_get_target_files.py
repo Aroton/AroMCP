@@ -20,14 +20,13 @@ class TestGetTargetFiles:
                 full_path.write_text("test content")
 
             result = get_target_files_impl(
-                status="pattern",
                 patterns=["*.py"],
                 project_root=temp_dir
             )
 
             assert "data" in result
-            assert len(result["data"]["files"]) == 2  # Both test.py and src/main.py match
-            file_paths = {f["path"] for f in result["data"]["files"]}
+            assert len(result["data"]["items"]) == 2  # Both test.py and src/main.py match
+            file_paths = {f["path"] for f in result["data"]["items"]}
             assert "test.py" in file_paths
             assert "src/main.py" in file_paths
 
@@ -42,20 +41,18 @@ class TestGetTargetFiles:
                 full_path.write_text("# Python file")
 
             result = get_target_files_impl(
-                status="pattern",
                 patterns=["**/*.py"],
                 project_root=temp_dir
             )
 
             assert "data" in result
-            assert len(result["data"]["files"]) == 3
-            file_paths = {f["path"] for f in result["data"]["files"]}
+            assert len(result["data"]["items"]) == 3
+            file_paths = {f["path"] for f in result["data"]["items"]}
             assert file_paths == {"src/main.py", "src/utils/helper.py", "tests/test_main.py"}
 
     def test_invalid_project_root(self):
         """Test error handling for invalid project root."""
         result = get_target_files_impl(
-            status="pattern",
             patterns=["*.py"],
             project_root="/nonexistent/path"
         )
@@ -63,41 +60,17 @@ class TestGetTargetFiles:
         assert "error" in result
         assert result["error"]["code"] == "NOT_FOUND"
 
-    def test_pattern_mode_without_patterns(self):
-        """Test error when patterns are missing in pattern mode."""
+    def test_empty_patterns(self):
+        """Test error when patterns are empty."""
         with tempfile.TemporaryDirectory() as temp_dir:
             result = get_target_files_impl(
-                status="pattern",
-                patterns=None,
+                patterns=[],
                 project_root=temp_dir
             )
 
             assert "error" in result
             assert result["error"]["code"] == "INVALID_INPUT"
 
-    def test_git_status_not_in_git_repo(self):
-        """Test error when trying to use git status outside git repository."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            result = get_target_files_impl(
-                status="working",
-                project_root=temp_dir
-            )
-
-            assert "error" in result
-            assert result["error"]["code"] == "INVALID_INPUT"
-            assert "Not in a git repository" in result["error"]["message"]
-
-    def test_invalid_status_mode(self):
-        """Test error for invalid status mode."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            result = get_target_files_impl(
-                status="invalid_mode",
-                project_root=temp_dir
-            )
-
-            assert "error" in result
-            assert result["error"]["code"] == "INVALID_INPUT"
-            assert "Invalid status" in result["error"]["message"]
 
     def test_multiple_patterns(self):
         """Test multiple glob patterns."""
@@ -113,13 +86,12 @@ class TestGetTargetFiles:
                 full_path.write_text("content")
 
             result = get_target_files_impl(
-                status="pattern",
                 patterns=["**/*.py", "**/*.js", "*.json"],
                 project_root=temp_dir
             )
 
             assert "data" in result
-            file_paths = {f["path"] for f in result["data"]["files"]}
+            file_paths = {f["path"] for f in result["data"]["items"]}
             expected = {"src/main.py", "src/utils.js", "tests/test.py", "config.json"}
             assert file_paths == expected
 
@@ -134,11 +106,71 @@ class TestGetTargetFiles:
                 full_path.write_text("content")
 
             result = get_target_files_impl(
-                status="pattern",
                 patterns=["/src/*.py"],  # Absolute pattern
                 project_root=temp_dir
             )
 
             assert "data" in result
-            file_paths = {f["path"] for f in result["data"]["files"]}
+            file_paths = {f["path"] for f in result["data"]["items"]}
             assert file_paths == {"src/main.py"}
+
+    def test_pagination_response_structure(self):
+        """Test that pagination response structure is correct."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create some test files
+            files = ["file1.py", "file2.py", "file3.py"]
+            for file_path in files:
+                full_path = Path(temp_dir) / file_path
+                full_path.write_text("content")
+
+            result = get_target_files_impl(
+                patterns=["*.py"],
+                project_root=temp_dir
+            )
+
+            assert "data" in result
+            assert "items" in result["data"]
+            assert "pagination" in result["data"]
+
+            # Check pagination structure
+            pagination = result["data"]["pagination"]
+            assert "page" in pagination
+            assert "total_pages" in pagination
+            assert "total_items" in pagination
+            assert "page_size" in pagination
+            assert "has_next" in pagination
+            assert "has_previous" in pagination
+            assert "estimated_tokens" in pagination
+            assert "max_tokens" in pagination
+
+    def test_pagination_parameters(self):
+        """Test pagination with different page and max_tokens parameters."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create many small files
+            files = [f"file{i}.py" for i in range(10)]
+            for file_path in files:
+                full_path = Path(temp_dir) / file_path
+                full_path.write_text("content")
+
+            # Test with small max_tokens to force pagination
+            result = get_target_files_impl(
+                patterns=["*.py"],
+                project_root=temp_dir,
+                page=1,
+                max_tokens=100  # Small limit to force pagination
+            )
+
+            assert "data" in result
+            assert len(result["data"]["items"]) <= 10
+
+            # Test page 2 if there are multiple pages
+            if result["data"]["pagination"]["has_next"]:
+                result_page2 = get_target_files_impl(
+                    patterns=["*.py"],
+                    project_root=temp_dir,
+                    page=2,
+                    max_tokens=100
+                )
+
+                assert "data" in result_page2
+                assert result_page2["data"]["pagination"]["page"] == 2

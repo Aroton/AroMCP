@@ -153,7 +153,7 @@ class TestReadFilesBatch:
             # Create test files
             files = {
                 "test1.py": "# Python file 1",
-                "test2.py": "# Python file 2", 
+                "test2.py": "# Python file 2",
                 "test.js": "// JavaScript file",
                 "README.md": "# Readme",
                 "dir/nested.py": "# Nested Python file"

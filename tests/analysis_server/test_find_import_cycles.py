@@ -1,8 +1,5 @@
 """Tests for find_import_cycles tool."""
 
-import json
-from pathlib import Path
-import pytest
 
 from aromcp.analysis_server.tools.find_import_cycles import find_import_cycles_impl
 
@@ -88,10 +85,10 @@ def c_function():
 
         assert "data" in result
         cycles = result["data"]["cycles"]
-        
+
         # Should detect the three-way cycle
         assert len(cycles) >= 1
-        
+
         # Check that we have a cycle of length 3
         cycle_lengths = [cycle["length"] for cycle in cycles]
         assert 3 in cycle_lengths
@@ -128,10 +125,10 @@ def top_function():
 
         assert "data" in result
         cycles = result["data"]["cycles"]
-        
+
         # Should not detect any cycles
         assert len(cycles) == 0
-        
+
         # Should have positive recommendations
         recommendations = result["data"]["recommendations"]
         assert any("no import cycles" in rec.lower() for rec in recommendations)
@@ -164,10 +161,10 @@ export function functionB() {
 
         assert "data" in result
         cycles = result["data"]["cycles"]
-        
+
         # Should detect JavaScript cycle
         assert len(cycles) >= 1
-        
+
         # Check cycle type classification
         for cycle in cycles:
             if cycle["type"] == "javascript_module_cycle":
@@ -182,7 +179,7 @@ import { ServiceB } from './serviceB';
 
 export class ServiceA {
     private serviceB = new ServiceB();
-    
+
     public doSomething(): string {
         return this.serviceB.process();
     }
@@ -207,7 +204,7 @@ export class ServiceB {
 
         assert "data" in result
         cycles = result["data"]["cycles"]
-        
+
         # Should detect TypeScript cycle
         assert len(cycles) >= 1
 
@@ -246,7 +243,7 @@ export function tsFunction(): string {
         )
 
         assert "data" in result
-        
+
         # Should analyze all file types
         summary = result["data"]["summary"]
         assert summary["total_files_analyzed"] >= 3
@@ -280,11 +277,11 @@ export function tsFunction(): string {
 
         assert "data" in result_shallow
         assert "data" in result_deep
-        
+
         # Deep search should find more or equal cycles
         cycles_shallow = result_shallow["data"]["cycles"]
         cycles_deep = result_deep["data"]["cycles"]
-        
+
         assert len(cycles_deep) >= len(cycles_shallow)
 
     def test_include_node_modules_parameter(self, tmp_path):
@@ -292,10 +289,10 @@ export function tsFunction(): string {
         # Create node_modules structure
         node_modules = tmp_path / "node_modules"
         node_modules.mkdir()
-        
+
         package_dir = node_modules / "some-package"
         package_dir.mkdir()
-        
+
         package_file = package_dir / "index.js"
         package_file.write_text('''
 export function packageFunction() {
@@ -327,11 +324,11 @@ export function mainFunction() {
 
         assert "data" in result_exclude
         assert "data" in result_include
-        
+
         # Including node_modules should analyze more files
         files_exclude = result_exclude["data"]["analysis_settings"]["files_analyzed"]
         files_include = result_include["data"]["analysis_settings"]["files_analyzed"]
-        
+
         assert files_include >= files_exclude
 
     def test_relative_import_resolution(self, tmp_path):
@@ -339,7 +336,7 @@ export function mainFunction() {
         # Create nested directory structure
         subdir = tmp_path / "subdir"
         subdir.mkdir()
-        
+
         # File in subdirectory
         sub_file = subdir / "sub_module.py"
         sub_file.write_text('''
@@ -364,7 +361,7 @@ def main_function():
         )
 
         assert "data" in result
-        
+
         # Should resolve relative imports and detect cycle
         cycles = result["data"]["cycles"]
         assert len(cycles) >= 1
@@ -395,7 +392,7 @@ def main_function():
 
         assert "error" in result1
         assert result1["error"]["code"] == "INVALID_INPUT"
-        
+
         assert "error" in result2
         assert result2["error"]["code"] == "INVALID_INPUT"
 
@@ -442,10 +439,10 @@ def util2_function():
 
         assert "data" in result
         cycles = result["data"]["cycles"]
-        
+
         # Should detect both cycles
         assert len(cycles) >= 2
-        
+
         # Check that severity is calculated
         for cycle in cycles:
             assert "severity" in cycle
@@ -488,10 +485,10 @@ def dependent_{i}_function():
 
         assert "data" in result
         cycles = result["data"]["cycles"]
-        
+
         # Should detect high impact cycle
         assert len(cycles) >= 1
-        
+
         for cycle in cycles:
             assert "impact" in cycle
             assert cycle["impact"] in ["low", "medium", "high"]
@@ -524,13 +521,13 @@ class PythonB:
 
         assert "data" in result
         cycles = result["data"]["cycles"]
-        
+
         if cycles:
             cycle = cycles[0]
             assert "suggestions" in cycle
             assert isinstance(cycle["suggestions"], list)
             assert len(cycle["suggestions"]) > 0
-            
+
             # Should include TYPE_CHECKING suggestion for Python
             suggestions_text = " ".join(cycle["suggestions"])
             assert "TYPE_CHECKING" in suggestions_text or "dependency injection" in suggestions_text
@@ -561,11 +558,11 @@ class PythonB:
         )
 
         assert "data" in result
-        
+
         # Should detect multiple cycles
         cycles = result["data"]["cycles"]
         assert len(cycles) >= 1
-        
+
         # Check summary statistics
         summary = result["data"]["summary"]
         assert "total_cycles_found" in summary
@@ -602,12 +599,12 @@ def light_function():
 
         assert "data" in result
         dependency_graph = result["data"]["dependency_graph"]
-        
+
         # Check simplified graph structure
         assert "total_files" in dependency_graph
         assert "total_dependencies" in dependency_graph
         assert "avg_dependencies_per_file" in dependency_graph
-        
+
         # Should not include the full graph (too large for output)
         assert "file_with_most_dependencies" in dependency_graph
         assert "most_depended_on_file" in dependency_graph
@@ -658,17 +655,17 @@ def test_function():
         """Test performance with a larger number of files."""
         # Create many files with some interconnections
         num_files = 50
-        
+
         for i in range(num_files):
             file_path = tmp_path / f"module_{i}.py"
-            
+
             # Create some import patterns
             imports = []
             if i > 0:
                 imports.append(f"from module_{i-1} import function_{i-1}")
             if i < num_files - 1 and i % 5 == 0:
                 imports.append(f"from module_{i+1} import function_{i+1}")
-            
+
             content = "\n".join(imports) + f"\n\ndef function_{i}():\n    return 'module_{i}'"
             file_path.write_text(content)
 
@@ -678,10 +675,10 @@ def test_function():
         )
 
         assert "data" in result
-        
+
         # Should process all files efficiently
         summary = result["data"]["summary"]
         assert summary["total_files_analyzed"] == num_files
-        
+
         # Should complete in reasonable time (test will timeout if too slow)
         assert "total_cycles_found" in summary

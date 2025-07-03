@@ -1,7 +1,6 @@
 """Check dependencies tool implementation for Build Tools."""
 
 import json
-import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -30,7 +29,7 @@ def check_dependencies_impl(
         # Resolve project root
         if project_root is None:
             project_root = get_project_root()
-            
+
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
         if not validation_result.get("valid", False):
@@ -40,10 +39,10 @@ def check_dependencies_impl(
                     "message": validation_result.get("error", "Invalid project root path")
                 }
             }
-            
+
         project_path = Path(project_root)
         package_json_path = project_path / "package.json"
-        
+
         # Check if package.json exists
         if not package_json_path.exists():
             return {
@@ -52,7 +51,7 @@ def check_dependencies_impl(
                     "message": "package.json not found in project root"
                 }
             }
-            
+
         # Read and parse package.json
         try:
             package_json = json.loads(package_json_path.read_text(encoding='utf-8'))
@@ -63,7 +62,7 @@ def check_dependencies_impl(
                     "message": f"Failed to parse package.json: {str(e)}"
                 }
             }
-            
+
         # Detect package manager if auto
         if package_manager == "auto":
             if (project_path / "yarn.lock").exists():
@@ -74,20 +73,20 @@ def check_dependencies_impl(
                 package_manager = "npm"
             else:
                 package_manager = "npm"  # Default fallback
-                
+
         # Extract dependencies from package.json
         dependencies = package_json.get("dependencies", {})
         dev_dependencies = package_json.get("devDependencies", {})
         peer_dependencies = package_json.get("peerDependencies", {})
         optional_dependencies = package_json.get("optionalDependencies", {})
-        
+
         all_dependencies = {
             **dependencies,
             **dev_dependencies,
             **peer_dependencies,
             **optional_dependencies
         }
-        
+
         result = {
             "package_manager": package_manager,
             "dependencies": {
@@ -102,7 +101,7 @@ def check_dependencies_impl(
             "engines": package_json.get("engines", {}),
             "scripts": package_json.get("scripts", {})
         }
-        
+
         # Check for outdated packages
         if check_outdated:
             try:
@@ -115,17 +114,17 @@ def check_dependencies_impl(
                         text=True,
                         timeout=60
                     )
-                    
+
                     if package_manager == "npm":
                         result["outdated"] = _parse_npm_outdated(outdated_result.stdout)
                     elif package_manager == "yarn":
                         result["outdated"] = _parse_yarn_outdated(outdated_result.stdout)
                     elif package_manager == "pnpm":
                         result["outdated"] = _parse_pnpm_outdated(outdated_result.stdout)
-                        
+
             except (subprocess.TimeoutExpired, subprocess.SubprocessError):
                 result["outdated"] = {"error": "Failed to check outdated packages"}
-                
+
         # Check for security vulnerabilities
         if check_security:
             try:
@@ -138,19 +137,19 @@ def check_dependencies_impl(
                         text=True,
                         timeout=60
                     )
-                    
+
                     if package_manager == "npm":
                         result["security"] = _parse_npm_audit(audit_result.stdout)
                     elif package_manager == "yarn":
                         result["security"] = _parse_yarn_audit(audit_result.stdout)
                     elif package_manager == "pnpm":
                         result["security"] = _parse_pnpm_audit(audit_result.stdout)
-                        
+
             except (subprocess.TimeoutExpired, subprocess.SubprocessError):
                 result["security"] = {"error": "Failed to run security audit"}
-                
+
         return {"data": result}
-        
+
     except Exception as e:
         return {
             "error": {
@@ -185,10 +184,10 @@ def _parse_npm_outdated(output: str) -> list[dict[str, Any]]:
     try:
         if not output.strip():
             return []
-            
+
         data = json.loads(output)
         outdated = []
-        
+
         for package, info in data.items():
             outdated.append({
                 "package": package,
@@ -197,7 +196,7 @@ def _parse_npm_outdated(output: str) -> list[dict[str, Any]]:
                 "latest": info.get("latest"),
                 "location": info.get("location")
             })
-            
+
         return outdated
     except (json.JSONDecodeError, AttributeError):
         return []
@@ -208,7 +207,7 @@ def _parse_yarn_outdated(output: str) -> list[dict[str, Any]]:
     try:
         if not output.strip():
             return []
-            
+
         data = json.loads(output)
         return data.get("data", {}).get("body", [])
     except (json.JSONDecodeError, AttributeError):
@@ -220,7 +219,7 @@ def _parse_pnpm_outdated(output: str) -> list[dict[str, Any]]:
     try:
         if not output.strip():
             return []
-            
+
         data = json.loads(output)
         return data if isinstance(data, list) else []
     except (json.JSONDecodeError, AttributeError):
@@ -232,9 +231,9 @@ def _parse_npm_audit(output: str) -> dict[str, Any]:
     try:
         if not output.strip():
             return {"vulnerabilities": [], "summary": {"total": 0}}
-            
+
         data = json.loads(output)
-        
+
         # Extract vulnerability summary
         summary = {
             "total": data.get("metadata", {}).get("vulnerabilities", {}).get("total", 0),
@@ -243,7 +242,7 @@ def _parse_npm_audit(output: str) -> dict[str, Any]:
             "high": data.get("metadata", {}).get("vulnerabilities", {}).get("high", 0),
             "critical": data.get("metadata", {}).get("vulnerabilities", {}).get("critical", 0)
         }
-        
+
         # Extract individual vulnerabilities
         vulnerabilities = []
         for advisory_id, advisory in data.get("advisories", {}).items():
@@ -255,12 +254,12 @@ def _parse_npm_audit(output: str) -> dict[str, Any]:
                 "patched_versions": advisory.get("patched_versions"),
                 "module_name": advisory.get("module_name")
             })
-            
+
         return {
             "summary": summary,
             "vulnerabilities": vulnerabilities
         }
-        
+
     except (json.JSONDecodeError, AttributeError):
         return {"vulnerabilities": [], "summary": {"total": 0}}
 
@@ -270,18 +269,18 @@ def _parse_yarn_audit(output: str) -> dict[str, Any]:
     try:
         if not output.strip():
             return {"vulnerabilities": [], "summary": {"total": 0}}
-            
+
         data = json.loads(output)
-        
+
         # Yarn audit format may vary, extract what we can
         vulnerabilities = data.get("data", {}).get("vulnerabilities", [])
         summary = data.get("data", {}).get("summary", {"total": len(vulnerabilities)})
-        
+
         return {
             "summary": summary,
             "vulnerabilities": vulnerabilities
         }
-        
+
     except (json.JSONDecodeError, AttributeError):
         return {"vulnerabilities": [], "summary": {"total": 0}}
 
@@ -291,9 +290,9 @@ def _parse_pnpm_audit(output: str) -> dict[str, Any]:
     try:
         if not output.strip():
             return {"vulnerabilities": [], "summary": {"total": 0}}
-            
+
         data = json.loads(output)
-        
+
         # Extract vulnerabilities from pnpm format
         vulnerabilities = []
         if isinstance(data, dict) and "advisories" in data:
@@ -304,11 +303,11 @@ def _parse_pnpm_audit(output: str) -> dict[str, Any]:
                     "severity": advisory.get("severity"),
                     "module_name": advisory.get("module_name")
                 })
-                
+
         return {
             "summary": {"total": len(vulnerabilities)},
             "vulnerabilities": vulnerabilities
         }
-        
+
     except (json.JSONDecodeError, AttributeError):
         return {"vulnerabilities": [], "summary": {"total": 0}}

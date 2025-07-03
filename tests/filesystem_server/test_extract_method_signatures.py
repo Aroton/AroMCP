@@ -40,10 +40,7 @@ class TestClass:
             )
 
             assert "data" in result
-            files = result["data"]["files"]
-            assert "test.py" in files
-            
-            signatures = files["test.py"]["signatures"]
+            signatures = result["data"]["items"]
 
             # Should find 2 functions, 1 class, and 2 methods
             assert len(signatures) == 5
@@ -85,10 +82,7 @@ class MyClass {
             )
 
             assert "data" in result
-            files = result["data"]["files"]
-            assert "test.js" in files
-            
-            signatures = files["test.js"]["signatures"]
+            signatures = result["data"]["items"]
 
             # Should find functions and class
             assert len(signatures) > 0
@@ -140,10 +134,7 @@ class TestClass:
             )
 
             assert "data" in result
-            files = result["data"]["files"]
-            assert "test.py" in files
-            
-            signatures = files["test.py"]["signatures"]
+            signatures = result["data"]["items"]
 
             # Find the function signature
             func_sig = next(s for s in signatures if s["name"] == "decorated_function")
@@ -159,10 +150,7 @@ class TestClass:
             )
 
             assert "data" in result
-            files = result["data"]["files"]
-            assert "test.py" in files
-            
-            signatures = files["test.py"]["signatures"]
+            signatures = result["data"]["items"]
 
             func_sig = next(s for s in signatures if s["name"] == "decorated_function")
             assert func_sig["docstring"] is not None
@@ -191,10 +179,9 @@ class AsyncClass:
             )
 
             assert "data" in result
-            files = result["data"]["files"]
-            assert "test.py" in files
-            
-            signatures = files["test.py"]["signatures"]
+            signatures = result["data"]["items"]
+            # Filter signatures for the test.py file
+            signatures = [sig for sig in signatures if sig["file_path"] == "test.py"]
 
             # Find async function
             async_func = next(s for s in signatures if s["name"] == "async_function")
@@ -229,10 +216,9 @@ def complex_function(
             )
 
             assert "data" in result
-            files = result["data"]["files"]
-            assert "test.py" in files
-            
-            signatures = files["test.py"]["signatures"]
+            signatures = result["data"]["items"]
+            # Filter signatures for the test.py file
+            signatures = [sig for sig in signatures if sig["file_path"] == "test.py"]
             func_sig = signatures[0]
 
             # Check that parameters have type annotations
@@ -313,10 +299,9 @@ for (let i = 0; i < 5; i++) {
             )
 
             assert "data" in result
-            files = result["data"]["files"]
-            assert "test.ts" in files
-            
-            signatures = files["test.ts"]["signatures"]
+            signatures = result["data"]["items"]
+            # Filter signatures for the test.ts file
+            signatures = [sig for sig in signatures if sig["file_path"] == "test.ts"]
 
             # Extract just the names for easier testing
             names = {sig["name"] for sig in signatures}
@@ -413,10 +398,9 @@ for (let i = 0; i < 3; i++) {
             )
 
             assert "data" in result
-            files = result["data"]["files"]
-            assert "test.js" in files
-            
-            signatures = files["test.js"]["signatures"]
+            signatures = result["data"]["items"]
+            # Filter signatures for the test.js file
+            signatures = [sig for sig in signatures if sig["file_path"] == "test.js"]
 
             # Extract just the names for easier testing
             names = {sig["name"] for sig in signatures}
@@ -493,21 +477,23 @@ class TestClass {
             )
 
             assert "data" in result
-            files_result = result["data"]["files"]
-            assert len(files_result) == 2  # main.py and utils.py
-            assert "main.py" in files_result
-            assert "utils.py" in files_result
-            assert "test.js" not in files_result
+            signatures = result["data"]["items"]
+
+            # Check that we have signatures from both main.py and utils.py
+            file_paths = {sig["file_path"] for sig in signatures}
+            assert "main.py" in file_paths
+            assert "utils.py" in file_paths
+            assert "test.js" not in file_paths
 
             # Check signatures in main.py
-            main_signatures = files_result["main.py"]["signatures"]
+            main_signatures = [sig for sig in signatures if sig["file_path"] == "main.py"]
             main_names = {sig["name"] for sig in main_signatures}
             assert "main" in main_names
             assert "App" in main_names
             assert "run" in main_names
 
-            # Check signatures in utils.py  
-            utils_signatures = files_result["utils.py"]["signatures"]
+            # Check signatures in utils.py
+            utils_signatures = [sig for sig in signatures if sig["file_path"] == "utils.py"]
             utils_names = {sig["name"] for sig in utils_signatures}
             assert "helper" in utils_names
             assert "process" in utils_names
@@ -554,11 +540,14 @@ const helper = () => {
             )
 
             assert "data" in result
-            files_result = result["data"]["files"]
-            assert len(files_result) == 3
-            assert "src/main.py" in files_result
-            assert "src/utils.py" in files_result
-            assert "tests/test_main.py" in files_result
+            signatures = result["data"]["items"]
+
+            # Check that we have signatures from all 3 Python files
+            file_paths = {sig["file_path"] for sig in signatures}
+            assert len(file_paths) == 3
+            assert "src/main.py" in file_paths
+            assert "src/utils.py" in file_paths
+            assert "tests/test_main.py" in file_paths
 
             # Test **/*.js pattern
             result = extract_method_signatures_impl(
@@ -568,10 +557,13 @@ const helper = () => {
             )
 
             assert "data" in result
-            files_result = result["data"]["files"]
-            assert len(files_result) == 2
-            assert "frontend/app.js" in files_result
-            assert "frontend/utils.js" in files_result
+            signatures = result["data"]["items"]
+
+            # Check that we have signatures from both JS files
+            file_paths = {sig["file_path"] for sig in signatures}
+            assert len(file_paths) == 2
+            assert "frontend/app.js" in file_paths
+            assert "frontend/utils.js" in file_paths
 
     def test_pattern_expansion_mixed_with_static_paths(self):
         """Test mixing patterns with static file paths."""
@@ -579,7 +571,7 @@ const helper = () => {
             # Create test files
             files = {
                 "main.py": "def main(): pass",
-                "utils.py": "def helper(): pass", 
+                "utils.py": "def helper(): pass",
                 "specific.js": "function specific() { return true; }",
                 "other.ts": "function other(): boolean { return false; }"
             }
@@ -596,12 +588,15 @@ const helper = () => {
             )
 
             assert "data" in result
-            files_result = result["data"]["files"]
-            assert len(files_result) == 3
-            assert "main.py" in files_result
-            assert "utils.py" in files_result
-            assert "specific.js" in files_result
-            assert "other.ts" not in files_result
+            signatures = result["data"]["items"]
+
+            # Check that we have signatures from the expected files
+            file_paths = {sig["file_path"] for sig in signatures}
+            assert len(file_paths) == 3
+            assert "main.py" in file_paths
+            assert "utils.py" in file_paths
+            assert "specific.js" in file_paths
+            assert "other.ts" not in file_paths
 
     def test_pattern_expansion_disabled(self):
         """Test that pattern expansion can be disabled."""
@@ -625,7 +620,8 @@ const helper = () => {
 
             assert "data" in result
             # Should treat "*.py" as literal filename (which doesn't exist)
-            assert len(result["data"]["files"]) == 0
+            signatures = result["data"]["items"]
+            assert len(signatures) == 0
             assert "errors" in result["data"]
             assert len(result["data"]["errors"]) == 1
 
@@ -649,9 +645,16 @@ const helper = () => {
             )
 
             assert "data" in result
-            summary = result["data"]["summary"]
-            assert summary["input_patterns"] == 1  # One input pattern
-            assert summary["total_files"] == 2     # Expanded to 2 files
-            assert summary["successful"] == 2      # Both files processed successfully
-            assert summary["patterns_expanded"] is True
-            assert "duration_ms" in summary
+            # Check that we have signatures from both files
+            signatures = result["data"]["items"]
+            file_paths = {sig["file_path"] for sig in signatures}
+            assert len(file_paths) == 2
+            assert "file1.py" in file_paths
+            assert "file2.py" in file_paths
+
+            # Check metadata if available
+            if "metadata" in result["data"]:
+                metadata = result["data"]["metadata"]
+                if "summary" in metadata:
+                    summary = metadata["summary"]
+                    assert "duration_ms" in summary

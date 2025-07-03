@@ -21,31 +21,27 @@ def register_filesystem_tools(mcp):
     @mcp.tool
     @json_convert
     def get_target_files(
-        status: str = "working",
-        patterns: list[str] | None = None,
+        patterns: str | list[str],
         project_root: str | None = None,
         page: int = 1,
         max_tokens: int = 20000
     ) -> dict[str, Any]:
-        """List files based on git status or glob patterns.
+        """List files based on path patterns.
 
         Args:
-            status: Git status filter - "working", "staged", "branch", "commit", or
-                "pattern" (for glob pattern matching)
             patterns: Glob patterns to match files (e.g., "**/*.py", "src/**/*.js")
-                     Used only when status="pattern"
             project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             page: Page number for pagination (1-based, default: 1)
             max_tokens: Maximum tokens per page (default: 20000)
         """
         if project_root is None:
             project_root = get_project_root()
-        return get_target_files_impl(status, patterns, project_root, page, max_tokens)
+        return get_target_files_impl(patterns, project_root, page, max_tokens)
 
     @mcp.tool
     @json_convert
     def read_files_batch(
-        file_paths: list[str],
+        file_paths: str | list[str],
         project_root: str | None = None,
         encoding: str = "auto",
         expand_patterns: bool = True
@@ -117,9 +113,9 @@ def register_filesystem_tools(mcp):
     @mcp.tool
     @json_convert
     def find_imports_for_files(
-        file_paths: list[str],
+        file_paths: str | list[str],
         project_root: str | None = None,
-        search_patterns: list[str] | None = None,
+        search_patterns: str | list[str] | None = None,
         expand_patterns: bool = True,
         page: int = 1,
         max_tokens: int = 20000
@@ -144,7 +140,7 @@ def register_filesystem_tools(mcp):
     @mcp.tool
     @json_convert
     def load_documents_by_pattern(
-        patterns: list[str],
+        patterns: str | list[str],
         project_root: str | None = None,
         max_file_size: int = 1024 * 1024,
         encoding: str = "auto"

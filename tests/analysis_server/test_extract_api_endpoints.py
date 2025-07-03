@@ -1,10 +1,11 @@
 """Tests for extract_api_endpoints tool."""
 
-import pytest
 import tempfile
 from pathlib import Path
 
-from aromcp.analysis_server.tools.extract_api_endpoints import extract_api_endpoints_impl
+from aromcp.analysis_server.tools.extract_api_endpoints import (
+    extract_api_endpoints_impl,
+)
 
 
 class TestExtractApiEndpoints:
@@ -51,19 +52,19 @@ module.exports = router;
 
             assert "data" in result
             data = result["data"]
-            
+
             endpoints = data["endpoints"]
             assert len(endpoints) == 5
-            
+
             # Check GET /users
             get_users = next(ep for ep in endpoints if ep["method"] == "GET" and ep["path"] == "/users")
-            assert get_users["is_async"] == True
+            assert get_users["is_async"]
             assert get_users["parameters"] == []
-            
+
             # Check POST /users with middleware
             post_users = next(ep for ep in endpoints if ep["method"] == "POST" and ep["path"] == "/users")
             assert "validateUser" in post_users["middleware"]
-            
+
             # Check parameterized routes
             get_user_by_id = next(ep for ep in endpoints if ep["method"] == "GET" and "id" in ep["path"])
             assert "id" in get_user_by_id["parameters"]
@@ -111,16 +112,16 @@ async def update_user(user_id: int, user: UserCreate):
 
             assert "data" in result
             data = result["data"]
-            
+
             endpoints = data["endpoints"]
             # May find more due to regex patterns, so check we find at least the expected ones
             assert len(endpoints) >= 4
-            
+
             # Check root endpoint
             root_endpoint = next(ep for ep in endpoints if ep["path"] == "/")
             assert root_endpoint["method"] == "GET"
             assert "Root endpoint" in root_endpoint["description"]
-            
+
             # Check parameterized endpoint
             get_user = next(ep for ep in endpoints if ep["method"] == "GET" and "user_id" in ep["path"])
             assert "user_id" in get_user["parameters"]
@@ -157,11 +158,11 @@ export async function DELETE(request: Request) {
 
             assert "data" in result
             data = result["data"]
-            
+
             endpoints = data["endpoints"]
             # May find more due to regex patterns, so check we find at least the expected ones
             assert len(endpoints) >= 3
-            
+
             # Check that all endpoints have derived paths
             methods = [ep["method"] for ep in endpoints]
             assert "GET" in methods
@@ -178,7 +179,7 @@ import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common'
 
 @Controller('users')
 export class UserController {
-  
+
   @Get()
   findAll(): string {
     return 'All users';
@@ -214,11 +215,11 @@ export class UserController {
 
             assert "data" in result
             data = result["data"]
-            
+
             endpoints = data["endpoints"]
             # May find more due to regex patterns, so check we find at least the expected ones
             assert len(endpoints) >= 5
-            
+
             # Check various HTTP methods
             methods = [ep["method"] for ep in endpoints]
             assert "GET" in methods
@@ -258,14 +259,14 @@ module.exports = app;
 
             assert "data" in result
             data = result["data"]
-            
+
             middleware = data["middleware"]
             assert len(middleware) >= 2  # Should find global and path-specific middleware
-            
+
             # Check for global middleware
             global_middleware = [mw for mw in middleware if mw["type"] == "global"]
             assert len(global_middleware) >= 2
-            
+
             # Check for path-specific middleware
             path_middleware = [mw for mw in middleware if mw["type"] == "path-specific"]
             assert len(path_middleware) >= 2
@@ -305,11 +306,11 @@ module.exports = router;
 
             assert "data" in result
             endpoints = result["data"]["endpoints"]
-            
+
             # Check that descriptions are extracted
             get_products = next(ep for ep in endpoints if ep["method"] == "GET")
             assert len(get_products["description"]) > 0
-            
+
             post_products = next(ep for ep in endpoints if ep["method"] == "POST")
             assert "authentication" in post_products["description"].lower()
 
@@ -337,12 +338,12 @@ router.get('/categories/:category/items/:id/details/:detailId', getDetails);
 
             assert "data" in result
             endpoints = result["data"]["endpoints"]
-            
+
             # Check parameter extraction
             post_endpoint = next(ep for ep in endpoints if "posts" in ep["path"])
             assert "userId" in post_endpoint["parameters"]
             assert "postId" in post_endpoint["parameters"]
-            
+
             details_endpoint = next(ep for ep in endpoints if "details" in ep["path"])
             assert len(details_endpoint["parameters"]) == 3
 
@@ -356,7 +357,7 @@ router.get('/categories/:category/items/:id/details/:detailId', getDetails);
 router.get('/users', getUsers);
 router.post('/users', createUser);
             """)
-            
+
             products_file = Path(temp_dir) / "routes" / "products.js"
             products_file.write_text("""
 router.get('/products', getProducts);
@@ -372,18 +373,18 @@ router.delete('/products/:id', deleteProduct);
 
             assert "data" in result
             data = result["data"]
-            
+
             summary = data["summary"]
             assert summary["total_endpoints"] == 5
             assert summary["files_analyzed"] == 2
-            
+
             # Check HTTP method statistics
             http_methods = summary["http_methods"]
             assert http_methods.get("GET", 0) >= 2
             assert http_methods.get("POST", 0) >= 1
             assert http_methods.get("PUT", 0) >= 1
             assert http_methods.get("DELETE", 0) >= 1
-            
+
             # Check route grouping
             route_groups = summary["route_groups"]
             assert "/users" in route_groups
@@ -404,7 +405,7 @@ router.delete('/products/:id', deleteProduct);
 
             assert "data" in result
             data = result["data"]
-            
+
             assert data["endpoints"] == []
             assert data["middleware"] == []
             assert data["summary"]["total_endpoints"] == 0
@@ -426,7 +427,7 @@ app.get('/custom-endpoint', customHandler);
                 route_patterns=["**/routes/**/*.js"],
                 include_middleware=True
             )
-            
+
             assert result1["data"]["summary"]["total_endpoints"] == 0
 
             # Test with custom patterns (should find it)
@@ -435,7 +436,7 @@ app.get('/custom-endpoint', customHandler);
                 route_patterns=["**/handlers/**/*.js"],
                 include_middleware=True
             )
-            
+
             assert result2["data"]["summary"]["total_endpoints"] >= 1
 
     def test_middleware_disabled(self):
@@ -456,7 +457,7 @@ router.get('/test', localMiddleware, handler);
 
             assert "data" in result
             data = result["data"]
-            
+
             # Middleware should be empty when disabled
             assert data["middleware"] == []
 
@@ -484,10 +485,10 @@ userRouter.get('/:id', getUserById);
 app.use('/users', userRouter);
 
 // Multiple middleware
-router.get('/protected', 
-  authenticate, 
-  authorize, 
-  rateLimit, 
+router.get('/protected',
+  authenticate,
+  authorize,
+  rateLimit,
   getProtectedResource
 );
 
