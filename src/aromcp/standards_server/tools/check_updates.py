@@ -108,15 +108,20 @@ def check_updates_impl(
             template_updated = frontmatter.get("updated", "")
             filesystem_modified = md_file["lastModified"]
 
-            # Convert template_updated to string if it's a datetime object
+            # Convert template_updated to string if it's a datetime/date object
             if template_updated and not isinstance(template_updated, str):
-                # Convert datetime to ISO string with Z suffix for UTC
-                if template_updated.tzinfo is not None:
-                    template_updated = template_updated.isoformat().replace(
-                        '+00:00', 'Z'
-                    )
+                # Handle both datetime.datetime and datetime.date objects
+                if hasattr(template_updated, 'tzinfo'):
+                    # datetime.datetime object
+                    if template_updated.tzinfo is not None:
+                        template_updated = template_updated.isoformat().replace(
+                            '+00:00', 'Z'
+                        )
+                    else:
+                        template_updated = template_updated.isoformat() + 'Z'
                 else:
-                    template_updated = template_updated.isoformat() + 'Z'
+                    # datetime.date object - convert to ISO date string
+                    template_updated = template_updated.isoformat()
 
             # Prefer template updated field for comparison
             last_modified = (

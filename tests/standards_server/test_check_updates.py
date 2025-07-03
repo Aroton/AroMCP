@@ -227,3 +227,72 @@ priority: required
             assert result["data"]["needsUpdate"][0]["reason"] == "modified"
             assert result["data"]["needsUpdate"][0]["standardId"] == "test-standard"
             assert result["data"]["needsUpdate"][0]["templateUpdated"] == "2024-01-15T10:30:00Z"
+    
+    def test_date_only_format_handling(self):
+        """Test that date-only format in updated field is handled correctly."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["MCP_FILE_ROOT"] = temp_dir
+            
+            standards_dir = Path(temp_dir) / "standards"
+            standards_dir.mkdir()
+            
+            # Create file with date-only updated field
+            date_only_md = standards_dir / "date-only.md"
+            date_only_md.write_text("""---
+id: date-only
+name: Date Only Standard
+category: general
+tags: [test]
+applies_to: ["**/*.ts"]
+severity: error
+updated: 2024-01-15
+priority: required
+---
+
+# Date Only Standard""")
+            
+            result = check_updates_impl("standards", temp_dir)
+            
+            assert "data" in result
+            assert len(result["data"]["needsUpdate"]) == 1
+            assert result["data"]["needsUpdate"][0]["standardId"] == "date-only"
+            # Should convert date to ISO string format
+            assert result["data"]["needsUpdate"][0]["templateUpdated"] == "2024-01-15"
+    
+    def test_real_world_header_format(self):
+        """Test with actual header format from frontend-standards file."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["MCP_FILE_ROOT"] = temp_dir
+            
+            standards_dir = Path(temp_dir) / "standards"
+            standards_dir.mkdir()
+            
+            # Create file with real-world header format
+            frontend_md = standards_dir / "frontend-standards.md"
+            frontend_md.write_text("""---
+id: frontend-standards
+name: Frontend Standards
+category: frontend
+tags: [react, nextjs, typescript, components, hooks, ssr, forms, performance]
+applies_to: ["app/**/*.tsx", "src/components/**/*.tsx", "src/hooks/**/*.ts", "app/**/*.ts"]
+severity: warning
+updated: 2025-01-03T10:00:00
+priority: required
+dependencies: [data-fetching-patterns, type-safety-checklist, api-standards]
+description: Standards for React components, hooks, SSR/CSR patterns, and frontend architecture in Next.js
+---
+
+# Frontend Standards
+
+Real world content here.""")
+            
+            result = check_updates_impl("standards", temp_dir)
+            
+            assert "data" in result
+            assert len(result["data"]["needsUpdate"]) == 1
+            entry = result["data"]["needsUpdate"][0]
+            assert entry["standardId"] == "frontend-standards"
+            assert entry["reason"] == "new"
+            # Should handle datetime format correctly  
+            assert entry["templateUpdated"] == "2025-01-03T10:00:00Z"
+            assert "filesystemModified" in entry
