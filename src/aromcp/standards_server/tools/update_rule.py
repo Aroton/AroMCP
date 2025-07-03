@@ -24,24 +24,24 @@ def _validate_eslint_rule_content(content: str) -> bool:
         True if content is a valid ESLint rule, False otherwise
     """
     import re
-    
+
     # Remove comments and normalize whitespace for parsing
     content_normalized = re.sub(r'//.*?$', '', content, flags=re.MULTILINE)
     content_normalized = re.sub(r'/\*.*?\*/', '', content_normalized, flags=re.DOTALL)
     content_normalized = re.sub(r'\s+', ' ', content_normalized).strip()
-    
+
     # Must start with module.exports
     if not re.search(r'module\.exports\s*=', content_normalized):
         return False
-    
+
     # Must have meta property
     if not re.search(r'meta\s*:', content_normalized):
         return False
-    
+
     # Must have create property (function)
     if not re.search(r'create\s*:', content_normalized):
         return False
-    
+
     # Must not contain any configuration objects (those are managed by API)
     forbidden_patterns = [
         r'plugins\s*:',
@@ -52,11 +52,11 @@ def _validate_eslint_rule_content(content: str) -> bool:
         r'parser\s*:',
         r'parserOptions\s*:'
     ]
-    
+
     for pattern in forbidden_patterns:
         if re.search(pattern, content_normalized):
             return False
-    
+
     return True
 
 
@@ -151,7 +151,7 @@ def update_rule_impl(
                         "message": "ai_hints must be a list after JSON parsing"
                     }
                 }
-            
+
             # Validate hint structure
             for i, hint in enumerate(ai_hints):
                 if not isinstance(hint, dict):
@@ -161,7 +161,7 @@ def update_rule_impl(
                             "message": f"Hint {i+1} must be an object"
                         }
                     }
-                    
+
                 required_hint_fields = ["rule", "context", "correctExample", "incorrectExample"]
                 for field in required_hint_fields:
                     if field not in hint:
@@ -192,11 +192,11 @@ def update_rule_impl(
                 }
 
             from pathlib import Path
-            
+
             # Write each ESLint file
             eslint_dir = Path(project_root) / ".aromcp" / "eslint"
             eslint_dir.mkdir(parents=True, exist_ok=True)
-            
+
             files_written = 0
             for filename, content in eslint_files.items():
                 if not isinstance(content, str):
@@ -206,7 +206,7 @@ def update_rule_impl(
                             "message": f"Content for file '{filename}' must be a string"
                         }
                     }
-                
+
                 # Enhanced filename validation
                 if ".." in filename or filename.startswith("/"):
                     return {
@@ -215,7 +215,7 @@ def update_rule_impl(
                             "message": f"Invalid filename: {filename}"
                         }
                     }
-                
+
                 # Validate filename restrictions
                 filename_lower = filename.lower()
                 if "config" in filename_lower:
@@ -225,7 +225,7 @@ def update_rule_impl(
                             "message": f"ESLint rule files cannot contain 'config' in filename: {filename}. Configuration files are managed by the API."
                         }
                     }
-                
+
                 if filename_lower.startswith("index"):
                     return {
                         "error": {
@@ -233,7 +233,7 @@ def update_rule_impl(
                             "message": f"ESLint rule files cannot be named 'index': {filename}. Index files are managed by the API."
                         }
                     }
-                
+
                 # Validate file must be in rules/ directory
                 if not filename.startswith("rules/") or not filename.endswith(".js"):
                     return {
@@ -242,7 +242,7 @@ def update_rule_impl(
                             "message": f"ESLint files must be in 'rules/' directory and end with '.js': {filename}"
                         }
                     }
-                
+
                 # Validate content is a module.exports ESLint rule
                 if not _validate_eslint_rule_content(content):
                     return {
@@ -251,18 +251,18 @@ def update_rule_impl(
                             "message": f"File '{filename}' must contain a valid module.exports ESLint rule with meta and create properties"
                         }
                     }
-                
+
                 file_path = eslint_dir / filename
                 # Create subdirectories if needed
                 file_path.parent.mkdir(parents=True, exist_ok=True)
-                
+
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(content)
                 files_written += 1
-            
+
             results["eslintFilesWritten"] = files_written
             results["eslintUpdated"] = True
-            
+
             # Update ESLint configuration files after writing rules
             update_eslint_config(project_root)
 

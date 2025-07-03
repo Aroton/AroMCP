@@ -92,6 +92,14 @@ def select_hints_by_budget(
                 "incorrectExample": hint.get("incorrectExample", ""),
                 "relevanceScore": round(score, 2)
             }
+            
+            # Include import map if present
+            if "importMap" in hint:
+                response_hint["importMap"] = hint["importMap"]
+            
+            # Include standard ID if present for reference
+            if "standardId" in hint:
+                response_hint["standardId"] = hint["standardId"]
             selected.append(response_hint)
             total_tokens += hint_tokens
         else:

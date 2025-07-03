@@ -55,8 +55,8 @@ def _has_valid_yaml_header(file_path: str) -> bool:
         True if the file has a valid YAML header with id and updated fields
     """
     frontmatter = _parse_yaml_frontmatter(file_path)
-    return (frontmatter is not None and 
-            'id' in frontmatter and 
+    return (frontmatter is not None and
+            'id' in frontmatter and
             'updated' in frontmatter)
 
 
@@ -112,7 +112,7 @@ def check_updates_impl(
             # Get template updated field (guaranteed to exist due to validation)
             template_updated_raw = frontmatter["updated"]
             filesystem_modified = md_file["lastModified"]
-            
+
             # Convert template_updated to string if it's not already a string
             if isinstance(template_updated_raw, str):
                 template_updated = template_updated_raw

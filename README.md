@@ -104,32 +104,46 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 
 **Phase 1: Discovery & Planning** (MANDATORY for ALL operations - MUST use separate Task agent)
 - Launch a dedicated Task agent for discovery that focuses on the specific work at hand
+- This task has the following goals:
+  - Determine what files need to be created
+  - Summarize standards that should be used
+  - Determine optimal agent strategy (single vs parallel) for the actual work phase
 - Use targeted AroMCP file discovery tools to understand relevant project context (avoid reading all files of a type)
+- Always load coding standards FIRST for target files.
 - Analyze the scope and complexity of operations needed based on the specific task requirements
-- Determine optimal agent strategy (single vs parallel) for the actual work phase
-- **Example**: For creating one new API endpoint, discover similar existing endpoints and understand project structure
+- **Example**:
+  - I am creating a new file in "api/test/route.ts"
+  - Call `hints_for_file` for "api/test/route.ts"
+  - Analyze hints, and determine what standards must be followed
+  - Look up any other files if unclear on standards
+  - Determine whether files should be processed in parallel. Determine file batches to process in each sub agent.
 
 **Phase 2: Structured Operations** (MANDATORY for ALL operations)
-- Launch Task agents to handle file operations (use judgment on single vs parallel based on Phase 1 analysis)
+- Launch Task agents to handle file operations (use judgment on single vs parallel based on Phase 1 analysis) **launch parallel agents with the task tool for parallel workstrems**
 - **FIRST ACTION**: Each agent must call `hints_for_file` for all files they will modify OR create (including new files that don't exist yet)
 - Each agent should choose appropriate tools for file operations (AroMCP tools preferred, but agents can use standard tools when more suitable)
 - Agents can create new files when necessary (this overrides general "avoid file creation" guidance)
 - Agents should use the hints to guide their implementation decisions and follow project patterns
-- **Example**: Single agent first gets hints for the new API file path, then creates the file following discovered patterns
-- Run quality checks using `parse_lint_results` and `parse_typescript_errors` for files updated
-- DO NOT RUN DEV SERVERS
-- DO NOT RUN CURL COMMANDS
+- **Example**:
+  - agent analyzes summary from phase 1
+  - agent calls `hints_for_file` for API file path
+  - agent creates files according to standards
+  - agent runs minimal validations. `parse_lint_results`, `parse_typescript_errors`, and any tests written for modified files.
+  - MANDATOR: DO NOT RUN VALIDATIONS FOR THE ENTIRE CODE BASE
+  - MANDATORY: agent DOES NOT RUN THE DEV SERVER AND TEST THE ACTION API
+  - MANDATORY: AGENT DOES NOT RUN ANY curl COMMANDS
 
 **Phase 3: Quality Assurance** (MANDATORY for ALL operations - ONLY after ALL work is complete)
 - Wait until ALL Task agents from Phase 2 have completed their file operations
 - Run comprehensive quality checks using `parse_lint_results` and `parse_typescript_errors`
 - Identify any linting errors, type errors, or other issues introduced during operations
+- Run full build and fix any issues
 - Launch additional Task agents to fix specific errors, with each agent focusing on particular files or error types
 - **Example**: Even after creating one simple file, validate it integrates properly with the project
 
 **Decision Points for AI:**
 - **Batch Size**: Agents decide optimal file grouping based on file size, complexity, and relationships
-- **Agent Strategy**: Determine whether to use parallel agents or single agent based on task complexity
+- **Agent Strategy**: Determine whether to use parallel agents (tasks) or single agent (todowrite) based on task complexity
 - **Error Handling**: Choose appropriate strategies for fixing different types of errors
 - **File Dependencies**: Consider import relationships and dependencies when organizing work
 - **Operation Type**: Adapt strategy based on whether creating, modifying, or deleting files
@@ -142,6 +156,7 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 - **Complete Before Validate**: Phase 3 validation only starts after ALL Phase 2 work is complete
 - **File Creation Permitted**: This workflow overrides general "avoid file creation" guidance when files are needed
 - **Token Efficiency**: Each Task agent works within manageable token limits
+- **Sub agents**: parallel work streams are run in sub agents using the task tool. Run multiple Task invocations in a SINGLE message.
 
 **Common Examples Requiring This Workflow:**
 - ✅ Creating a single new API endpoint file

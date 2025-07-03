@@ -44,12 +44,12 @@ def hints_for_file_impl(
 ) -> dict[str, Any]:
     """
     Gets relevant hints for a specific file with relevance scoring.
-    
+
     Args:
         file_path: Path to the file to get hints for
         max_tokens: Maximum tokens to return in response
         project_root: Project root directory
-        
+
     Returns:
         Dict with hints array and totalTokens
     """
@@ -102,8 +102,9 @@ def hints_for_file_impl(
             hints = load_ai_hints(standard_id, project_root)
 
             for hint in hints:
-                # Add metadata reference for priority sorting
+                # Add metadata reference for priority sorting and standard ID
                 hint["metadata"] = metadata
+                hint["standardId"] = standard_id
                 hints_with_scores.append((hint, relevance_score))
 
         # Apply ESLint coverage deprioritization
@@ -118,10 +119,55 @@ def hints_for_file_impl(
             deprioritized_hints, max_tokens
         )
 
+        # Extract import maps and optimize token usage
+        global_import_maps = {}  # Structure: { "module_name": [import_objects] }
+        optimized_hints = []
+
+        for i, hint in enumerate(selected_hints):
+            # Extract import map if present
+            modules_used = []
+            if "importMap" in hint:
+                import_map = hint["importMap"]
+
+                # Organize imports by module name
+                if import_map:  # Check if import map has entries
+                    for import_item in import_map:
+                        module_name = import_item.get("module", "")
+                        if module_name:
+                            if module_name not in global_import_maps:
+                                global_import_maps[module_name] = []
+
+                            # Check if this exact import already exists for this module
+                            existing_statements = [imp.get("statement", "") for imp in global_import_maps[module_name]]
+                            if import_item.get("statement", "") not in existing_statements:
+                                # Remove the "type" field before adding to global import maps
+                                clean_import = {k: v for k, v in import_item.items() if k != "type"}
+                                global_import_maps[module_name].append(clean_import)
+
+                            if module_name not in modules_used:
+                                modules_used.append(module_name)
+
+            # Create optimized hint without import map, metadata, and standardId
+            optimized_hint = {k: v for k, v in hint.items() if k not in ("importMap", "metadata", "standardId")}
+
+            # Add modules array
+            if modules_used:
+                optimized_hint["modules"] = sorted(modules_used)  # Sort for consistency
+
+            # Apply import stripping as fallback for existing hints
+            from .._storage import _strip_imports_from_code
+            if "correctExample" in optimized_hint:
+                optimized_hint["correctExample"] = _strip_imports_from_code(optimized_hint["correctExample"])
+            if "incorrectExample" in optimized_hint:
+                optimized_hint["incorrectExample"] = _strip_imports_from_code(optimized_hint["incorrectExample"])
+
+            optimized_hints.append(optimized_hint)
+
         return {
             "data": {
-                "hints": selected_hints,
-                "totalTokens": total_tokens
+                "hints": optimized_hints,
+                "totalTokens": total_tokens,
+                "importMaps": global_import_maps if global_import_maps else None
             }
         }
 

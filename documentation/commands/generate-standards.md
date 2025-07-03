@@ -34,6 +34,8 @@ This command uses the new standards-server MCP tools to:
 
 **IMPORTANT**: AI agents must NEVER write files directly to disk or use any MCP file writing tools. All storage is handled by the standards-server MCP APIs only.
 
+**JSON PARSING CRITICAL NOTE**: When passing data to MCP APIs, ALWAYS use Python objects/lists directly, NOT JSON strings. Multi-line code examples with newlines and quotes will cause JSON parsing errors if passed as strings. Use raw Python strings (triple quotes) for code examples.
+
 ## Implementation Steps
 
 ### Step 1: Check for Updates and Discover Standards
@@ -56,7 +58,7 @@ needs_update = update_result['data']['needsUpdate']
 ```python
 # Process standards in batches with maximum parallelization
 # Always use at least 7-parallel-Task method for efficiency
-# IMMEDIATE EXECUTION: Launch parallel Tasks immediately upon feature requests
+# Run multiple Task invocations in a SINGLE message
 from math import ceil
 batch_size = 2
 num_batches = ceil(len(needs_update) / batch_size)
@@ -112,9 +114,10 @@ for batch_num in range(num_batches):
 2. **AI Hints** (actionable coding guidelines):
    - rule: Concise rule statement
    - context: Why this matters / background
-   - correctExample: Good code example
-   - incorrectExample: Bad code example
+   - correctExample: Good code example (with proper imports)
+   - incorrectExample: Bad code example (with proper imports)
    - hasEslintRule: true if this can be enforced by ESLint, false otherwise
+   - importMap: Auto-generated from code examples (handled by system)
 
 3. **ESLint Rules** (if applicable):
    - Generate actual ESLint rule implementations (JavaScript code)
@@ -124,10 +127,12 @@ for batch_num in range(num_batches):
 **IMPORTANT**:
 - Extract 3-8 AI hints per standard (focus on most important rules)
 - Each hint should be actionable and specific
-- Include both positive and negative examples
+- Include both positive and negative examples with **complete, runnable code** including all necessary imports
 - Mark hasEslintRule=true only for patterns ESLint can actually detect via AST
 - **NEVER write files to disk directly** - use ONLY the MCP APIs (register, update_rule)
 - **DO NOT create any folders or files** - all storage is handled by the MCP server
+- **Code examples MUST include imports**: Always show the necessary import statements for classes/functions used in examples
+- **CRITICAL**: When passing data to MCP APIs, use Python objects/lists directly - DO NOT pass JSON strings to avoid escaping issues
 
 **For ESLint Rules:**
 - Only generate if the pattern can be detected by analyzing the Abstract Syntax Tree (AST)
@@ -149,7 +154,7 @@ for batch_num in range(num_batches):
 ```python
 register_result = mcp.register(
     source_path="{source_path}",
-    metadata='''{{
+    metadata={{
         "id": "{standard_id}",
         "name": "...",
         "category": "...",
@@ -157,7 +162,7 @@ register_result = mcp.register(
         "appliesTo": [...],
         "severity": "...",
         "priority": "..."
-    }}'''
+    }}
 )
 ```
 
@@ -198,19 +203,20 @@ if has_eslint_rules:
 # - NO configuration, plugins, extends, or index files
 
 # Store AI hints and ESLint files in the standards system
+# IMPORTANT: Pass Python lists/objects directly, NOT JSON strings
 mcp.update_rule(
     standard_id="{standard_id}",
-    clear_existing=true,
-    ai_hints='''[
+    clear_existing=True,
+    ai_hints=[
         {{
             "rule": "...",
             "context": "...",
-            "correctExample": "...",
+            "correctExample": "...",  # Multi-line strings will be handled automatically
             "incorrectExample": "...",
-            "hasEslintRule": true/false
+            "hasEslintRule": True  # Use Python boolean, not string
         }},
         # ... more hints
-    ]''',
+    ],
     eslint_files=eslint_files
 )
 ```
@@ -233,7 +239,7 @@ Process the file completely and report success."""
 ```python
 register_result = mcp.register(
     source_path="SOURCE_PATH_FROM_ABOVE",
-    metadata='''{{
+    metadata={{
         "id": "STANDARD_ID_FROM_ABOVE",
         "name": "...",
         "category": "...",
@@ -241,25 +247,26 @@ register_result = mcp.register(
         "appliesTo": [...],
         "severity": "...",
         "priority": "..."
-    }}'''
+    }}
 )
 ```
 
 2. Store AI hints and ESLint files:
 ```python
+# IMPORTANT: Use Python objects directly, NOT JSON strings
 mcp.update_rule(
     standard_id="STANDARD_ID_FROM_ABOVE",
-    clear_existing=true,
-    ai_hints='''[
+    clear_existing=True,
+    ai_hints=[
         {{
             "rule": "...",
             "context": "...",
-            "correctExample": "...",
+            "correctExample": "...",  # Multi-line code will be handled automatically
             "incorrectExample": "...",
-            "hasEslintRule": true/false
+            "hasEslintRule": True  # Python boolean
         }},
         # ... more hints
-    ]''',
+    ],
     eslint_files=eslint_files_if_any
 )
 ```
@@ -271,6 +278,7 @@ mcp.update_rule(
 - **USE ONLY the MCP APIs**: mcp.register() and mcp.update_rule()
 - **All file storage is handled automatically** by the MCP server
 - **Your job is ONLY parsing and API calls** - no direct file system operations
+- **ALWAYS include full imports** - whenever imports are available, always include them.
 
 **COMPLETE EXAMPLE** - Process a standard called "api-error-handling":
 
@@ -290,6 +298,7 @@ register_result = mcp.register(
 )
 
 # Step 2: Store AI hints and ESLint rules
+# CRITICAL: Use raw Python strings (triple quotes) for multi-line code examples
 mcp.update_rule(
     standard_id="api-error-handling",
     clear_existing=True,
@@ -297,15 +306,35 @@ mcp.update_rule(
         {
             "rule": "Always return structured error responses",
             "context": "Consistent error format helps frontend handle errors predictably",
-            "correctExample": "return Response.json({error: 'User not found', code: 404}, {status: 404})",
-            "incorrectExample": "return Response.json('Error!')",
+            "correctExample": """import { Response } from 'next/server';
+
+export async function GET() {
+  return Response.json({error: 'User not found', code: 404}, {status: 404});
+}""",
+            "incorrectExample": """import { Response } from 'next/server';
+
+export async function GET() {
+  return Response.json('Error!');
+}""",
             "hasEslintRule": True
         },
         {
             "rule": "Use appropriate HTTP status codes",
             "context": "Status codes communicate error type to clients",
-            "correctExample": "400 for validation, 404 for not found, 500 for server errors",
-            "incorrectExample": "Always returning 200 OK with error in body",
+            "correctExample": """import { Response } from 'next/server';
+
+// Validation error
+return Response.json({error: 'Invalid input'}, {status: 400});
+
+// Not found
+return Response.json({error: 'User not found'}, {status: 404});
+
+// Server error
+return Response.json({error: 'Internal error'}, {status: 500});""",
+            "incorrectExample": """import { Response } from 'next/server';
+
+// Always returning 200 OK with error in body
+return Response.json({error: 'User not found'}, {status: 200});""",
             "hasEslintRule": False
         }
     ],
@@ -372,11 +401,16 @@ hints_result = mcp.hints_for_file(
     max_tokens=8000
 )
 
-# Results will include relevant hints with relevance scores
+# Results include relevant hints with relevance scores and import maps
 for hint in hints_result['data']['hints']:
     print(f"Rule: {{hint['rule']}}")
     print(f"Score: {{hint['relevanceScore']}}")
     print(f"Example: {{hint['correctExample']}}")
+
+    # Access import map if available
+    if 'importMapId' in hint and hints_result['data']['importMaps']:
+        import_map = hints_result['data']['importMaps'][hint['importMapId']]
+        print(f"Required imports: {{[imp['statement'] for imp in import_map]}}")
     print("---")
 """)
 ```
