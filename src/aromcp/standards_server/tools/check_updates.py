@@ -1,5 +1,6 @@
 """Check for standards that need updating."""
 
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -8,14 +9,49 @@ from ...filesystem_server._security import get_project_root, validate_file_path_
 from .._storage import find_markdown_files, load_manifest
 
 
-def check_updates_impl(standards_path: str, project_root: str | None = None) -> dict[str, Any]:
+def _has_valid_yaml_header(file_path: str) -> bool:
+    """
+    Check if a markdown file has a valid YAML header with at least an 'id' field.
+
+    Args:
+        file_path: Path to the markdown file
+
+    Returns:
+        True if the file has a valid YAML header with an id field
+    """
+    try:
+        with open(file_path, encoding='utf-8') as f:
+            content = f.read()
+
+        # Check for YAML frontmatter (starts with --- and ends with ---)
+        yaml_pattern = r'^---\s*\n(.*?)\n---\s*\n'
+        match = re.match(yaml_pattern, content, re.DOTALL)
+
+        if not match:
+            return False
+
+        yaml_content = match.group(1)
+
+        # Check for id field (simple regex to find id: followed by any value)
+        id_pattern = r'^\s*id\s*:\s*.+$'
+        has_id = bool(re.search(id_pattern, yaml_content, re.MULTILINE))
+
+        return has_id
+
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
+def check_updates_impl(
+    standards_path: str, project_root: str | None = None
+) -> dict[str, Any]:
     """
     Scans for new or modified standard files.
-    
+
     Args:
         standards_path: Root folder containing .md files
         project_root: Project root directory
-        
+
     Returns:
         Dict with needsUpdate list and upToDate count
     """
@@ -30,6 +66,12 @@ def check_updates_impl(standards_path: str, project_root: str | None = None) -> 
         # Find all markdown files
         md_files = find_markdown_files(standards_path, project_root)
 
+        # Filter files to only include those with valid YAML headers
+        valid_md_files = []
+        for md_file in md_files:
+            if _has_valid_yaml_header(md_file["absolutePath"]):
+                valid_md_files.append(md_file)
+
         # Load existing manifest
         manifest = load_manifest(project_root)
         tracked_standards = manifest.get("standards", {})
@@ -37,8 +79,8 @@ def check_updates_impl(standards_path: str, project_root: str | None = None) -> 
         needs_update = []
         up_to_date_count = 0
 
-        # Check each markdown file
-        for md_file in md_files:
+        # Check each valid markdown file
+        for md_file in valid_md_files:
             file_path = md_file["path"]
             last_modified = md_file["lastModified"]
 
@@ -54,7 +96,9 @@ def check_updates_impl(standards_path: str, project_root: str | None = None) -> 
                     "lastModified": last_modified
                 })
             else:
-                tracked_modified = tracked_standards[standard_id].get("lastModified", "")
+                tracked_modified = tracked_standards[standard_id].get(
+                    "lastModified", ""
+                )
                 if last_modified > tracked_modified:
                     needs_update.append({
                         "standardId": standard_id,
@@ -66,7 +110,10 @@ def check_updates_impl(standards_path: str, project_root: str | None = None) -> 
                     up_to_date_count += 1
 
         # Check for deleted files
-        current_files_set = {_generate_standard_id(f["path"], standards_path) for f in md_files}
+        current_files_set = {
+            _generate_standard_id(f["path"], standards_path)
+            for f in valid_md_files
+        }
         for standard_id in tracked_standards:
             if standard_id not in current_files_set:
                 needs_update.append({
