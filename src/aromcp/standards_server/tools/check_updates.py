@@ -5,8 +5,43 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from ...filesystem_server._security import get_project_root, validate_file_path_legacy
 from .._storage import find_markdown_files, load_manifest
+
+
+def _parse_yaml_frontmatter(file_path: str) -> dict[str, Any] | None:
+    """
+    Parse YAML frontmatter from a markdown file.
+
+    Args:
+        file_path: Path to the markdown file
+
+    Returns:
+        Dictionary containing YAML frontmatter data or None if invalid
+    """
+    try:
+        with open(file_path, encoding='utf-8') as f:
+            content = f.read()
+
+        # Check for YAML frontmatter (starts with --- and ends with ---)
+        yaml_pattern = r'^---\s*\n(.*?)\n---\s*\n'
+        match = re.match(yaml_pattern, content, re.DOTALL)
+
+        if not match:
+            return None
+
+        yaml_content = match.group(1)
+
+        # Parse YAML
+        try:
+            return yaml.safe_load(yaml_content)
+        except yaml.YAMLError:
+            return None
+
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def _has_valid_yaml_header(file_path: str) -> bool:
@@ -19,27 +54,8 @@ def _has_valid_yaml_header(file_path: str) -> bool:
     Returns:
         True if the file has a valid YAML header with an id field
     """
-    try:
-        with open(file_path, encoding='utf-8') as f:
-            content = f.read()
-
-        # Check for YAML frontmatter (starts with --- and ends with ---)
-        yaml_pattern = r'^---\s*\n(.*?)\n---\s*\n'
-        match = re.match(yaml_pattern, content, re.DOTALL)
-
-        if not match:
-            return False
-
-        yaml_content = match.group(1)
-
-        # Check for id field (simple regex to find id: followed by any value)
-        id_pattern = r'^\s*id\s*:\s*.+$'
-        has_id = bool(re.search(id_pattern, yaml_content, re.MULTILINE))
-
-        return has_id
-
-    except (OSError, UnicodeDecodeError):
-        return False
+    frontmatter = _parse_yaml_frontmatter(file_path)
+    return frontmatter is not None and 'id' in frontmatter
 
 
 def check_updates_impl(
@@ -82,7 +98,30 @@ def check_updates_impl(
         # Check each valid markdown file
         for md_file in valid_md_files:
             file_path = md_file["path"]
-            last_modified = md_file["lastModified"]
+
+            # Parse YAML frontmatter to get template updated field
+            frontmatter = _parse_yaml_frontmatter(md_file["absolutePath"])
+            if not frontmatter:
+                continue
+
+            # Use template updated field if available, otherwise fallback to filesystem
+            template_updated = frontmatter.get("updated", "")
+            filesystem_modified = md_file["lastModified"]
+
+            # Convert template_updated to string if it's a datetime object
+            if template_updated and not isinstance(template_updated, str):
+                # Convert datetime to ISO string with Z suffix for UTC
+                if template_updated.tzinfo is not None:
+                    template_updated = template_updated.isoformat().replace(
+                        '+00:00', 'Z'
+                    )
+                else:
+                    template_updated = template_updated.isoformat() + 'Z'
+
+            # Prefer template updated field for comparison
+            last_modified = (
+                template_updated if template_updated else filesystem_modified
+            )
 
             # Generate standard ID from relative path
             standard_id = _generate_standard_id(file_path, standards_path)
@@ -93,7 +132,9 @@ def check_updates_impl(
                     "standardId": standard_id,
                     "sourcePath": file_path,
                     "reason": "new",
-                    "lastModified": last_modified
+                    "lastModified": last_modified,
+                    "templateUpdated": template_updated,
+                    "filesystemModified": filesystem_modified
                 })
             else:
                 tracked_modified = tracked_standards[standard_id].get(
@@ -104,7 +145,9 @@ def check_updates_impl(
                         "standardId": standard_id,
                         "sourcePath": file_path,
                         "reason": "modified",
-                        "lastModified": last_modified
+                        "lastModified": last_modified,
+                        "templateUpdated": template_updated,
+                        "filesystemModified": filesystem_modified
                     })
                 else:
                     up_to_date_count += 1

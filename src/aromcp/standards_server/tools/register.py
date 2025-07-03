@@ -7,15 +7,19 @@ from .._storage import build_index, load_manifest, save_manifest, save_standard_
 from .hints_for_file import invalidate_index_cache
 
 
-def register_impl(source_path: str, metadata: dict[str, Any] | str, project_root: str | None = None) -> dict[str, Any]:
+def register_impl(
+    source_path: str,
+    metadata: dict[str, Any] | str,
+    project_root: str | None = None,
+) -> dict[str, Any]:
     """
     Registers a standard with metadata after AI parsing.
-    
+
     Args:
         source_path: Path to the source markdown file
         metadata: Standard metadata with required fields
         project_root: Project root directory
-        
+
     Returns:
         Dict with standardId and isNew flag
     """
@@ -41,7 +45,9 @@ def register_impl(source_path: str, metadata: dict[str, Any] | str, project_root
                 }
 
         # Validate required metadata fields
-        required_fields = ["id", "name", "category", "tags", "appliesTo", "severity", "priority"]
+        required_fields = [
+            "id", "name", "category", "tags", "appliesTo", "severity", "priority"
+        ]
         for field in required_fields:
             if field not in metadata:
                 return {
@@ -50,6 +56,12 @@ def register_impl(source_path: str, metadata: dict[str, Any] | str, project_root
                         "message": f"Missing required metadata field: {field}"
                     }
                 }
+
+        # Ensure updated field is properly mapped from template
+        if "updated" not in metadata:
+            # If no updated field, use current timestamp
+            from datetime import datetime
+            metadata["updated"] = datetime.now().isoformat()
 
         # Validate enum values
         valid_severities = ["error", "warning", "info"]
@@ -103,7 +115,7 @@ def register_impl(source_path: str, metadata: dict[str, Any] | str, project_root
 
         manifest["standards"][standard_id] = {
             "sourcePath": source_path,
-            "lastModified": metadata.get("lastModified", ""),
+            "lastModified": metadata.get("updated", ""),
             "registered": True
         }
 

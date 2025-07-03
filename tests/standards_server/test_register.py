@@ -29,6 +29,7 @@ class TestRegister:
                 "tags": ["error", "exceptions"],
                 "appliesTo": ["*.py", "*.js"],
                 "severity": "error",
+                "updated": "2024-01-15T10:30:00Z",
                 "priority": "required"
             }
             
@@ -206,3 +207,58 @@ class TestRegister:
             assert "standards" in index
             assert "test-standard" in index["standards"]
             assert index["standards"]["test-standard"]["category"] == "testing"
+    
+    def test_updated_field_handling(self):
+        """Test that updated field is properly handled in registration."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["MCP_FILE_ROOT"] = temp_dir
+            
+            # Test with updated field provided
+            metadata_with_updated = {
+                "id": "test-with-updated",
+                "name": "Test With Updated",
+                "category": "testing",
+                "tags": ["test"],
+                "appliesTo": ["*.py"],
+                "severity": "error",
+                "updated": "2024-01-15T10:30:00Z",
+                "priority": "required"
+            }
+            
+            result = register_impl("standards/test-with-updated.md", metadata_with_updated, temp_dir)
+            assert "data" in result
+            
+            # Verify manifest uses updated field
+            import json
+            manifest_file = Path(temp_dir) / ".aromcp" / "manifest.json"
+            with open(manifest_file) as f:
+                manifest = json.load(f)
+            
+            assert manifest["standards"]["test-with-updated"]["lastModified"] == "2024-01-15T10:30:00Z"
+            
+            # Test without updated field - should add current timestamp
+            metadata_without_updated = {
+                "id": "test-without-updated",
+                "name": "Test Without Updated",
+                "category": "testing",
+                "tags": ["test"],
+                "appliesTo": ["*.py"],
+                "severity": "error",
+                "priority": "required"
+            }
+            
+            result = register_impl("standards/test-without-updated.md", metadata_without_updated, temp_dir)
+            assert "data" in result
+            
+            # Verify manifest has a timestamp
+            with open(manifest_file) as f:
+                manifest = json.load(f)
+            
+            # Should have a timestamp (not empty)
+            assert manifest["standards"]["test-without-updated"]["lastModified"] != ""
+            # Should be in ISO format
+            from datetime import datetime
+            timestamp = manifest["standards"]["test-without-updated"]["lastModified"]
+            # Should be parseable as ISO timestamp
+            parsed = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            assert parsed is not None

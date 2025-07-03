@@ -33,6 +33,7 @@ category: general
 tags: [error, handling]
 applies_to: ["**/*.ts", "**/*.tsx"]
 severity: error
+updated: 2024-01-15T10:30:00Z
 priority: required
 ---
 
@@ -49,6 +50,9 @@ Sample standard content.""")
             assert len(result["data"]["needsUpdate"]) == 1
             assert result["data"]["needsUpdate"][0]["reason"] == "new"
             assert result["data"]["needsUpdate"][0]["standardId"] == "error-handling"
+            # Verify template updated field is used
+            assert result["data"]["needsUpdate"][0]["templateUpdated"] == "2024-01-15T10:30:00Z"
+            assert "filesystemModified" in result["data"]["needsUpdate"][0]
     
     def test_empty_standards_directory(self):
         """Test with empty standards directory."""
@@ -114,3 +118,112 @@ This has YAML header but no id field.""")
             # Only the valid file should be processed
             assert len(result["data"]["needsUpdate"]) == 1
             assert result["data"]["needsUpdate"][0]["standardId"] == "valid-standard"
+    
+    def test_template_updated_field_priority(self):
+        """Test that template updated field takes priority over filesystem timestamp."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["MCP_FILE_ROOT"] = temp_dir
+            
+            standards_dir = Path(temp_dir) / "standards"
+            standards_dir.mkdir()
+            
+            # Create file with template updated field
+            template_md = standards_dir / "template-updated.md"
+            template_md.write_text("""---
+id: template-updated
+name: Template Updated
+category: general
+tags: [test]
+applies_to: ["**/*.ts"]
+severity: error
+updated: 2024-02-01T12:00:00Z
+priority: required
+---
+
+# Template Updated Standard""")
+            
+            # Create file without template updated field
+            no_template_md = standards_dir / "no-template-updated.md"
+            no_template_md.write_text("""---
+id: no-template-updated
+name: No Template Updated
+category: general
+tags: [test]
+applies_to: ["**/*.ts"]
+severity: error
+priority: required
+---
+
+# No Template Updated Standard""")
+            
+            result = check_updates_impl("standards", temp_dir)
+            
+            assert "data" in result
+            assert len(result["data"]["needsUpdate"]) == 2
+            
+            # Find the entries
+            template_entry = next(
+                item for item in result["data"]["needsUpdate"] 
+                if item["standardId"] == "template-updated"
+            )
+            no_template_entry = next(
+                item for item in result["data"]["needsUpdate"] 
+                if item["standardId"] == "no-template-updated"
+            )
+            
+            # Verify template updated field is used when available
+            assert template_entry["templateUpdated"] == "2024-02-01T12:00:00Z"
+            assert template_entry["lastModified"] == "2024-02-01T12:00:00Z"
+            
+            # Verify filesystem timestamp is used when template field is missing
+            assert no_template_entry["templateUpdated"] == ""
+            assert no_template_entry["lastModified"] == no_template_entry["filesystemModified"]
+    
+    def test_modified_detection_with_template_field(self):
+        """Test that modifications are detected based on template updated field."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["MCP_FILE_ROOT"] = temp_dir
+            
+            standards_dir = Path(temp_dir) / "standards"
+            standards_dir.mkdir()
+            
+            # Create .aromcp directory and manifest
+            aromcp_dir = Path(temp_dir) / ".aromcp"
+            aromcp_dir.mkdir()
+            
+            manifest = {
+                "standards": {
+                    "test-standard": {
+                        "sourcePath": "standards/test-standard.md",
+                        "lastModified": "2024-01-01T00:00:00Z",
+                        "registered": True
+                    }
+                }
+            }
+            
+            manifest_path = aromcp_dir / "manifest.json"
+            with open(manifest_path, 'w') as f:
+                json.dump(manifest, f)
+            
+            # Create file with newer template updated field
+            test_md = standards_dir / "test-standard.md"
+            test_md.write_text("""---
+id: test-standard
+name: Test Standard
+category: general
+tags: [test]
+applies_to: ["**/*.ts"]
+severity: error
+updated: 2024-01-15T10:30:00Z
+priority: required
+---
+
+# Test Standard""")
+            
+            result = check_updates_impl("standards", temp_dir)
+            
+            assert "data" in result
+            assert len(result["data"]["needsUpdate"]) == 1
+            assert result["data"]["needsUpdate"][0]["reason"] == "modified"
+            assert result["data"]["needsUpdate"][0]["standardId"] == "test-standard"
+            assert result["data"]["needsUpdate"][0]["templateUpdated"] == "2024-01-15T10:30:00Z"
