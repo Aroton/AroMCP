@@ -44,7 +44,9 @@ def register_filesystem_tools(mcp):
         file_paths: str | list[str],
         project_root: str | None = None,
         encoding: str = "auto",
-        expand_patterns: bool = True
+        expand_patterns: bool = True,
+        page: int = 1,
+        max_tokens: int = 20000
     ) -> dict[str, Any]:
         """Read multiple files in one operation.
 
@@ -55,11 +57,13 @@ def register_filesystem_tools(mcp):
             encoding: File encoding ("auto", "utf-8", "ascii", etc.)
             expand_patterns: Whether to expand glob patterns in file_paths
                             (default: True)
+            page: Page number for pagination (1-based, default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
         """
         if project_root is None:
             project_root = get_project_root()
         return read_files_batch_impl(
-            file_paths, project_root, encoding, expand_patterns
+            file_paths, project_root, encoding, expand_patterns, page, max_tokens
         )
 
     @mcp.tool

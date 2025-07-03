@@ -97,11 +97,11 @@ for batch_num in range(num_batches):
         source_path = standard_info['sourcePath']
         reason = standard_info['reason']
 
-        # Get file content from batch read
+        # Get file content from batch read (paginated format)
         file_content = None
-        for file_data in batch_files['data']['files']:
-            if file_data['path'] == source_path:
-                file_content = file_data['content']
+        for file_item in batch_files['data']['items']:
+            if file_item['file_path'] == source_path:
+                file_content = file_item['content']
                 break
 
         if file_content is None:

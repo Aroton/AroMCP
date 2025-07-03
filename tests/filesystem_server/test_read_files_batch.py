@@ -30,12 +30,16 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            assert len(result["data"]["files"]) == 3
+            assert len(result["data"]["items"]) == 3
 
+            # Convert list back to dict for easy checking
+            files_dict = {item["file_path"]: item for item in result["data"]["items"]}
             for file_path, expected_content in files.items():
-                assert file_path in result["data"]["files"]
-                assert result["data"]["files"][file_path]["content"] == expected_content
-                assert result["data"]["files"][file_path]["lines"] == len(expected_content.splitlines())
+                assert file_path in files_dict
+                assert files_dict[file_path]["content"] == expected_content
+                assert files_dict[file_path]["lines"] == len(
+                    expected_content.splitlines()
+                )
 
     def test_file_not_found(self):
         """Test handling of non-existent files."""
@@ -46,7 +50,7 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            assert len(result["data"]["files"]) == 0
+            assert len(result["data"]["items"]) == 0
             assert "errors" in result["data"]
             assert len(result["data"]["errors"]) == 1
             assert result["data"]["errors"][0]["file"] == "nonexistent.txt"
@@ -61,7 +65,8 @@ class TestReadFilesBatch:
 
             assert "data" in result
             assert "errors" in result["data"]
-            assert any("outside project root" in error["error"] for error in result["data"]["errors"])
+            errors = result["data"]["errors"]
+            assert any("outside project root" in error["error"] for error in errors)
 
     def test_encoding_auto_detection(self):
         """Test automatic encoding detection."""
@@ -80,9 +85,12 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            assert len(result["data"]["files"]) == 2
-            assert result["data"]["files"]["utf8.txt"]["content"] == "Hello 世界"
-            assert result["data"]["files"]["ascii.txt"]["content"] == "Hello World"
+            assert len(result["data"]["items"]) == 2
+
+            # Convert list back to dict for easy checking
+            files_dict = {item["file_path"]: item for item in result["data"]["items"]}
+            assert files_dict["utf8.txt"]["content"] == "Hello 世界"
+            assert files_dict["ascii.txt"]["content"] == "Hello World"
 
     def test_explicit_encoding(self):
         """Test explicit encoding specification."""
@@ -97,8 +105,8 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            assert len(result["data"]["files"]) == 1
-            assert result["data"]["files"]["test.txt"]["encoding"] == "utf-8"
+            assert len(result["data"]["items"]) == 1
+            assert result["data"]["items"][0]["encoding"] == "utf-8"
 
     def test_large_file_handling(self):
         """Test handling of large files."""
@@ -114,9 +122,10 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            assert len(result["data"]["files"]) == 0
+            assert len(result["data"]["items"]) == 0
             assert "errors" in result["data"]
-            assert any("too large" in error["error"] for error in result["data"]["errors"])
+            errors = result["data"]["errors"]
+            assert any("too large" in error["error"] for error in errors)
 
     def test_directory_instead_of_file(self):
         """Test error when path points to directory."""
@@ -131,9 +140,10 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            assert len(result["data"]["files"]) == 0
+            assert len(result["data"]["items"]) == 0
             assert "errors" in result["data"]
-            assert any("not a file" in error["error"] for error in result["data"]["errors"])
+            errors = result["data"]["errors"]
+            assert any("not a file" in error["error"] for error in errors)
 
     def test_empty_file_list(self):
         """Test behavior with empty file list."""
@@ -144,7 +154,7 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            assert len(result["data"]["files"]) == 0
+            assert len(result["data"]["items"]) == 0
             assert result["data"]["summary"]["total_files"] == 0
 
     def test_pattern_expansion_basic(self):
@@ -172,11 +182,13 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            python_files = result["data"]["files"]
-            assert len(python_files) == 2  # test1.py and test2.py
-            assert "test1.py" in python_files
-            assert "test2.py" in python_files
-            assert "test.js" not in python_files
+            items = result["data"]["items"]
+            assert len(items) == 2  # test1.py and test2.py
+
+            file_paths = [item["file_path"] for item in items]
+            assert "test1.py" in file_paths
+            assert "test2.py" in file_paths
+            assert "test.js" not in file_paths
 
     def test_pattern_expansion_recursive(self):
         """Test recursive glob pattern expansion."""
@@ -202,11 +214,13 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            python_files = result["data"]["files"]
-            assert len(python_files) == 3
-            assert "src/main.py" in python_files
-            assert "src/utils/helper.py" in python_files
-            assert "src/tests/test_main.py" in python_files
+            items = result["data"]["items"]
+            assert len(items) == 3
+
+            file_paths = [item["file_path"] for item in items]
+            assert "src/main.py" in file_paths
+            assert "src/utils/helper.py" in file_paths
+            assert "src/tests/test_main.py" in file_paths
 
     def test_pattern_expansion_multiple_patterns(self):
         """Test multiple patterns in one call."""
@@ -232,13 +246,15 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            matched_files = result["data"]["files"]
-            assert len(matched_files) == 3
-            assert "app.py" in matched_files
-            assert "config.json" in matched_files
-            assert "script.js" in matched_files
-            assert "styles.css" not in matched_files
-            assert "README.md" not in matched_files
+            items = result["data"]["items"]
+            assert len(items) == 3
+
+            file_paths = [item["file_path"] for item in items]
+            assert "app.py" in file_paths
+            assert "config.json" in file_paths
+            assert "script.js" in file_paths
+            assert "styles.css" not in file_paths
+            assert "README.md" not in file_paths
 
     def test_pattern_expansion_disabled(self):
         """Test behavior when pattern expansion is disabled."""
@@ -262,7 +278,7 @@ class TestReadFilesBatch:
 
             assert "data" in result
             # Should treat "*.py" as literal filename (which doesn't exist)
-            assert len(result["data"]["files"]) == 0
+            assert len(result["data"]["items"]) == 0
             assert "errors" in result["data"]
             assert len(result["data"]["errors"]) == 1
 
@@ -282,7 +298,7 @@ class TestReadFilesBatch:
 
             assert "data" in result
             # Should treat "*.py" as literal filename since no matches found
-            assert len(result["data"]["files"]) == 0
+            assert len(result["data"]["items"]) == 0
             assert "errors" in result["data"]
             assert len(result["data"]["errors"]) == 1
 
@@ -309,12 +325,14 @@ class TestReadFilesBatch:
             )
 
             assert "data" in result
-            matched_files = result["data"]["files"]
-            assert len(matched_files) == 4
-            assert "main.py" in matched_files
-            assert "utils.py" in matched_files
-            assert "config.json" in matched_files
-            assert "README.md" in matched_files
+            items = result["data"]["items"]
+            assert len(items) == 4
+
+            file_paths = [item["file_path"] for item in items]
+            assert "main.py" in file_paths
+            assert "utils.py" in file_paths
+            assert "config.json" in file_paths
+            assert "README.md" in file_paths
 
     def test_pattern_summary_statistics(self):
         """Test that summary includes pattern expansion statistics."""
@@ -341,3 +359,65 @@ class TestReadFilesBatch:
             assert summary["total_files"] == 2     # Expanded to 2 files
             assert summary["patterns_expanded"] is True
             assert "duration_ms" in summary
+
+    def test_pagination_basic(self):
+        """Test basic pagination functionality."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create multiple test files
+            files = {}
+            for i in range(5):
+                file_path = f"file_{i}.txt"
+                files[file_path] = f"Content of file {i}"
+                full_path = Path(temp_dir) / file_path
+                full_path.write_text(files[file_path])
+
+            # Test first page with small token limit
+            result = read_files_batch_impl(
+                file_paths=list(files.keys()),
+                project_root=temp_dir,
+                page=1,
+                max_tokens=1000  # Small limit to force pagination
+            )
+
+            assert "data" in result
+            assert "pagination" in result["data"]
+            assert result["data"]["pagination"]["page"] == 1
+            assert result["data"]["pagination"]["total_items"] == 5
+            assert result["data"]["pagination"]["total_pages"] >= 1
+            assert len(result["data"]["items"]) > 0
+
+    def test_pagination_page_navigation(self):
+        """Test navigating between pages."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create multiple test files
+            files = {}
+            for i in range(10):
+                file_path = f"file_{i:02d}.txt"
+                files[file_path] = f"Content of file {i}"
+                full_path = Path(temp_dir) / file_path
+                full_path.write_text(files[file_path])
+
+            # Get page 1
+            result1 = read_files_batch_impl(
+                file_paths=list(files.keys()),
+                project_root=temp_dir,
+                page=1,
+                max_tokens=1000
+            )
+
+            # Get page 2 if it exists
+            if result1["data"]["pagination"]["total_pages"] > 1:
+                result2 = read_files_batch_impl(
+                    file_paths=list(files.keys()),
+                    project_root=temp_dir,
+                    page=2,
+                    max_tokens=1000
+                )
+
+                assert result2["data"]["pagination"]["page"] == 2
+                assert result2["data"]["pagination"]["total_items"] == 10
+
+                # Items should be different between pages
+                page1_files = {item["file_path"] for item in result1["data"]["items"]}
+                page2_files = {item["file_path"] for item in result2["data"]["items"]}
+                assert page1_files != page2_files

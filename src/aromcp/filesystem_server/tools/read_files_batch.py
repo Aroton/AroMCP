@@ -6,6 +6,7 @@ from typing import Any
 
 import chardet
 
+from ...utils.pagination import paginate_list
 from .._security import validate_file_path_legacy
 
 
@@ -13,18 +14,24 @@ def read_files_batch_impl(
     file_paths: str | list[str],
     project_root: str = ".",
     encoding: str = "auto",
-    expand_patterns: bool = True
+    expand_patterns: bool = True,
+    page: int = 1,
+    max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Read multiple files in one operation.
-    
+
     Args:
-        file_paths: List of file paths or glob patterns to read (relative to project_root)
+        file_paths: List of file paths or glob patterns to read
+            (relative to project_root)
         project_root: Root directory of the project
         encoding: File encoding ("auto", "utf-8", "ascii", etc.)
-        expand_patterns: Whether to expand glob patterns in file_paths (default: True)
-        
+        expand_patterns: Whether to expand glob patterns in file_paths
+            (default: True)
+        page: Page number (1-based) for pagination
+        max_tokens: Maximum tokens per page
+
     Returns:
-        Dictionary with file contents and metadata
+        Paginated dictionary with file contents and metadata
     """
     start_time = time.time()
 
@@ -78,7 +85,7 @@ def read_files_batch_impl(
         else:
             actual_file_paths = file_paths
 
-        files_data = {}
+        files_list = []
         errors = []
         total_size = 0
 
@@ -118,13 +125,14 @@ def read_files_batch_impl(
                 # Read file content
                 content, detected_encoding = _read_file_content(abs_file_path, encoding)
 
-                files_data[file_path] = {
+                files_list.append({
+                    "file_path": file_path,
                     "content": content,
                     "encoding": detected_encoding,
                     "size": file_size,
                     "modified": stat.st_mtime,
                     "lines": len(content.splitlines()) if content else 0
-                }
+                })
 
             except Exception as e:
                 errors.append({
@@ -134,25 +142,30 @@ def read_files_batch_impl(
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        result = {
-            "data": {
-                "files": files_data,
-                "summary": {
-                    "total_files": len(actual_file_paths),
-                    "input_patterns": len(file_paths),
-                    "successful": len(files_data),
-                    "failed": len(errors),
-                    "total_size": total_size,
-                    "patterns_expanded": expand_patterns,
-                    "duration_ms": duration_ms
-                }
+        # Create metadata for pagination
+        metadata: dict[str, Any] = {
+            "summary": {
+                "total_files": len(actual_file_paths),
+                "input_patterns": len(file_paths),
+                "successful": len(files_list),
+                "failed": len(errors),
+                "total_size": total_size,
+                "patterns_expanded": expand_patterns,
+                "duration_ms": duration_ms
             }
         }
 
         if errors:
-            result["data"]["errors"] = errors
+            metadata["errors"] = errors
 
-        return result
+        # Return paginated list
+        return paginate_list(
+            items=files_list,
+            page=page,
+            max_tokens=max_tokens,
+            sort_key=lambda x: x["file_path"],  # Sort by file path
+            metadata=metadata
+        )
 
     except Exception as e:
         return {
@@ -199,8 +212,8 @@ def _read_file_content(file_path: Path, encoding: str = "auto") -> tuple[str, st
 
         # Use detected encoding
         try:
-            content = raw_content.decode(detected_encoding)
-            return content, detected_encoding
+            content = raw_content.decode(detected_encoding or 'utf-8')
+            return content, detected_encoding or 'utf-8'
         except (UnicodeDecodeError, TypeError):
             # Last resort: decode with errors='replace'
             content = raw_content.decode('utf-8', errors='replace')

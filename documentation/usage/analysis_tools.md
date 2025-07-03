@@ -179,8 +179,10 @@ Parse a coding standard to extract enforceable rules.
 ```python
 # Load and parse a standard
 content = aromcp.read_files_batch([".aromcp/standards/api-routes.md"])
+# Extract content from first item in paginated results
+file_item = content['data']['items'][0]
 rules = aromcp.parse_standard_to_rules(
-    standard_content=content['data']['files']['.aromcp/standards/api-routes.md'],
+    standard_content=file_item['content'],
     standard_id="api-routes"
 )
 ```
@@ -474,8 +476,10 @@ standards = aromcp.load_coding_standards()
 # Step 2: Parse standards to understand their structure
 for standard in standards['data']['standards']:
     content = aromcp.read_files_batch([standard['path']])
+    # Extract content from first item in paginated results
+    file_item = content['data']['items'][0]
     rules = aromcp.parse_standard_to_rules(
-        standard_content=content['data']['files'][standard['path']],
+        standard_content=file_item['content'],
         standard_id=standard['id']
     )
     # Review parsed rules for AI generation

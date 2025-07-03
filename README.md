@@ -58,6 +58,7 @@ action_plan = aromcp.generate_eslint_rules(
 # Efficient file discovery and batch operations
 files = aromcp.get_target_files(patterns=["**/*.ts"])
 content = aromcp.read_files_batch(file_paths=["src/main.ts", "src/utils.ts"])
+# Access files from paginated results: content["data"]["items"]
 aromcp.write_files_batch(files={"output.json": json.dumps(analysis)})
 ```
 
@@ -96,9 +97,8 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 - **Code Quality**: After changes run `parse_lint_results` and `parse_typescript_errors`
 - **Standards**: Load with `hints_for_file` before editing files
 - **ESLint Generation**: Use orchestrated `generate_eslint_rules` for project-specific rules
-```
 
-### Async Editing Flow
+## Async Editing Flow
 
 For complex multi-file editing tasks, leverage parallel Task agents to maximize efficiency while respecting token limits:
 
@@ -131,6 +131,7 @@ For complex multi-file editing tasks, leverage parallel Task agents to maximize 
 - **Quality First**: Always validate changes before considering work complete
 - **Atomic Operations**: Each agent completes their assigned files entirely
 - **Flexible Coordination**: Allow agents to adapt their approach based on encountered challenges
+```
 
 **[Complete Integration Guide →](documentation/claude_code.md)**
 

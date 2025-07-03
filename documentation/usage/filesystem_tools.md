@@ -41,13 +41,15 @@ result = get_target_files(
 ```
 
 ### 2. `read_files_batch`
-Read multiple files in one operation with automatic encoding detection and glob pattern support.
+Read multiple files in one operation with automatic encoding detection, glob pattern support, and pagination.
 
 **Parameters:**
 - `file_paths` (list[str]): List of file paths or glob patterns to read (relative to project_root)
 - `project_root` (str | None): Root directory of the project (defaults to MCP_FILE_ROOT environment variable)
 - `encoding` (str): File encoding - "auto", "utf-8", "ascii", etc. (default: "auto")
 - `expand_patterns` (bool): Whether to expand glob patterns in file_paths (default: True)
+- `page` (int): Page number for pagination (1-based, default: 1)
+- `max_tokens` (int): Maximum tokens per page (default: 20000)
 
 **Examples:**
 ```python
@@ -69,12 +71,30 @@ result = read_files_batch(
     expand_patterns=False
 )
 
-# Access file contents
-for file_path, file_data in result["data"]["files"].items():
-    content = file_data["content"]
-    encoding = file_data["encoding"]
-    lines = file_data["lines"]
-    size = file_data["size"]
+# Read large file sets with pagination
+result = read_files_batch(
+    file_paths=["**/*.py"],
+    page=1,
+    max_tokens=10000  # Smaller page size
+)
+
+# Access file contents from paginated results
+for file_item in result["data"]["items"]:
+    file_path = file_item["file_path"]
+    content = file_item["content"]
+    encoding = file_item["encoding"]
+    lines = file_item["lines"]
+    size = file_item["size"]
+
+# Check pagination info
+pagination = result["data"]["pagination"]
+if pagination["has_next"]:
+    # Get next page
+    next_result = read_files_batch(
+        file_paths=["**/*.py"],
+        page=pagination["page"] + 1,
+        max_tokens=10000
+    )
 ```
 
 ### 3. `write_files_batch`
