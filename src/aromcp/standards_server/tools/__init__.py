@@ -29,7 +29,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
     @json_convert
     def register(
         source_path: str,
-        metadata: dict,
+        metadata: dict | str,
         project_root: str | None = None
     ) -> dict:
         """Register a standard with its metadata."""
@@ -46,19 +46,19 @@ def register_standards_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name="update_rule",
-        description="Stores AI hints and ESLint rules for a standard"
+        description="Stores AI hints and ESLint files for a standard"
     )
     @json_convert
     def update_rule(
         standard_id: str,
         clear_existing: bool = False,
-        ai_hints: list[dict] | None = None,
-        eslint_rules: dict | None = None,
+        ai_hints: list[dict] | str | None = None,
+        eslint_files: dict[str, str] | str | None = None,
         project_root: str | None = None
     ) -> dict:
-        """Update AI hints and ESLint rules for a standard."""
+        """Update AI hints and ESLint files for a standard."""
         return update_rule_impl(
-            standard_id, clear_existing, ai_hints, eslint_rules, project_root
+            standard_id, clear_existing, ai_hints, eslint_files, project_root
         )
 
     @mcp.tool(

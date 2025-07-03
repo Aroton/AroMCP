@@ -68,6 +68,52 @@ def get_eslint_dir(project_root: str | None = None) -> Path:
     return eslint_dir
 
 
+def update_eslint_config(project_root: str | None = None) -> None:
+    """Update the master ESLint configuration files."""
+    eslint_dir = get_eslint_dir(project_root)
+    rules_dir = eslint_dir / "rules"
+    
+    # Find all rule files
+    rule_files = []
+    if rules_dir.exists():
+        rule_files = list(rules_dir.glob("*.js"))
+    
+    # Extract rule names from filenames
+    rule_names = [f.stem for f in rule_files]
+    
+    # Generate custom-rules plugin index
+    plugin_content = "module.exports = {\n  rules: {\n"
+    for rule_name in rule_names:
+        plugin_content += f"    '{rule_name}': require('./rules/{rule_name}'),\n"
+    plugin_content += "  }\n};\n"
+    
+    plugin_file = eslint_dir / "custom-rules.js"
+    with open(plugin_file, 'w', encoding='utf-8') as f:
+        f.write(plugin_content)
+    
+    # Generate standards config that can be extended
+    config_content = "module.exports = {\n"
+    config_content += "  plugins: ['./custom-rules'],\n"
+    config_content += "  rules: {\n"
+    for rule_name in rule_names:
+        config_content += f"    'custom-rules/{rule_name}': 'error',\n"
+    config_content += "  }\n};\n"
+    
+    config_file = eslint_dir / "standards-config.js"
+    with open(config_file, 'w', encoding='utf-8') as f:
+        f.write(config_content)
+    
+    # Also create a JSON version for easier parsing
+    config_json = {
+        "plugins": ["./custom-rules"],
+        "rules": {f"custom-rules/{rule_name}": "error" for rule_name in rule_names}
+    }
+    
+    config_json_file = eslint_dir / "standards-config.json"
+    with open(config_json_file, 'w', encoding='utf-8') as f:
+        json.dump(config_json, f, indent=2)
+
+
 def save_standard_metadata(standard_id: str, metadata: dict[str, Any], project_root: str | None = None) -> None:
     """Save metadata for a standard."""
     standard_dir = get_standard_hints_dir(standard_id, project_root)

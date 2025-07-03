@@ -7,7 +7,7 @@ from .._storage import build_index, load_manifest, save_manifest, save_standard_
 from .hints_for_file import invalidate_index_cache
 
 
-def register_impl(source_path: str, metadata: dict[str, Any], project_root: str | None = None) -> dict[str, Any]:
+def register_impl(source_path: str, metadata: dict[str, Any] | str, project_root: str | None = None) -> dict[str, Any]:
     """
     Registers a standard with metadata after AI parsing.
     
@@ -26,6 +26,19 @@ def register_impl(source_path: str, metadata: dict[str, Any], project_root: str 
         # Validate source path
         from pathlib import Path
         validate_file_path_legacy(source_path, Path(project_root))
+
+        # Parse metadata if it's a string
+        if isinstance(metadata, str):
+            import json
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError as e:
+                return {
+                    "error": {
+                        "code": "INVALID_INPUT",
+                        "message": f"Invalid JSON in metadata: {str(e)}"
+                    }
+                }
 
         # Validate required metadata fields
         required_fields = ["id", "name", "category", "tags", "appliesTo", "severity", "priority"]
