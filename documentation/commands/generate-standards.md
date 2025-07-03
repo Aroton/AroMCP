@@ -59,7 +59,7 @@ needs_update = update_result['data']['needsUpdate']
 # Always use at least 7-parallel-Task method for efficiency
 # IMMEDIATE EXECUTION: Launch parallel Tasks immediately upon feature requests
 from math import ceil
-batch_size = 5
+batch_size = 2
 num_batches = ceil(len(needs_update) / batch_size)
 
 print(f"Processing {len(needs_update)} standards in {num_batches} batches with maximum parallelization")
@@ -71,59 +71,35 @@ for batch_num in range(num_batches):
     end_idx = min(start_idx + batch_size, len(needs_update))
     batch_standards = needs_update[start_idx:end_idx]
 
-    # Collect file paths for batch reading
-    file_paths = [standard_info['sourcePath'] for standard_info in batch_standards]
-
-    # Read all files in this batch at once
-    batch_files = mcp.read_files_batch(
-        file_paths=file_paths,
-        project_root=".",
-        encoding="utf-8"
-    )
-
-    if 'error' in batch_files:
-        print(f"Error reading batch {batch_num + 1}: {batch_files['error']['message']}")
-        continue
-
     # Create comprehensive task prompt for the entire batch
     batch_task_prompt = f"""Process batch {batch_num + 1}/{num_batches} of coding standards files.
 
 **BATCH CONTENTS ({len(batch_standards)} standards):**
 """
 
-    # Add each standard's content to the batch prompt
+    # Add each standard's info to the batch prompt (Task will handle file reading)
     for standard_info in batch_standards:
         standard_id = standard_info['standardId']
         source_path = standard_info['sourcePath']
         reason = standard_info['reason']
-
-        # Get file content from batch read (paginated format)
-        file_content = None
-        for file_item in batch_files['data']['items']:
-            if file_item['file_path'] == source_path:
-                file_content = file_item['content']
-                break
-
-        if file_content is None:
-            batch_task_prompt += f"\n❌ ERROR: Could not find content for {standard_id} at {source_path}\n"
-            continue
 
         batch_task_prompt += f"""
 ---
 **Standard ID**: {standard_id}
 **Source Path**: {source_path}
 **Reason**: {reason}
-
-**File Content:**
-```markdown
-{file_content}
-```
 """
 
     batch_task_prompt += f"""
 ---
 
-**INSTRUCTIONS**: For EACH standard in this batch, parse the markdown content and extract:
+**INSTRUCTIONS**:
+
+1. **First, read all the markdown files for this batch using the Read tool**:
+   - Use the Read tool to read each source path listed above
+   - Extract the markdown content from each file
+
+2. **Then, for EACH standard in this batch, parse the markdown content and extract:**
 
 1. **Metadata** (following the exact schema):
    - id: Use the Standard ID provided above
@@ -304,7 +280,7 @@ mcp.update_rule(
 register_result = mcp.register(
     source_path="standards/api/error-handling.md",
     metadata={
-        "id": "api-error-handling", 
+        "id": "api-error-handling",
         "name": "API Error Handling Standards",
         "category": "api",
         "tags": ["error", "http", "response"],

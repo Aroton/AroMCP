@@ -1,114 +1,188 @@
 ---
-id: [kebab-case-id]
-name: [Human Readable Name]
-category: [api|database|frontend|architecture|security|pipeline|general]
-tags: [keyword1, keyword2]
-applies_to: ["**/*.ts", "**/*.tsx"]
-severity: [error|warning|info]
-priority: [required|important|recommended]
+# YAML Frontmatter - Machine-readable metadata for tooling and automation
+id: {unique-identifier}  # Kebab-case identifier matching filename
+name: {Human Readable Name}  # Display name for the standard
+category: {category}  # Primary category: pipeline, api, database, security, etc.
+tags: [{tag1}, {tag2}]  # Searchable tags for discovery
+applies_to: ["path/pattern/**/**.ts"]  # File glob patterns where this applies
+severity: error  # error | warning | info - How violations are treated
+updated: {YYYY-MM-DDTHH:mm:ss}  # ISO timestamp - Can be automated via git hooks or CI/CD
+priority: required  # required | recommended | optional
+dependencies: [{standard-id}]  # Other standards that must be followed with this one
+description: {One-line description for quick scanning}
 ---
 
+# {Standard Name}
+
 <!--
-ENFORCEMENT TYPE DETECTION:
-The analysis system automatically determines how standards should be enforced based on sections present:
-
-HYBRID (both ESLint + AI guidance):
-- Has "## Pattern" section AND "## Automation" section = can generate ESLint rules
-- Has "## Core Rules" section = requires human judgment/AI context
-- Result: Both automated detection + AI-driven guidance
-
-ESLINT_RULE (pure automation):
-- Has "## Pattern" section OR "## Automation" section = can generate ESLint rules
-- Does NOT have "## Core Rules" section = no human judgment needed
-- Result: Pure ESLint rule generation
-
-AI_CONTEXT (human judgment only):
-- Has "## Core Rules" section = requires human judgment
-- Does NOT have "## Pattern" or "## Automation" sections = cannot automate
-- Result: AI context only, no ESLint rules
-
-UNKNOWN (insufficient information):
-- Missing both automation sections AND core rules
-- Result: Cannot determine enforcement strategy
-
-KEY INSIGHT: Most standards using this template will be HYBRID because:
-- "## Pattern" + "## Automation" = can build ESLint rules
-- "## Core Rules" = needs AI understanding for context and edge cases
-
-To create pure ESLint rules: Remove "## Core Rules", keep "## Pattern"/"## Automation"
-To create AI-only standards: Remove "## Pattern"/"## Automation", keep "## Core Rules"
+TEMPLATE USAGE GUIDE:
+- REQUIRED sections: Critical Rules, Overview, Examples (at least 1 correct), Quick Reference
+- RECOMMENDED sections: Common Mistakes, Migration Guide (for existing code), Automation
+- OPTIONAL sections: All others - include based on relevance to your standard
+- This template is designed for AI/tooling consumption - verbosity is acceptable
 -->
 
-# [Standard Name]
+<!-- Version banner - Keep at top for visibility -->
+_Updated: {YYYY-MM-DD} - {Brief description of latest changes}_
 
-## Why & When
-<!-- 2-3 sentences max: problem solved, when to apply -->
-Brief explanation of the problem this solves and when it applies.
+## 🚨 Critical Rules
+<!-- Non-negotiable rules that MUST be followed. Keep to 5 or fewer. -->
+1. **{RULE IN CAPS}** - {Brief explanation}
+2. **{RULE IN CAPS}** - {Brief explanation}
 
-## Core Rules
-<!-- Only the MUST-follow rules, numbered for reference -->
-1. **NEVER** [critical prohibition] - [consequence]
-2. **ALWAYS** [critical requirement] - [reason]
-3. **USE** [pattern/convention] for [what]
+## Overview
+<!-- REQUIRED: 2-3 paragraphs explaining what this standard provides and why it exists -->
+{What problem does this solve?}
 
-## Pattern
+{What benefits does following this standard provide?}
 
-### Structure
+{When should this standard be applied?}
+
+## Core Requirements
+<!-- OPTIONAL: Bullet list of key requirements. More detailed than critical rules but still concise -->
+- **{Requirement}**: {Description}
+- **{Requirement}**: {Description}
+
+## Structure & Organization
+<!-- OPTIONAL: How code/files should be organized when following this standard -->
+
+### File Organization
 ```
-feature/
-├── components/    # UI components
-├── hooks/        # Custom hooks
-└── types/        # TypeScript types
+path/to/resource/
+├── {file}.ts         # {Description}
+├── {folder}/
+│   └── {file}.ts     # {Description}
+└── {folder}/
+    └── {file}.ts     # {Description}
 ```
 
-### Implementation
-```typescript
-// Minimal but complete example showing the pattern
-export const pattern = {
-  // Essential structure only
-};
-```
+### Naming Conventions
+<!-- OPTIONAL: Tables work well for naming patterns -->
+| Item | Pattern | Example |
+|------|---------|---------|
+| {Item type} | {Pattern description} | `{example}` |
 
 ## Examples
+<!-- REQUIRED: At least one correct example. Incorrect and refactoring examples are optional -->
 
-### ✅ Correct
+### ✅ Correct Implementation
 ```typescript
-// Why: Follows rules 1, 2, 3
-const correctExample = async () => {
-  // Minimal correct implementation
-};
+// Explain why this is correct
+{code example}
 ```
 
-### ❌ Wrong
+### ❌ Incorrect Implementation
+<!-- OPTIONAL: Show what NOT to do -->
 ```typescript
-// Violates: Rule 2 - missing error handling
-const wrongExample = () => {
-  // What not to do
-};
+// Explain what's wrong
+{code example}
 ```
+
+### 📝 Refactoring Example
+<!-- OPTIONAL: Show before/after to guide migration -->
+<details>
+<summary>Before → After Transformation</summary>
+
+**Before:**
+```typescript
+{old code}
+```
+
+**After:**
+```typescript
+{new code}
+```
+</details>
 
 ## Common Mistakes
-1. **[Mistake]**: [Why bad] → Use [solution] instead
-2. **[Mistake]**: [Why bad] → Use [solution] instead
+<!-- OPTIONAL BUT RECOMMENDED: Focus on the most frequent errors. Include "Why it's problematic" -->
+
+### 1. {Mistake Name}
+**Why it's problematic:** {Explanation}
+
+❌ **Don't:**
+```typescript
+{bad example}
+```
+
+✅ **Do:**
+```typescript
+{good example}
+```
+
+## Decision Guide
+<!-- OPTIONAL: Help developers choose the right approach -->
+| Scenario | Recommended Approach | Reason |
+|----------|---------------------|---------|
+| {Scenario} | {Approach} | {Why} |
+
+## Implementation Details
+<!-- OPTIONAL: Detailed examples, API references, etc. -->
+<details>
+<summary>📁 Complete Implementation Example</summary>
+
+```typescript
+{comprehensive example}
+```
+</details>
+
+## Testing
+<!-- OPTIONAL: How to test code following this standard -->
+```typescript
+{test example}
+```
+
+## Performance & Security
+<!-- OPTIONAL: Only include if relevant to the standard -->
+- **{Consideration}**: {Explanation}
+
+## Migration Guide
+<!-- OPTIONAL BUT RECOMMENDED for existing codebases: Steps to migrate existing code -->
+1. **{Step}**: {Description}
+2. **{Step}**: {Description}
 
 ## Automation
-<!-- For ESLint/tooling generation -->
+<!-- OPTIONAL BUT RECOMMENDED: Pattern detection and auto-fix rules for tooling -->
+
+### Pattern Detection
 ```yaml
 detect:
-  patterns: ["oldPattern", "deprecated"]
-  exclude: ["**/node_modules/**"]
-
-fix:
-  - replace: {from: "oldImport", to: "newImport"}
+  patterns:
+    - pattern: "{regex}"  # {What this detects}
+  exclude:
+    - "**/node_modules/**"
+    - "**/*.test.ts"
 ```
 
-## Related
+### Auto-Fix Rules
 ```yaml
-dependencies:
-  - id: pipeline-architecture
-    reason: "Defines overall structure this pattern fits into"
-  - id: api-standards
-    reason: "Required for API endpoint implementations"
-  - id: type-safety
-    reason: "TypeScript conventions used throughout"
+fixable: {true|false|partial}
+fixes:
+  - pattern: "{regex}"
+    replacement: "{replacement}"
+    message: "{error message}"
 ```
+
+## Related Standards
+<!-- OPTIONAL: Link to related documentation -->
+- [{Standard Name}](./{filename}.md) - {Relationship}
+
+## Quick Reference
+<!-- REQUIRED: Summary for easy scanning -->
+⭐ **ALWAYS**: {Do this}
+📝 **PREFER**: {Do this when possible}
+🚫 **NEVER**: {Don't do this}
+🔧 **USE**: {Tool/pattern} for {purpose}
+
+---
+<!-- Footer with metadata -->
+*Standard ID: `{id}` | Category: `{category}` | Priority: `{priority}`*
+
+<!--
+SECTION REQUIREMENTS SUMMARY:
+✅ REQUIRED: Critical Rules, Overview, Examples (≥1 correct), Quick Reference
+👍 RECOMMENDED: Common Mistakes, Migration Guide, Automation
+➕ OPTIONAL: Core Requirements, Structure & Organization, Testing, Performance & Security, Implementation Details, Decision Guide, Related Standards
+
+Remember: This document will be processed by AI/tooling - comprehensive detail is beneficial!
+-->
