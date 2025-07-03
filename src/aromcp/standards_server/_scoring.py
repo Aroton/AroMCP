@@ -1,0 +1,127 @@
+"""Relevance scoring utilities for standards management."""
+
+import fnmatch
+from pathlib import Path
+from typing import Any
+
+
+def score_relevance(metadata: dict[str, Any], file_path: str) -> float:
+    """
+    Calculate relevance score for a standard against a file path.
+    Based on the algorithm in the design document.
+    """
+    parts = Path(file_path).parts
+    folders = parts[:-1] if len(parts) > 1 else []
+    file_name = parts[-1] if parts else ""
+
+    category = metadata.get("category", "").lower()
+    tags = [tag.lower() for tag in metadata.get("tags", [])]
+    applies_to = metadata.get("appliesTo", [])
+    priority = metadata.get("priority", "recommended")
+
+    score = 0.0
+
+    # Exact folder match: 1.0
+    if category and any(folder.lower() == category for folder in folders):
+        score = 1.0
+    elif tags and any(tag in [folder.lower() for folder in folders] for tag in tags):
+        score = 1.0
+
+    # Glob pattern match: 0.8
+    elif applies_to and any(_matches_pattern(file_path, pattern) for pattern in applies_to):
+        score = 0.8
+
+    # Category in path: 0.6
+    elif category and any(category in folder.lower() for folder in folders):
+        score = 0.6
+
+    # Tag in path: 0.4
+    elif tags and any(
+        tag in file_path.lower() or tag in file_name.lower()
+        for tag in tags
+    ):
+        score = 0.4
+
+    # Priority boost
+    priority_multiplier = {
+        "required": 1.2,
+        "important": 1.1,
+        "recommended": 1.0
+    }
+
+    return score * priority_multiplier.get(priority, 1.0)
+
+
+def _matches_pattern(file_path: str, pattern: str) -> bool:
+    """Check if file path matches a glob pattern."""
+    try:
+        return fnmatch.fnmatch(file_path, pattern) or fnmatch.fnmatch(Path(file_path).name, pattern)
+    except (ValueError, TypeError):
+        return False
+
+
+def select_hints_by_budget(
+    hints_with_scores: list[tuple[dict[str, Any], float]],
+    max_tokens: int
+) -> tuple[list[dict[str, Any]], int]:
+    """
+    Select hints that fit within the token budget.
+    Returns (selected_hints, total_tokens_used).
+    """
+    # Sort by relevance score (descending), then by priority
+    def sort_key(item):
+        hint, score = item
+        priority_value = {"required": 3, "important": 2, "recommended": 1}
+        metadata_priority = hint.get("metadata", {}).get("priority", "recommended")
+        return (-score, -priority_value.get(metadata_priority, 1))
+
+    sorted_hints = sorted(hints_with_scores, key=sort_key)
+
+    selected = []
+    total_tokens = 0
+
+    for hint, score in sorted_hints:
+        hint_tokens = hint.get("tokens", _estimate_tokens(hint))
+
+        if total_tokens + hint_tokens <= max_tokens:
+            # Add score to response
+            response_hint = {
+                "rule": hint.get("rule", ""),
+                "context": hint.get("context", ""),
+                "correctExample": hint.get("correctExample", ""),
+                "incorrectExample": hint.get("incorrectExample", ""),
+                "relevanceScore": round(score, 2)
+            }
+            selected.append(response_hint)
+            total_tokens += hint_tokens
+        else:
+            break
+
+    return selected, total_tokens
+
+
+def _estimate_tokens(hint: dict[str, Any]) -> int:
+    """Estimate token count for a hint (4 characters per token)."""
+    import json
+    hint_json = json.dumps({
+        "rule": hint.get("rule", ""),
+        "context": hint.get("context", ""),
+        "correctExample": hint.get("correctExample", ""),
+        "incorrectExample": hint.get("incorrectExample", ""),
+    })
+    return len(hint_json) // 4
+
+
+def filter_by_eslint_coverage(hints: list[dict[str, Any]], deprioritize_factor: float = 0.7) -> list[dict[str, Any]]:
+    """
+    Reduce relevance score for hints that have ESLint rule coverage.
+    """
+    filtered = []
+    for hint in hints:
+        if hint.get("hasEslintRule", False):
+            # Reduce relevance score for ESLint-covered rules
+            if "relevanceScore" in hint:
+                hint["relevanceScore"] *= deprioritize_factor
+        filtered.append(hint)
+
+    return filtered

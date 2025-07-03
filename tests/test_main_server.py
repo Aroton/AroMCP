@@ -63,7 +63,15 @@ class TestMainServer:
             "extract_api_endpoints"
         ]
 
-        all_expected_tools = filesystem_tools + state_tools + build_tools + analysis_tools
+        standards_tools = [
+            "check_updates",
+            "register",
+            "delete",
+            "update_rule",
+            "hints_for_file"
+        ]
+
+        all_expected_tools = filesystem_tools + state_tools + build_tools + analysis_tools + standards_tools
 
         # Check that we have the expected number of tools
         assert len(tools) == len(all_expected_tools), f"Expected {len(all_expected_tools)} tools, got {len(tools)}"
@@ -83,11 +91,13 @@ class TestMainServer:
         state_present = any("process" in name for name in tool_names)
         build_present = any("command" in name or "test" in name or "dependencies" in name for name in tool_names)
         analysis_present = any("dead_code" in name or "import_cycles" in name or "api_endpoints" in name for name in tool_names)
+        standards_present = any("check_updates" in name or "register" in name or "delete" in name or "update_rule" in name or "hints_for_file" in name for name in tool_names)
 
         assert filesystem_present, "No filesystem tools found"
         assert state_present, "No state management tools found"
         assert build_present, "No build tools found"
         assert analysis_present, "No analysis tools found"
+        assert standards_present, "No standards tools found"
 
     @pytest.mark.asyncio
     async def test_individual_tool_callable(self):
@@ -97,7 +107,8 @@ class TestMainServer:
             "get_target_files",
             "initialize_process",
             "run_command",
-            "find_dead_code"
+            "find_dead_code",
+            "check_updates"
         ]
 
         for tool_name in test_tools:

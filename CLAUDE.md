@@ -11,7 +11,7 @@ AroMCP is a suite of MCP (Model Context Protocol) servers designed as utilities 
 **Implementation Status:**
 - ✅ **Phase 1: FileSystem Tools** - 9 tools with file I/O, git operations, diff validation, batch operations
 - ✅ **Phase 2: Build Tools** - 7 tools with command execution, output parsing, multi-package manager support  
-- ✅ **Phase 4: Code Analysis Tools** - 8 tools plus V2 rule generation (standards management, security detection, code quality)
+- ✅ **Phase 4: Code Analysis Tools** - 3 tools implemented (find_dead_code, find_import_cycles, extract_api_endpoints)
 - ⚠️ Phases 3, 5-6: Other tool categories are stub implementations
 
 ## Architecture
@@ -59,8 +59,20 @@ Six main tool categories:
   - `preview_file_changes.py` - Preview diff changes before applying
   - `validate_diffs.py` - Pre-validate diffs for conflicts and syntax
 - `src/aromcp/state_server/tools.py` - Persistent state management tools (planned)
-- `src/aromcp/build_server/tools.py` - Build, lint, test execution tools (planned)
-- `src/aromcp/analysis_server/tools/` - Code analysis tools with registration and implementations
+- `src/aromcp/build_server/tools/` - Build tools with registration and implementations:
+  - `__init__.py` - FastMCP tool registration for build operations
+  - `run_command.py` - Execute build/test commands with structured output
+  - `run_nextjs_build.py` - Next.js-specific build operations
+  - `get_build_config.py` - Extract build configuration information
+  - `parse_lint_results.py` - Parse and structure linting output
+  - `parse_typescript_errors.py` - Parse TypeScript compiler errors
+  - `check_dependencies.py` - Analyze project dependencies
+  - `run_test_suite.py` - Execute test suites with result parsing
+- `src/aromcp/analysis_server/tools/` - Code analysis tools with registration and implementations:
+  - `__init__.py` - FastMCP tool registration for analysis operations
+  - `find_dead_code.py` - Identify unused code that can be removed
+  - `find_import_cycles.py` - Detect circular import dependencies
+  - `extract_api_endpoints.py` - Document API endpoints from route files
 - `main.py` - Entry point that imports and runs the main server
 - `tests/filesystem_server/` - Modular test suite with separate files per test class:
   - `test_get_target_files.py` - Tests for file listing and pattern matching
@@ -71,6 +83,7 @@ Six main tool categories:
   - `test_load_documents_by_pattern.py` - Tests for document loading and classification
   - `test_security_validation.py` - Tests for security measures across all tools
   - `test_diff_operations.py` - Tests for diff operations (apply, preview, validate)
+- `tests/analysis_server/` - Analysis server test suite with modular structure
 
 ## Core Design Principles
 
@@ -224,6 +237,7 @@ All tools must follow consistent error response format:
 - **Descriptive Test Names**: Test method names should clearly describe what is being tested
 - **Isolated Tests**: Each test should be independent and use temporary directories
 - **Security Testing**: Dedicated `test_security_validation.py` file for cross-tool security validation
+- **IMPORTANT**: When adding new tools, **ALWAYS update `tests/test_main_server.py`** to include the new tool names in the expected tools lists. This ensures the unified server test validates all tools are properly registered.
 
 ### Type Annotations
 - **Modern Python Types**: Use `dict[str, Any]` instead of `Dict[str, Any]`
