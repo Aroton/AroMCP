@@ -135,13 +135,25 @@ class StandardsRegistry:
             content = file_path.read_text(encoding='utf-8')
             
             # Parse metadata and content
-            metadata, body = self._metadata_parser.parse_metadata(content)
+            metadata, body = self._metadata_parser.parse_frontmatter(content)
             
-            # Generate standard ID from metadata or filename
-            standard_id = metadata.get("id", file_path.stem)
+            # Validate metadata first
+            validation = self._metadata_parser.validate_standard_metadata(metadata)
+            if not validation["valid"]:
+                print(f"Warning: Invalid metadata in {file_path}: {'; '.join(validation['errors'])}")
+                return None
             
-            # Parse content structure
-            parsed_content = self._metadata_parser.parse_content_structure(body)
+            metadata = validation["metadata"]
+            
+            # Generate standard ID from metadata
+            standard_id = metadata.get("id")
+            if not standard_id:
+                print(f"Warning: Missing required 'id' field in {file_path}")
+                return None
+            
+            # Parse content structure using new template parser
+            from .metadata_parser import parse_content_structure
+            parsed_content = parse_content_structure(body)
             
             # Build standard object
             standard = {
@@ -149,14 +161,14 @@ class StandardsRegistry:
                 "path": str(file_path.relative_to(Path(self._project_root))),
                 "absolute_path": str(file_path),
                 "name": metadata.get("name", standard_id.replace("-", " ").title()),
-                "version": metadata.get("version", "1.0.0"),
                 "metadata": metadata,
                 "content": parsed_content,
-                "patterns": metadata.get("patterns", []),
+                "applies_to": metadata.get("applies_to", []),
+                "category": metadata.get("category", "general"),
                 "tags": metadata.get("tags", []),
                 "severity": metadata.get("severity", "error"),
                 "enabled": metadata.get("enabled", True),
-                "priority": metadata.get("priority", 1),
+                "priority": metadata.get("priority", "recommended"),
                 "dependencies": metadata.get("dependencies", []),
                 "file_size": file_path.stat().st_size,
                 "modified_time": file_path.stat().st_mtime,
@@ -203,7 +215,7 @@ class StandardsRegistry:
         pattern_mappings = {}
         
         for standard_id, standard in self._standards.items():
-            patterns = standard.get("patterns", [])
+            patterns = standard.get("applies_to", [])
             for pattern in patterns:
                 if pattern not in pattern_mappings:
                     pattern_mappings[pattern] = []
@@ -273,7 +285,7 @@ class StandardsRegistry:
                 if not standard.get("enabled", True):
                     continue
 
-                patterns = standard.get("patterns", [])
+                patterns = standard.get("applies_to", [])
                 
                 if not patterns:
                     # No patterns means it's a general standard
@@ -440,23 +452,37 @@ class StandardsRegistry:
         if "name" not in standard or not standard["name"]:
             warnings.append("Standard should have a 'name' field")
         
-        # Validate patterns
-        patterns = standard.get("patterns", [])
-        for pattern in patterns:
+        # Validate applies_to patterns
+        applies_to = standard.get("applies_to", [])
+        for pattern in applies_to:
             try:
-                self._pattern_matcher.matches("test/file.py", pattern)
+                from .pattern_matcher import match_pattern
+                match_pattern("test/file.py", pattern, "/dummy")
             except Exception as e:
                 errors.append(f"Invalid pattern '{pattern}': {e}")
         
+        # Validate category
+        category = standard.get("category")
+        if not category:
+            errors.append("Standard must have a 'category' field")
+        else:
+            valid_categories = ["api", "database", "frontend", "architecture", "security", "pipeline", "general"]
+            if category not in valid_categories:
+                warnings.append(f"Unknown category '{category}'. Should be one of: {', '.join(valid_categories)}")
+        
         # Validate severity
         severity = standard.get("severity", "error")
-        if severity not in ["error", "warn", "info", "off"]:
-            warnings.append(f"Unknown severity level '{severity}'. Should be one of: error, warn, info, off")
+        if severity not in ["error", "warning", "info"]:
+            warnings.append(f"Unknown severity level '{severity}'. Should be one of: error, warning, info")
         
         # Validate priority
-        priority = standard.get("priority", 1)
-        if not isinstance(priority, int) or priority < 1:
-            warnings.append("Priority should be a positive integer")
+        priority = standard.get("priority")
+        if not priority:
+            errors.append("Standard must have a 'priority' field")
+        else:
+            valid_priorities = ["required", "important", "recommended"]
+            if priority not in valid_priorities:
+                warnings.append(f"Unknown priority '{priority}'. Should be one of: {', '.join(valid_priorities)}")
         
         # Check for dependencies
         dependencies = standard.get("dependencies", [])

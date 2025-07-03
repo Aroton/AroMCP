@@ -57,8 +57,8 @@ def validate_standard_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
             "metadata": {}
         }
     
-    # Required fields
-    required_fields = ["id", "name"]
+    # Required fields (updated for new template)
+    required_fields = ["id", "name", "category"]
     for field in required_fields:
         if field not in metadata:
             errors.append(f"Missing required field: {field}")
@@ -78,14 +78,15 @@ def validate_standard_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(metadata["version"], str):
             warnings.append("Field 'version' should be a string")
     
-    # Validate patterns
-    if "patterns" in metadata:
-        if not isinstance(metadata["patterns"], list):
-            errors.append("Field 'patterns' must be a list")
-        else:
-            for i, pattern in enumerate(metadata["patterns"]):
-                if not isinstance(pattern, str):
-                    errors.append(f"Pattern {i} must be a string")
+    # Validate applies_to patterns (required field)
+    if "applies_to" not in metadata:
+        errors.append("Missing required field: applies_to")
+    elif not isinstance(metadata["applies_to"], list):
+        errors.append("Field 'applies_to' must be a list")
+    else:
+        for i, pattern in enumerate(metadata["applies_to"]):
+            if not isinstance(pattern, str):
+                errors.append(f"Pattern {i} in 'applies_to' must be a string")
     
     # Validate tags
     if "tags" in metadata:
@@ -96,9 +97,15 @@ def validate_standard_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
                 if not isinstance(tag, str):
                     errors.append(f"Tag {i} must be a string")
     
+    # Validate category
+    if "category" in metadata:
+        valid_categories = ["api", "database", "frontend", "architecture", "security", "pipeline", "general"]
+        if metadata["category"] not in valid_categories:
+            warnings.append(f"Field 'category' should be one of: {', '.join(valid_categories)}")
+    
     # Validate severity
     if "severity" in metadata:
-        valid_severities = ["error", "warn", "info"]
+        valid_severities = ["error", "warning", "info"]
         if metadata["severity"] not in valid_severities:
             errors.append(f"Field 'severity' must be one of: {', '.join(valid_severities)}")
     
@@ -107,10 +114,13 @@ def validate_standard_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(metadata["enabled"], bool):
             warnings.append("Field 'enabled' should be a boolean")
     
-    # Validate priority
-    if "priority" in metadata:
-        if not isinstance(metadata["priority"], (int, float)):
-            warnings.append("Field 'priority' should be a number")
+    # Validate priority (required field with specific values)
+    if "priority" not in metadata:
+        errors.append("Missing required field: priority")
+    else:
+        valid_priorities = ["required", "important", "recommended"]
+        if metadata["priority"] not in valid_priorities:
+            errors.append(f"Field 'priority' must be one of: {', '.join(valid_priorities)}")
     
     # Validate dependencies
     if "dependencies" in metadata:
@@ -125,16 +135,9 @@ def validate_standard_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
     normalized_metadata = metadata.copy()
     if "enabled" not in normalized_metadata:
         normalized_metadata["enabled"] = True
-    if "priority" not in normalized_metadata:
-        normalized_metadata["priority"] = 1
-    if "severity" not in normalized_metadata:
-        normalized_metadata["severity"] = "error"
-    if "patterns" not in normalized_metadata:
-        normalized_metadata["patterns"] = []
     if "tags" not in normalized_metadata:
         normalized_metadata["tags"] = []
-    if "dependencies" not in normalized_metadata:
-        normalized_metadata["dependencies"] = []
+    # Note: severity, priority, applies_to, category are now required fields with no defaults
     
     return {
         "valid": len(errors) == 0,
@@ -226,6 +229,106 @@ def parse_standard_file(file_path: Path) -> Dict[str, Any]:
     }
 
 
+def parse_content_structure(content: str) -> Dict[str, Any]:
+    """Parse the structured content of a new template standard.
+    
+    Args:
+        content: Markdown content without frontmatter
+        
+    Returns:
+        Dictionary with parsed content sections
+    """
+    sections = {
+        "title": "",
+        "why_and_when": "",
+        "core_rules": [],
+        "pattern": {
+            "structure": "",
+            "implementation": ""
+        },
+        "examples": {
+            "correct": [],
+            "wrong": []
+        },
+        "common_mistakes": [],
+        "automation": "",
+        "related": []
+    }
+    
+    # Extract title (first heading)
+    title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
+    if title_match:
+        sections["title"] = title_match.group(1).strip()
+    
+    # Extract Why & When section
+    why_when_match = re.search(r'## Why & When\s*\n<!--.*?-->\s*\n(.+?)(?=\n## |$)', content, re.DOTALL)
+    if why_when_match:
+        sections["why_and_when"] = why_when_match.group(1).strip()
+    
+    # Extract Core Rules
+    rules_match = re.search(r'## Core Rules\s*\n<!--.*?-->\s*\n(.+?)(?=\n## |$)', content, re.DOTALL)
+    if rules_match:
+        rules_text = rules_match.group(1)
+        # Extract numbered rules
+        rule_matches = re.findall(r'^(\d+)\. \*\*(.+?)\*\* (.+?) - (.+?)$', rules_text, re.MULTILINE)
+        for rule_match in rule_matches:
+            sections["core_rules"].append({
+                "number": int(rule_match[0]),
+                "type": rule_match[1],  # NEVER, ALWAYS, USE
+                "rule": rule_match[2],
+                "reason": rule_match[3]
+            })
+    
+    # Extract Pattern sections
+    structure_match = re.search(r'### Structure\s*\n```[^\n]*\n(.+?)\n```', content, re.DOTALL)
+    if structure_match:
+        sections["pattern"]["structure"] = structure_match.group(1).strip()
+    
+    implementation_match = re.search(r'### Implementation\s*\n```[^\n]*\n(.+?)\n```', content, re.DOTALL)
+    if implementation_match:
+        sections["pattern"]["implementation"] = implementation_match.group(1).strip()
+    
+    # Extract Examples
+    correct_matches = re.finditer(r'### ✅ Correct\s*\n```[^\n]*\n(.+?)\n```', content, re.DOTALL)
+    for match in correct_matches:
+        sections["examples"]["correct"].append(match.group(1).strip())
+    
+    wrong_matches = re.finditer(r'### ❌ Wrong\s*\n```[^\n]*\n(.+?)\n```', content, re.DOTALL)
+    for match in wrong_matches:
+        sections["examples"]["wrong"].append(match.group(1).strip())
+    
+    # Extract Common Mistakes
+    mistakes_match = re.search(r'## Common Mistakes\s*\n(.+?)(?=\n## |$)', content, re.DOTALL)
+    if mistakes_match:
+        mistakes_text = mistakes_match.group(1)
+        mistake_matches = re.findall(r'^\d+\. \*\*(.+?)\*\*: (.+?) → (.+?)$', mistakes_text, re.MULTILINE)
+        for mistake_match in mistake_matches:
+            sections["common_mistakes"].append({
+                "mistake": mistake_match[0],
+                "reason": mistake_match[1],
+                "solution": mistake_match[2]
+            })
+    
+    # Extract Automation section
+    automation_match = re.search(r'## Automation\s*\n<!--.*?-->\s*\n```yaml\s*\n(.+?)\n```', content, re.DOTALL)
+    if automation_match:
+        sections["automation"] = automation_match.group(1).strip()
+    
+    # Extract Related dependencies
+    related_match = re.search(r'## Related\s*\n```yaml\s*\n(.+?)\n```', content, re.DOTALL)
+    if related_match:
+        related_text = related_match.group(1)
+        # Parse YAML-like dependencies
+        dep_matches = re.findall(r'- id: (.+?)\s*\n\s*reason: "(.+?)"', related_text)
+        for dep_match in dep_matches:
+            sections["related"].append({
+                "id": dep_match[0].strip(),
+                "reason": dep_match[1].strip()
+            })
+    
+    return sections
+
+
 def get_standard_summary(metadata: Dict[str, Any]) -> str:
     """Generate a human-readable summary of a standard.
     
@@ -240,14 +343,19 @@ def get_standard_summary(metadata: Dict[str, Any]) -> str:
     if "name" in metadata:
         summary_parts.append(f"Name: {metadata['name']}")
     
-    if "version" in metadata:
-        summary_parts.append(f"Version: {metadata['version']}")
+    # Version is not part of new template
+    
+    if "category" in metadata:
+        summary_parts.append(f"Category: {metadata['category']}")
     
     if "tags" in metadata and metadata["tags"]:
         summary_parts.append(f"Tags: {', '.join(metadata['tags'])}")
     
-    if "patterns" in metadata and metadata["patterns"]:
-        summary_parts.append(f"Applies to: {', '.join(metadata['patterns'])}")
+    if "applies_to" in metadata and metadata["applies_to"]:
+        summary_parts.append(f"Applies to: {', '.join(metadata['applies_to'])}")
+    
+    if "priority" in metadata:
+        summary_parts.append(f"Priority: {metadata['priority']}")
     
     if "severity" in metadata:
         summary_parts.append(f"Severity: {metadata['severity']}")

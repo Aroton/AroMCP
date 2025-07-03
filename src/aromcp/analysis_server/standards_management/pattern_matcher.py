@@ -207,7 +207,7 @@ def find_matching_standards(
     
     for standard in standards:
         metadata = standard.get('metadata', {})
-        patterns = metadata.get('patterns', [])
+        patterns = metadata.get('applies_to', [])
         
         # Handle standards without patterns (general standards)
         if not patterns:
@@ -353,7 +353,7 @@ def create_pattern_report(
     # Collect all patterns
     for standard in standards:
         metadata = standard.get('metadata', {})
-        patterns = metadata.get('patterns', [])
+        patterns = metadata.get('applies_to', [])
         
         if patterns:
             report['standards_with_patterns'] += 1
@@ -361,7 +361,8 @@ def create_pattern_report(
             
             for pattern in patterns:
                 all_patterns.append(pattern)
-                pattern_to_standard[pattern] = standard.get('metadata', {}).get('id', 'unknown')
+                standard_id = standard.get('metadata', {}).get('id', 'unknown')
+                pattern_to_standard[pattern] = standard_id
                 
                 # Calculate specificity
                 specificity = calculate_pattern_specificity(pattern)
