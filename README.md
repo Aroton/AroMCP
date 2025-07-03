@@ -93,44 +93,63 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 ## AroMCP Development Tools
 
 ### Workflow Patterns
-- **File Operations**: Use `get_target_files` → `read_files_batch` → `write_files_batch`
+- **File Operations**: Prefer `get_target_files` → `read_files_batch` → `write_files_batch` for batch operations
 - **Code Quality**: After changes run `parse_lint_results` and `parse_typescript_errors`
 - **Standards**: Load with `hints_for_file` before editing files
 - **ESLint Generation**: Use orchestrated `generate_eslint_rules` for project-specific rules
 
-## Async Editing Flow
+## Mandatory File Operation Workflow
 
-For complex multi-file editing tasks, leverage parallel Task agents to maximize efficiency while respecting token limits:
+**CRITICAL**: For ANY file operation (single file or multiple files - create, modify, delete, analyze), you MUST follow this structured workflow. This applies to everything from creating a single "hello world" file to complex multi-file refactoring:
 
-**Phase 1: Discovery & Planning**
-- Use AroMCP file discovery tools to identify all relevant files
-- Analyze the scope and complexity of changes needed
-- Determine optimal parallelization strategy based on file relationships and dependencies
-- Do not ever use "hints_for_file" tool during discovery
+**Phase 1: Discovery & Planning** (MANDATORY for ALL operations - MUST use separate Task agent)
+- Launch a dedicated Task agent for discovery that focuses on the specific work at hand
+- Use targeted AroMCP file discovery tools to understand relevant project context (avoid reading all files of a type)
+- Analyze the scope and complexity of operations needed based on the specific task requirements
+- Determine optimal agent strategy (single vs parallel) for the actual work phase
+- **Example**: For creating one new API endpoint, discover similar existing endpoints and understand project structure
 
-**Phase 2: Parallel Editing**
-- Launch multiple Task agents simultaneously, each responsible for editing a subset of files
-- Let each agent decide how many files to handle based on their complexity and token constraints
-- Agents should use AroMCP tools exclusively for all file operations (read, write, create)
-- Allow agents to create new files as needed during the editing process
-- **ALWAYS** use hints_for_file tool before editing a file
+**Phase 2: Structured Operations** (MANDATORY for ALL operations)
+- Launch Task agents to handle file operations (use judgment on single vs parallel based on Phase 1 analysis)
+- **FIRST ACTION**: Each agent must call `hints_for_file` for all files they will modify OR create (including new files that don't exist yet)
+- Each agent should choose appropriate tools for file operations (AroMCP tools preferred, but agents can use standard tools when more suitable)
+- Agents can create new files when necessary (this overrides general "avoid file creation" guidance)
+- Agents should use the hints to guide their implementation decisions and follow project patterns
+- **Example**: Single agent first gets hints for the new API file path, then creates the file following discovered patterns
+- Run quality checks using `parse_lint_results` and `parse_typescript_errors` for files updated
+- DO NOT RUN DEV SERVERS
+- DO NOT RUN CURL COMMANDS
 
-**Phase 3: Quality Assurance**
-- After editing completes, run comprehensive quality checks using `parse_lint_results`
-- Identify any linting errors, type errors, or other issues introduced during editing
+**Phase 3: Quality Assurance** (MANDATORY for ALL operations - ONLY after ALL work is complete)
+- Wait until ALL Task agents from Phase 2 have completed their file operations
+- Run comprehensive quality checks using `parse_lint_results` and `parse_typescript_errors`
+- Identify any linting errors, type errors, or other issues introduced during operations
 - Launch additional Task agents to fix specific errors, with each agent focusing on particular files or error types
+- **Example**: Even after creating one simple file, validate it integrates properly with the project
 
 **Decision Points for AI:**
 - **Batch Size**: Agents decide optimal file grouping based on file size, complexity, and relationships
-- **Parallelization**: Determine how many parallel agents to launch based on task complexity
+- **Agent Strategy**: Determine whether to use parallel agents or single agent based on task complexity
 - **Error Handling**: Choose appropriate strategies for fixing different types of errors
 - **File Dependencies**: Consider import relationships and dependencies when organizing work
+- **Operation Type**: Adapt strategy based on whether creating, modifying, or deleting files
 
 **Key Principles:**
+- **Mandatory Workflow**: ALWAYS follow all 3 phases for ANY file operation, no exceptions
+- **Separate Discovery Agent**: Phase 1 must always use a dedicated Task agent for targeted discovery
+- **Hints at Work Start**: Every Phase 2 agent must call `hints_for_file` as their first action for all target files
+- **Focused Discovery**: Avoid over-broad discovery; focus on specific work requirements
+- **Complete Before Validate**: Phase 3 validation only starts after ALL Phase 2 work is complete
+- **File Creation Permitted**: This workflow overrides general "avoid file creation" guidance when files are needed
 - **Token Efficiency**: Each Task agent works within manageable token limits
-- **Quality First**: Always validate changes before considering work complete
-- **Atomic Operations**: Each agent completes their assigned files entirely
-- **Flexible Coordination**: Allow agents to adapt their approach based on encountered challenges
+
+**Common Examples Requiring This Workflow:**
+- ✅ Creating a single new API endpoint file
+- ✅ Modifying one configuration file
+- ✅ Adding a new utility function file
+- ✅ Deleting unused files
+- ✅ Complex multi-file refactoring
+- ✅ ANY file operation, regardless of size or complexity
 ```
 
 **[Complete Integration Guide →](documentation/claude_code.md)**

@@ -258,6 +258,10 @@ def find_markdown_files(standards_path: str, project_root: str | None = None) ->
 
     files = []
     for md_file in standards_dir.rglob("*.md"):
+        # Skip files with "template" in their name
+        if "template" in md_file.name.lower():
+            continue
+            
         try:
             stat = md_file.stat()
             files.append({

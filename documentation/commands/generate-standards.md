@@ -41,8 +41,7 @@ This command uses the new standards-server MCP tools to:
 ```python
 # Check what standards need processing
 update_result = mcp.check_updates(
-    standards_path="standards",
-    project_root="."
+    standards_path="standards"
 )
 
 print(f"Found {len(update_result['data']['needsUpdate'])} standards to process")

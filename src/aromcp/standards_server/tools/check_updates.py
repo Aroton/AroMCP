@@ -84,9 +84,12 @@ def check_updates_impl(
         # Find all markdown files
         md_files = find_markdown_files(standards_path, project_root)
 
-        # Filter files to only include those with valid YAML headers
+        # Filter files to only include those with valid YAML headers and exclude templates
         valid_md_files = []
         for md_file in md_files:
+            # Skip files with "template" in their path
+            if "template" in md_file["path"].lower():
+                continue
             if _has_valid_yaml_header(md_file["absolutePath"]):
                 valid_md_files.append(md_file)
 
@@ -169,9 +172,13 @@ def check_updates_impl(
         }
         for standard_id in tracked_standards:
             if standard_id not in current_files_set:
+                # Skip template files when checking for deletions
+                source_path = tracked_standards[standard_id].get("sourcePath", "")
+                if "template" in source_path.lower():
+                    continue
                 needs_update.append({
                     "standardId": standard_id,
-                    "sourcePath": tracked_standards[standard_id].get("sourcePath", ""),
+                    "sourcePath": source_path,
                     "reason": "deleted",
                     "lastModified": datetime.now().isoformat()
                 })

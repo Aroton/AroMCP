@@ -139,11 +139,11 @@ This has id but no updated field.""")
             standards_dir = Path(temp_dir) / "standards"
             standards_dir.mkdir()
             
-            # Create file with template updated field
-            template_md = standards_dir / "template-updated.md"
-            template_md.write_text("""---
-id: template-updated
-name: Template Updated
+            # Create file with updated field
+            updated_md = standards_dir / "field-updated.md"
+            updated_md.write_text("""---
+id: field-updated
+name: Field Updated
 category: general
 tags: [test]
 applies_to: ["**/*.ts"]
@@ -152,7 +152,7 @@ updated: 2024-02-01T12:00:00Z
 priority: required
 ---
 
-# Template Updated Standard""")
+# Field Updated Standard""")
             
             # Create file with different template updated field format
             different_format_md = standards_dir / "different-format-updated.md"
@@ -175,18 +175,18 @@ priority: required
             assert len(result["data"]["needsUpdate"]) == 2
             
             # Find the entries
-            template_entry = next(
+            field_entry = next(
                 item for item in result["data"]["needsUpdate"] 
-                if item["standardId"] == "template-updated"
+                if item["standardId"] == "field-updated"
             )
             different_format_entry = next(
                 item for item in result["data"]["needsUpdate"] 
                 if item["standardId"] == "different-format-updated"
             )
             
-            # Verify template updated field is used correctly
-            assert template_entry["templateUpdated"] == "2024-02-01T12:00:00Z"
-            assert template_entry["lastModified"] == "2024-02-01T12:00:00Z"
+            # Verify updated field is used correctly
+            assert field_entry["templateUpdated"] == "2024-02-01T12:00:00Z"
+            assert field_entry["lastModified"] == "2024-02-01T12:00:00Z"
             
             # Verify different date format is handled correctly
             assert different_format_entry["templateUpdated"] == "2024-01-01"
@@ -388,3 +388,69 @@ priority: required
             assert len(result["data"]["needsUpdate"]) == 1
             entry = result["data"]["needsUpdate"][0]
             assert entry["standardId"] == "valid-standard"
+    
+    def test_template_files_filtered_out(self):
+        """Test that files with 'template' in their names are filtered out."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["MCP_FILE_ROOT"] = temp_dir
+            
+            standards_dir = Path(temp_dir) / "standards"
+            standards_dir.mkdir()
+            
+            # Create template files with valid YAML headers (should be filtered out)
+            template_md = standards_dir / "standard-template.md"
+            template_md.write_text("""---
+id: standard-template
+name: Standard Template
+category: template
+tags: [template]
+applies_to: ["**/*.ts"]
+severity: error
+updated: 2024-01-15T10:00:00Z
+priority: required
+---
+
+# Standard Template""")
+            
+            # Create another template file
+            another_template_md = standards_dir / "TEMPLATE-example.md"
+            another_template_md.write_text("""---
+id: template-example
+name: Template Example
+category: template
+tags: [template]
+applies_to: ["**/*.ts"]
+severity: error
+updated: 2024-01-15T10:00:00Z
+priority: required
+---
+
+# Template Example""")
+            
+            # Create a regular file (should be processed)
+            regular_md = standards_dir / "regular-standard.md"
+            regular_md.write_text("""---
+id: regular-standard
+name: Regular Standard
+category: general
+tags: [test]
+applies_to: ["**/*.ts"]
+severity: error
+updated: 2024-01-15T10:00:00Z
+priority: required
+---
+
+# Regular Standard""")
+            
+            result = check_updates_impl("standards", temp_dir)
+            
+            assert "data" in result
+            # Only the regular file should be processed
+            assert len(result["data"]["needsUpdate"]) == 1
+            entry = result["data"]["needsUpdate"][0]
+            assert entry["standardId"] == "regular-standard"
+            
+            # Ensure template files are not in the results
+            standard_ids = [item["standardId"] for item in result["data"]["needsUpdate"]]
+            assert "standard-template" not in standard_ids
+            assert "template-example" not in standard_ids
