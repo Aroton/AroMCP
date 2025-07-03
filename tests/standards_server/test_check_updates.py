@@ -93,16 +93,17 @@ Sample standard content.""")
 id: valid-standard
 name: Valid Standard
 category: general
+updated: 2024-01-01T00:00:00Z
 ---
 
 # Valid Standard
-This has a valid YAML header with id field.""")
+This has a valid YAML header with id and updated fields.""")
             
             # Create a file without YAML header
             invalid_md = standards_dir / "invalid-standard.md"
             invalid_md.write_text("# Invalid Standard\n\nThis has no YAML header.")
             
-            # Create a file with YAML header but no id field
+            # Create a file with YAML header but missing required fields
             no_id_md = standards_dir / "no-id-standard.md"
             no_id_md.write_text("""---
 name: No ID Standard
@@ -111,11 +112,22 @@ category: general
 
 # No ID Standard
 This has YAML header but no id field.""")
+
+            # Create a file with id but no updated field
+            no_updated_md = standards_dir / "no-updated-standard.md"
+            no_updated_md.write_text("""---
+id: no-updated-standard
+name: No Updated Standard
+category: general
+---
+
+# No Updated Standard
+This has id but no updated field.""")
             
             result = check_updates_impl("standards", temp_dir)
             
             assert "data" in result
-            # Only the valid file should be processed
+            # Only the valid file with both id and updated should be processed
             assert len(result["data"]["needsUpdate"]) == 1
             assert result["data"]["needsUpdate"][0]["standardId"] == "valid-standard"
     
@@ -142,19 +154,20 @@ priority: required
 
 # Template Updated Standard""")
             
-            # Create file without template updated field
-            no_template_md = standards_dir / "no-template-updated.md"
-            no_template_md.write_text("""---
-id: no-template-updated
-name: No Template Updated
+            # Create file with different template updated field format
+            different_format_md = standards_dir / "different-format-updated.md"
+            different_format_md.write_text("""---
+id: different-format-updated
+name: Different Format Updated
 category: general
 tags: [test]
 applies_to: ["**/*.ts"]
 severity: error
+updated: 2024-01-01
 priority: required
 ---
 
-# No Template Updated Standard""")
+# Different Format Updated Standard""")
             
             result = check_updates_impl("standards", temp_dir)
             
@@ -166,18 +179,18 @@ priority: required
                 item for item in result["data"]["needsUpdate"] 
                 if item["standardId"] == "template-updated"
             )
-            no_template_entry = next(
+            different_format_entry = next(
                 item for item in result["data"]["needsUpdate"] 
-                if item["standardId"] == "no-template-updated"
+                if item["standardId"] == "different-format-updated"
             )
             
-            # Verify template updated field is used when available
+            # Verify template updated field is used correctly
             assert template_entry["templateUpdated"] == "2024-02-01T12:00:00Z"
             assert template_entry["lastModified"] == "2024-02-01T12:00:00Z"
             
-            # Verify filesystem timestamp is used when template field is missing
-            assert no_template_entry["templateUpdated"] == ""
-            assert no_template_entry["lastModified"] == no_template_entry["filesystemModified"]
+            # Verify different date format is handled correctly
+            assert different_format_entry["templateUpdated"] == "2024-01-01"
+            assert different_format_entry["lastModified"] == "2024-01-01"
     
     def test_modified_detection_with_template_field(self):
         """Test that modifications are detected based on template updated field."""
@@ -296,3 +309,82 @@ Real world content here.""")
             # Should handle datetime format correctly  
             assert entry["templateUpdated"] == "2025-01-03T10:00:00Z"
             assert "filesystemModified" in entry
+    
+    def test_invalid_updated_field_format(self):
+        """Test handling of invalid or unexpected updated field formats."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["MCP_FILE_ROOT"] = temp_dir
+            
+            standards_dir = Path(temp_dir) / "standards"
+            standards_dir.mkdir()
+            
+            # Create file with non-standard updated field (dict/object)
+            invalid_md = standards_dir / "invalid-updated.md"
+            invalid_md.write_text("""---
+id: invalid-updated
+name: Invalid Updated Field
+category: general
+tags: [test]
+applies_to: ["**/*.ts"]
+severity: error
+updated: {year: 2024, month: 1, day: 15}
+priority: required
+---
+
+# Invalid Updated Field Standard""")
+            
+            result = check_updates_impl("standards", temp_dir)
+            
+            assert "data" in result
+            assert len(result["data"]["needsUpdate"]) == 1
+            entry = result["data"]["needsUpdate"][0]
+            assert entry["standardId"] == "invalid-updated"
+            # Should convert to string without crashing
+            assert isinstance(entry["templateUpdated"], str)
+            # Should contain the dict representation
+            assert "year" in entry["templateUpdated"] or "2024" in entry["templateUpdated"]
+    
+    def test_missing_updated_field_filtered_out(self):
+        """Test that files without updated field are filtered out completely."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["MCP_FILE_ROOT"] = temp_dir
+            
+            standards_dir = Path(temp_dir) / "standards"
+            standards_dir.mkdir()
+            
+            # Create file without updated field at all
+            no_updated_md = standards_dir / "no-updated.md"
+            no_updated_md.write_text("""---
+id: no-updated
+name: No Updated Field
+category: general
+tags: [test]
+applies_to: ["**/*.ts"]
+severity: error
+priority: required
+---
+
+# No Updated Field Standard""")
+            
+            # Create file with both id and updated (should be processed)
+            valid_md = standards_dir / "valid-standard.md"
+            valid_md.write_text("""---
+id: valid-standard
+name: Valid Standard
+category: general
+tags: [test]
+applies_to: ["**/*.ts"]
+severity: error
+updated: 2024-01-15T10:00:00Z
+priority: required
+---
+
+# Valid Standard""")
+            
+            result = check_updates_impl("standards", temp_dir)
+            
+            assert "data" in result
+            # Only the valid file should be processed
+            assert len(result["data"]["needsUpdate"]) == 1
+            entry = result["data"]["needsUpdate"][0]
+            assert entry["standardId"] == "valid-standard"

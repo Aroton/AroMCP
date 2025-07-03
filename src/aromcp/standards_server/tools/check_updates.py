@@ -46,16 +46,18 @@ def _parse_yaml_frontmatter(file_path: str) -> dict[str, Any] | None:
 
 def _has_valid_yaml_header(file_path: str) -> bool:
     """
-    Check if a markdown file has a valid YAML header with at least an 'id' field.
+    Check if a markdown file has a valid YAML header with required fields.
 
     Args:
         file_path: Path to the markdown file
 
     Returns:
-        True if the file has a valid YAML header with an id field
+        True if the file has a valid YAML header with id and updated fields
     """
     frontmatter = _parse_yaml_frontmatter(file_path)
-    return frontmatter is not None and 'id' in frontmatter
+    return (frontmatter is not None and 
+            'id' in frontmatter and 
+            'updated' in frontmatter)
 
 
 def check_updates_impl(
@@ -104,29 +106,32 @@ def check_updates_impl(
             if not frontmatter:
                 continue
 
-            # Use template updated field if available, otherwise fallback to filesystem
-            template_updated = frontmatter.get("updated", "")
+            # Get template updated field (guaranteed to exist due to validation)
+            template_updated_raw = frontmatter["updated"]
             filesystem_modified = md_file["lastModified"]
-
-            # Convert template_updated to string if it's a datetime/date object
-            if template_updated and not isinstance(template_updated, str):
-                # Handle both datetime.datetime and datetime.date objects
-                if hasattr(template_updated, 'tzinfo'):
+            
+            # Convert template_updated to string if it's not already a string
+            if isinstance(template_updated_raw, str):
+                template_updated = template_updated_raw
+            elif hasattr(template_updated_raw, 'isoformat'):
+                # datetime.datetime or datetime.date object
+                if hasattr(template_updated_raw, 'tzinfo'):
                     # datetime.datetime object
-                    if template_updated.tzinfo is not None:
-                        template_updated = template_updated.isoformat().replace(
+                    if template_updated_raw.tzinfo is not None:
+                        template_updated = template_updated_raw.isoformat().replace(
                             '+00:00', 'Z'
                         )
                     else:
-                        template_updated = template_updated.isoformat() + 'Z'
+                        template_updated = template_updated_raw.isoformat() + 'Z'
                 else:
                     # datetime.date object - convert to ISO date string
-                    template_updated = template_updated.isoformat()
+                    template_updated = template_updated_raw.isoformat()
+            else:
+                # Other object types - convert to string
+                template_updated = str(template_updated_raw)
 
-            # Prefer template updated field for comparison
-            last_modified = (
-                template_updated if template_updated else filesystem_modified
-            )
+            # Use template updated field for comparison
+            last_modified = template_updated
 
             # Generate standard ID from relative path
             standard_id = _generate_standard_id(file_path, standards_path)
