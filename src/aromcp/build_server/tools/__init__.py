@@ -118,6 +118,7 @@ def register_build_tools(mcp):
         target_files: str | list[str] | None = None,
         config_file: str | None = None,
         include_warnings: bool = True,
+        use_standards_eslint: bool = False,
         timeout: int = 120,
         page: int = 1,
         max_tokens: int = 20000
@@ -130,6 +131,7 @@ def register_build_tools(mcp):
             target_files: Specific files to lint (defaults to linter defaults)
             config_file: Path to linter config file
             include_warnings: Whether to include warnings
+            use_standards_eslint: Whether to include generated ESLint rules from standards server
             timeout: Maximum execution time in seconds
             page: Page number for pagination (1-based, default: 1)
             max_tokens: Maximum tokens per page (default: 20000)
@@ -137,7 +139,7 @@ def register_build_tools(mcp):
         project_root = get_project_root(project_root)
         return parse_lint_results_impl(
             linter, project_root, target_files, config_file, include_warnings,
-            timeout, page, max_tokens
+            use_standards_eslint, timeout, page, max_tokens
         )
 
     @mcp.tool

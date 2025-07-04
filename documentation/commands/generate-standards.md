@@ -140,6 +140,7 @@ for batch_num in range(num_batches):
 - Use ESLint selector syntax for AST pattern matching
 - Test your selector logic - ensure it matches the intended patterns
 - Include proper error messages that guide developers to the correct approach
+- **CRITICAL**: Any recursive AST traversal functions MUST limit recursion depth to maximum 10 levels and include cycle detection to prevent infinite loops
 
 **ESLint File Rules (CRITICAL):**
 - **Filename MUST**: Be in format `rules/rule-name.js` (e.g., `rules/api-mandatory-pipeline.js`)
@@ -450,6 +451,13 @@ module.exports = {
         }
       }
     };
+
+    // CRITICAL: If implementing recursive AST traversal, include these safeguards:
+    // function recursiveTraversal(node, visited = new Set(), depth = 0) {
+    //   if (depth > 10 || visited.has(node)) return;
+    //   visited.add(node);
+    //   // ... traversal logic
+    // }
   }
 };
 ```

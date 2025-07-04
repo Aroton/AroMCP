@@ -37,6 +37,43 @@ uv run ruff check src/ tests/              # Lint
 uv run ruff check --fix src/ tests/        # Auto-fix linting
 ```
 
+### Project Dependencies for ESLint Integration
+
+When using AroMCP's `parse_lint_results` tool with standards ESLint rules in your target projects, ensure the following dependencies are installed:
+
+#### Required Dependencies
+```bash
+# Install ESLint v9+ and TypeScript parser
+npm install --save-dev eslint @typescript-eslint/parser
+
+# Or with yarn
+yarn add --dev eslint @typescript-eslint/parser
+```
+
+#### Next.js Projects
+For Next.js projects, ESLint is typically pre-configured. Ensure you have:
+```bash
+# Usually included in Next.js by default
+npm install --save-dev eslint eslint-config-next @typescript-eslint/parser
+```
+
+#### Dependencies Explained
+- **`eslint`** (v9.0.0+) - Required for linting with flat config format
+- **`@typescript-eslint/parser`** - Required for parsing TypeScript files in AroMCP standards rules
+- **`eslint-config-next`** - Next.js ESLint configuration (Next.js projects only)
+
+#### ESLint Configuration
+AroMCP generates ESLint v9 flat config files at `.aromcp/eslint/standards-config.js` that:
+- Use `@typescript-eslint/parser` for TypeScript support
+- Include ignore patterns for common directories (`.aromcp/`, `node_modules/`, `dist/`, `build/`, `.next/`)
+- Apply only to JavaScript/TypeScript files (`**/*.{js,jsx,ts,tsx}`)
+- Run independently of existing project ESLint configuration
+
+#### Usage Notes
+- **Next.js projects**: AroMCP runs both `npm run lint` (Next.js config) and standards ESLint separately
+- **Other projects**: AroMCP can run either standards ESLint or regular ESLint
+- **No conflicts**: Standards ESLint uses `--no-config-lookup` to avoid conflicts with existing `.eslintrc.*` files
+
 ## 🔧 Core Capabilities
 
 ### Orchestrated ESLint Rule Generation

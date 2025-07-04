@@ -88,17 +88,69 @@ def update_eslint_config(project_root: str | None = None) -> None:
         plugin_content += f"    '{rule_name}': require('./rules/{rule_name}'),\n"
     plugin_content += "  }\n};\n"
 
-    plugin_file = eslint_dir / "custom-rules.js"
+    plugin_file = eslint_dir / "eslint-plugin-aromcp.js"
     with open(plugin_file, 'w', encoding='utf-8') as f:
         f.write(plugin_content)
 
-    # Generate standards config that can be extended
-    config_content = "module.exports = {\n"
-    config_content += "  plugins: ['./custom-rules'],\n"
-    config_content += "  rules: {\n"
+    # Create package.json to define the plugin module
+    package_json = {
+        "name": "eslint-plugin-aromcp",
+        "version": "1.0.0",
+        "main": "eslint-plugin-aromcp.js",
+        "private": True
+    }
+
+    package_file = eslint_dir / "package.json"
+    with open(package_file, 'w', encoding='utf-8') as f:
+        json.dump(package_json, f, indent=2)
+
+    # Generate standards config for ESLint 9.x flat config with TypeScript support
+    config_content = """const aromcpPlugin = require('./eslint-plugin-aromcp');
+
+// Try to load TypeScript parser if available
+let tsParser;
+try {
+  tsParser = require('@typescript-eslint/parser');
+} catch (e) {
+  // TypeScript parser not available, will use default parser
+}
+
+module.exports = [
+  {
+    // Apply to TypeScript and JavaScript files
+    files: ['**/*.{js,jsx,ts,tsx}'],
+    ignores: [
+      '.aromcp/**',
+      'node_modules/**',
+      'dist/**',
+      'build/**',
+      '.next/**'
+    ],
+    languageOptions: {
+      ...(tsParser && { parser: tsParser }),
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        ecmaFeatures: {
+          jsx: true
+        },
+        ...(tsParser && {
+          project: false, // Don't require tsconfig for performance
+          tsconfigRootDir: undefined
+        })
+      }
+    },
+    plugins: {
+      aromcp: aromcpPlugin,
+    },
+    rules: {
+"""
     for rule_name in rule_names:
-        config_content += f"    'custom-rules/{rule_name}': 'error',\n"
-    config_content += "  }\n};\n"
+        config_content += f"      'aromcp/{rule_name}': 'error',\n"
+    config_content += """    },
+  },
+];
+"""
 
     config_file = eslint_dir / "standards-config.js"
     with open(config_file, 'w', encoding='utf-8') as f:
@@ -106,8 +158,8 @@ def update_eslint_config(project_root: str | None = None) -> None:
 
     # Also create a JSON version for easier parsing
     config_json = {
-        "plugins": ["./custom-rules"],
-        "rules": {f"custom-rules/{rule_name}": "error" for rule_name in rule_names}
+        "plugins": ["aromcp"],
+        "rules": {f"aromcp/{rule_name}": "error" for rule_name in rule_names}
     }
 
     config_json_file = eslint_dir / "standards-config.json"

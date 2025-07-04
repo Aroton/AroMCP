@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from aromcp.standards_server.tools.register import register_impl
 from aromcp.standards_server.tools.update_rule import update_rule_impl
@@ -248,7 +249,7 @@ class TestUpdateRule:
 
     def test_eslint_files_non_string_content(self):
         """Test ESLint files with non-string content."""
-        eslint_files = {
+        eslint_files: dict[str, Any] = {
             "rules/test.js": {"not": "a string"}  # type: ignore
         }
 
@@ -312,8 +313,8 @@ class TestUpdateRule:
         # Verify config files were created
         eslint_dir = Path(self.temp_dir) / ".aromcp" / "eslint"
 
-        # Check plugin index file
-        plugin_file = eslint_dir / "custom-rules.js"
+        # Check plugin index file (updated name)
+        plugin_file = eslint_dir / "eslint-plugin-aromcp.js"
         assert plugin_file.exists()
 
         with open(plugin_file) as f:
@@ -322,14 +323,26 @@ class TestUpdateRule:
         assert "another-rule" in plugin_content
         assert "require('./rules/test-rule')" in plugin_content
 
+        # Check that package.json was created for the plugin
+        package_file = eslint_dir / "package.json"
+        assert package_file.exists()
+        with open(package_file) as f:
+            package_data = json.load(f)
+        assert package_data["name"] == "eslint-plugin-aromcp"
+
         # Check standards config file (JS)
         config_file = eslint_dir / "standards-config.js"
         assert config_file.exists()
 
         with open(config_file) as f:
             config_content = f.read()
-        assert "custom-rules/test-rule" in config_content
-        assert "custom-rules/another-rule" in config_content
+        # Check for new aromcp/ rule format
+        assert "aromcp/test-rule" in config_content
+        assert "aromcp/another-rule" in config_content
+        # Check that ignore patterns are included
+        assert "ignores:" in config_content
+        assert "'.aromcp/**'" in config_content
+        assert "'node_modules/**'" in config_content
 
         # Check standards config file (JSON)
         config_json_file = eslint_dir / "standards-config.json"
@@ -338,6 +351,7 @@ class TestUpdateRule:
         with open(config_json_file) as f:
             config_data = json.load(f)
 
-        assert "custom-rules/test-rule" in config_data["rules"]
-        assert "custom-rules/another-rule" in config_data["rules"]
-        assert config_data["plugins"] == ["./custom-rules"]
+        # Check for new aromcp/ rule format in JSON
+        assert "aromcp/test-rule" in config_data["rules"]
+        assert "aromcp/another-rule" in config_data["rules"]
+        assert config_data["plugins"] == ["aromcp"]
