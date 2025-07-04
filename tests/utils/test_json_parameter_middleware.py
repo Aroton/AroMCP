@@ -93,24 +93,32 @@ class TestJSONParameterMiddleware:
     def test_convert_value_union_types(self):
         """Test handling of Union types (e.g., str | list[str])."""
         # Test with list value in union
-        result = self.middleware._convert_value('["a", "b"]', str | list[str], "test_param")
+        result = self.middleware._convert_value(
+            '["a", "b"]', str | list[str], "test_param"
+        )
         assert result == ["a", "b"]
 
         # Test with string value in union
-        result = self.middleware._convert_value('plain string', str | list[str], "test_param")
+        result = self.middleware._convert_value(
+            'plain string', str | list[str], "test_param"
+        )
         assert result == 'plain string'
 
     def test_convert_value_invalid_json_error(self):
         """Test error handling for invalid JSON."""
         with pytest.raises(ValueError) as exc_info:
-            self.middleware._convert_value('{"invalid": json}', dict[str, str], "test_param")
+            self.middleware._convert_value(
+                '{"invalid": json}', dict[str, str], "test_param"
+            )
 
         assert "Invalid JSON in parameter 'test_param'" in str(exc_info.value)
 
     def test_convert_value_type_mismatch_error(self):
         """Test error handling for type mismatches."""
         with pytest.raises(ValueError) as exc_info:
-            self.middleware._convert_value('["list", "data"]', dict[str, str], "test_param")
+            self.middleware._convert_value(
+                '["list", "data"]', dict[str, str], "test_param"
+            )
 
         assert "must be a dict" in str(exc_info.value)
 
@@ -118,7 +126,9 @@ class TestJSONParameterMiddleware:
         """Test error handling when invalid JSON string is passed to list parameter."""
         # For list types, the middleware will try to parse as JSON first
         with pytest.raises(ValueError) as exc_info:
-            self.middleware._convert_value('plain string not json', list[str], "test_param")
+            self.middleware._convert_value(
+                'plain string not json', list[str], "test_param"
+            )
 
         assert "Invalid JSON in parameter 'test_param'" in str(exc_info.value)
 
@@ -126,7 +136,9 @@ class TestJSONParameterMiddleware:
         """Test error handling when invalid JSON string is passed to dict parameter."""
         # For dict types, the middleware will try to parse as JSON first
         with pytest.raises(ValueError) as exc_info:
-            self.middleware._convert_value('plain string not json', dict[str, str], "test_param")
+            self.middleware._convert_value(
+                'plain string not json', dict[str, str], "test_param"
+            )
 
         assert "Invalid JSON in parameter 'test_param'" in str(exc_info.value)
 
@@ -284,7 +296,10 @@ class TestEdgeCases:
 
     def test_nested_json_structures(self):
         """Test handling of nested JSON structures."""
-        nested_data = '{"users": [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}]}'
+        nested_data = (
+            '{"users": [{"name": "John", "age": 30}, '
+            '{"name": "Jane", "age": 25}]}'
+        )
         result = self.middleware._convert_value(nested_data, dict, "test_param")
 
         expected = {
@@ -298,7 +313,9 @@ class TestEdgeCases:
     def test_complex_union_types(self):
         """Test complex union type scenarios."""
         # Test with multiple union options
-        result = self.middleware._convert_value('["a", "b"]', str | list[str] | dict, "test_param")
+        result = self.middleware._convert_value(
+            '["a", "b"]', str | list[str] | dict, "test_param"
+        )
         assert result == ["a", "b"]
 
         # Test fallback behavior
@@ -307,7 +324,8 @@ class TestEdgeCases:
 
     def test_json_string_values(self):
         """Test that JSON strings are handled appropriately for string types."""
-        # When expecting a string type, JSON strings should be parsed if they look like JSON
+        # When expecting a string type, JSON strings should be parsed if they look
+        # like JSON
         result = self.middleware._convert_value('"hello world"', str, "test_param")
         # The middleware will parse JSON strings that look like JSON
         assert result == "hello world"
@@ -325,7 +343,9 @@ class TestEdgeCases:
 
     def test_whitespace_handling(self):
         """Test handling of JSON with extra whitespace."""
-        result = self.middleware._convert_value('  ["a", "b"]  ', list[str], "test_param")
+        result = self.middleware._convert_value(
+            '  ["a", "b"]  ', list[str], "test_param"
+        )
         assert result == ["a", "b"]
 
     def test_function_with_no_type_hints(self):

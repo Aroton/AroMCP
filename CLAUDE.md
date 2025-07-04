@@ -10,7 +10,7 @@ AroMCP is a suite of MCP (Model Context Protocol) servers designed as utilities 
 
 **Implementation Status:**
 - ✅ **Phase 1: FileSystem Tools** - 9 tools with file I/O, git operations, diff validation, batch operations
-- ✅ **Phase 2: Build Tools** - 7 tools with command execution, output parsing, multi-package manager support  
+- ✅ **Phase 2: Build Tools** - 7 tools with command execution, output parsing, multi-package manager support
 - ✅ **Phase 4: Code Analysis Tools** - 3 tools implemented (find_dead_code, find_import_cycles, extract_api_endpoints)
 - ⚠️ Phases 3, 5-6: Other tool categories are stub implementations
 
@@ -36,7 +36,7 @@ Six main tool categories:
 
 - **Install dependencies**: `uv sync --dev` (uses uv package manager)
 - **Run server**: `uv run python main.py` or `uv run python -m src.aromcp.main_server`
-- **Run tests**: `uv run pytest` 
+- **Run tests**: `uv run pytest`
 - **Run single test**: `uv run pytest tests/filesystem_server/test_get_target_files.py::TestGetTargetFiles::test_basic_functionality`
 - **Code formatting**: `uv run black src/ tests/`
 - **Linting**: `uv run ruff check src/ tests/`
@@ -128,7 +128,7 @@ def my_tool(patterns: list[str]) -> dict[str, Any]:
 **Path validation and project root management**:
 - `validate_file_path()` - Modern validation with structured error responses
 - `validate_file_path_legacy()` - Backward-compatible validation for existing tools
-- `get_project_root()` - Environment-based project root resolution from `MCP_FILE_ROOT`
+- `get_project_root(project_root: str | None = None)` - Environment-based project root resolution from `MCP_FILE_ROOT`
 
 **Security features**:
 - Directory traversal protection
@@ -165,12 +165,12 @@ def tool_name(
     page: int = 1,  # Page number (1-based)
     max_tokens: int = 20000  # Maximum tokens per page
 ) -> dict[str, Any]:
-    if project_root is None:
-        project_root = get_project_root()
-    
+    # Resolve project root using new pattern
+    project_root = get_project_root(project_root)
+
     # Implementation that collects items...
     items = collect_items()
-    
+
     # For list-returning tools, use pagination
     from ...utils.pagination import paginate_list
     metadata = {"summary": summary_data}
@@ -184,13 +184,24 @@ def tool_name(
 ```
 
 **Key patterns**:
-- Always default `project_root` to `None` and resolve using `get_project_root()`
+- Always default `project_root` to `None` and resolve using `get_project_root(project_root)`
 - Support both single strings and lists for file paths where appropriate
 - Use `expand_patterns=True` for glob pattern support
 - Apply `@json_convert` decorator for all tools accepting lists/dicts
 - **Add pagination parameters** (`page`, `max_tokens`) for tools returning lists
 - **Use `paginate_list()`** with appropriate sort key for deterministic ordering
 - **Preserve metadata** in pagination response
+
+### Project Root Resolution Pattern
+The updated `get_project_root()` function now accepts an optional parameter:
+```python
+def get_project_root(project_root: str | None = None) -> str:
+```
+
+**Usage pattern**: Replace old pattern `if project_root is None: project_root = get_project_root()` with:
+```python
+project_root = get_project_root(project_root)
+```
 
 ### Error Handling Standards
 All tools must follow consistent error response format:
@@ -214,7 +225,7 @@ All tools must follow consistent error response format:
 **Standard Error Codes:**
 - `INVALID_INPUT`: Parameter validation failed
 - `NOT_FOUND`: Resource not found
-- `PERMISSION_DENIED`: Security check failed  
+- `PERMISSION_DENIED`: Security check failed
 - `OPERATION_FAILED`: Operation failed to complete
 - `TIMEOUT`: Operation timed out
 - `UNSUPPORTED`: Feature not supported
@@ -254,7 +265,7 @@ All tools must follow consistent error response format:
 ## Testing Architecture
 
 **Modular test structure** - Each tool has its own test file matching the pattern `test_[tool_name].py`:
-- Tests organized in classes like `TestGetTargetFiles` 
+- Tests organized in classes like `TestGetTargetFiles`
 - One test class per file for better organization
 - Comprehensive coverage including happy path, edge cases, and security validation
 - Isolated tests using temporary directories and cleanup
@@ -288,7 +299,7 @@ uv run pytest --cov=src/aromcp
 All list-returning tools support pagination to stay under 20k token limits:
 
 **Implementation (`src/aromcp/utils/pagination.py`)**:
-- Token-based sizing (1 token ≈ 4 characters)  
+- Token-based sizing (1 token ≈ 4 characters)
 - Deterministic ordering via sort keys
 - Binary search optimization for page size
 

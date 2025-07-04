@@ -42,9 +42,25 @@ class TestDelete:
             }]
 
             eslint_rules = {
-                "rules": {
-                    "test-rule": "error"
-                }
+                "rules/test-standard.js": '''module.exports = {
+  meta: {
+    type: "problem",
+    docs: {
+      description: "Test rule",
+      category: "Possible Errors"
+    }
+  },
+  create: function(context) {
+    return {
+      'CallExpression': function(node) {
+        context.report({
+          node: node,
+          message: 'Test message'
+        });
+      }
+    };
+  }
+};'''
             }
 
             update_result = update_rule_impl(
@@ -172,10 +188,25 @@ class TestDelete:
 
             # Add only ESLint rules (no hints)
             eslint_rules = {
-                "rules": {
-                    "test-rule": "error",
-                    "another-rule": "warn"
-                }
+                "rules/eslint-only.js": '''module.exports = {
+  meta: {
+    type: "problem",
+    docs: {
+      description: "Test rule",
+      category: "Possible Errors"
+    }
+  },
+  create: function(context) {
+    return {
+      'CallExpression': function(node) {
+        context.report({
+          node: node,
+          message: 'Test message'
+        });
+      }
+    };
+  }
+};'''
             }
 
             update_rule_impl("eslint-only", False, None, eslint_rules, temp_dir)

@@ -74,8 +74,7 @@ def check_updates_impl(
         Dict with needsUpdate list and upToDate count
     """
     try:
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate standards path
         from pathlib import Path

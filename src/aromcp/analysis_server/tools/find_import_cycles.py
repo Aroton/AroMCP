@@ -1,11 +1,14 @@
 """Tool for detecting circular import dependencies in the codebase."""
 
 import ast
+import logging
 import re
 from pathlib import Path
 from typing import Any
 
 from ...filesystem_server.tools.get_target_files import get_target_files_impl
+
+logger = logging.getLogger(__name__)
 
 
 def find_import_cycles_impl(
@@ -49,7 +52,9 @@ def find_import_cycles_impl(
             # Exclude node_modules by filtering results
             pass  # We'll filter in _get_project_files
 
-        project_files = _get_project_files(project_root, code_patterns, include_node_modules)
+        project_files = _get_project_files(
+            project_root, code_patterns, include_node_modules
+        )
 
         if not project_files:
             return {
@@ -99,7 +104,9 @@ def find_import_cycles_impl(
         }
 
 
-def _get_project_files(project_root: str, patterns: list[str], include_node_modules: bool) -> list[dict[str, Any]]:
+def _get_project_files(
+    project_root: str, patterns: list[str], include_node_modules: bool
+) -> list[dict[str, Any]]:
     """Get all project files matching the patterns.
 
     Args:
@@ -139,7 +146,9 @@ def _get_project_files(project_root: str, patterns: list[str], include_node_modu
     return unique_files
 
 
-def _build_dependency_graph(project_files: list[dict[str, Any]], project_root: str) -> dict[str, list[str]]:
+def _build_dependency_graph(
+    project_files: list[dict[str, Any]], project_root: str
+) -> dict[str, list[str]]:
     """Build a dependency graph from import statements.
 
     Args:
@@ -160,7 +169,9 @@ def _build_dependency_graph(project_files: list[dict[str, Any]], project_root: s
             imports = _extract_imports_from_file(absolute_path, project_root)
 
             # Resolve import paths to actual files
-            resolved_imports = _resolve_import_paths(imports, absolute_path, project_root)
+            resolved_imports = _resolve_import_paths(
+                imports, absolute_path, project_root
+            )
 
             # Add to graph
             graph[absolute_path] = resolved_imports
@@ -292,7 +303,9 @@ def _extract_javascript_imports(content: str) -> list[str]:
     return imports
 
 
-def _resolve_import_paths(imports: list[str], current_file: str, project_root: str) -> list[str]:
+def _resolve_import_paths(
+    imports: list[str], current_file: str, project_root: str
+) -> list[str]:
     """Resolve import paths to actual file paths.
 
     Args:
@@ -312,7 +325,9 @@ def _resolve_import_paths(imports: list[str], current_file: str, project_root: s
             # Handle different import types
             if import_path.startswith('.'):
                 # Relative import
-                resolved_path = _resolve_relative_import(import_path, current_dir, project_path)
+                resolved_path = _resolve_relative_import(
+                    import_path, current_dir, project_path
+                )
             elif import_path.startswith('/'):
                 # Absolute import (from project root)
                 resolved_path = project_path / import_path.lstrip('/')
@@ -323,13 +338,19 @@ def _resolve_import_paths(imports: list[str], current_file: str, project_root: s
             if resolved_path and resolved_path.exists():
                 resolved.append(str(resolved_path))
 
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Failed to resolve import %s in file %s: %s",
+                import_path, current_file, str(e)
+            )
             continue
 
     return resolved
 
 
-def _resolve_relative_import(import_path: str, current_dir: Path, project_path: Path) -> Path | None:
+def _resolve_relative_import(
+    import_path: str, current_dir: Path, project_path: Path
+) -> Path | None:
     """Resolve relative import path.
 
     Args:
@@ -407,7 +428,10 @@ def _resolve_relative_import(import_path: str, current_dir: Path, project_path: 
             target_path = target_dir
 
         # Try different file extensions
-        extensions = ['.py', '.js', '.ts', '.jsx', '.tsx', '/__init__.py', '/index.js', '/index.ts']
+        extensions = [
+            '.py', '.js', '.ts', '.jsx', '.tsx',
+            '/__init__.py', '/index.js', '/index.ts'
+        ]
 
         for ext in extensions:
             candidate = Path(str(target_path) + ext)
@@ -452,7 +476,9 @@ def _resolve_module_import(import_path: str, project_path: Path) -> Path | None:
     return None
 
 
-def _find_cycles_in_graph(graph: dict[str, list[str]], max_depth: int) -> list[list[str]]:
+def _find_cycles_in_graph(
+    graph: dict[str, list[str]], max_depth: int
+) -> list[list[str]]:
     """Find cycles in the dependency graph using DFS.
 
     Args:
@@ -511,7 +537,9 @@ def _find_cycles_in_graph(graph: dict[str, list[str]], max_depth: int) -> list[l
     return unique_cycles
 
 
-def _analyze_cycles(cycles: list[list[str]], graph: dict[str, list[str]]) -> list[dict[str, Any]]:
+def _analyze_cycles(
+    cycles: list[list[str]], graph: dict[str, list[str]]
+) -> list[dict[str, Any]]:
     """Analyze cycles for severity and impact.
 
     Args:
@@ -544,7 +572,9 @@ def _analyze_cycles(cycles: list[list[str]], graph: dict[str, list[str]]) -> lis
     return analyzed_cycles
 
 
-def _calculate_cycle_severity(cycle_files: list[str], graph: dict[str, list[str]]) -> int:
+def _calculate_cycle_severity(
+    cycle_files: list[str], graph: dict[str, list[str]]
+) -> int:
     """Calculate severity score for a cycle.
 
     Args:
@@ -564,7 +594,10 @@ def _calculate_cycle_severity(cycle_files: list[str], graph: dict[str, list[str]
     # Check if cycle involves core/important files
     importance_score = 0
     for file in cycle_files:
-        if any(keyword in file.lower() for keyword in ['main', 'index', 'app', 'core', 'base']):
+        if any(
+            keyword in file.lower()
+            for keyword in ['main', 'index', 'app', 'core', 'base']
+        ):
             importance_score += 1
 
     return min(length_score + connection_score + importance_score, 10)
@@ -658,17 +691,23 @@ def _generate_cycle_recommendations(cycle_analysis: list[dict[str, Any]]) -> lis
     recommendations = []
 
     if not cycle_analysis:
-        recommendations.append("No import cycles detected - good dependency management!")
+        recommendations.append(
+            "No import cycles detected - good dependency management!"
+        )
         return recommendations
 
     high_severity_cycles = [c for c in cycle_analysis if c["severity"] >= 7]
     medium_severity_cycles = [c for c in cycle_analysis if 4 <= c["severity"] < 7]
 
     if high_severity_cycles:
-        recommendations.append(f"Address {len(high_severity_cycles)} high-severity cycles immediately")
+        recommendations.append(
+            f"Address {len(high_severity_cycles)} high-severity cycles immediately"
+        )
 
     if medium_severity_cycles:
-        recommendations.append(f"Review {len(medium_severity_cycles)} medium-severity cycles")
+        recommendations.append(
+            f"Review {len(medium_severity_cycles)} medium-severity cycles"
+        )
 
     recommendations.extend([
         "Consider implementing dependency inversion principle",
@@ -680,7 +719,11 @@ def _generate_cycle_recommendations(cycle_analysis: list[dict[str, Any]]) -> lis
     return recommendations
 
 
-def _calculate_cycle_summary(cycles: list[list[str]], graph: dict[str, list[str]], project_files: list[dict[str, Any]]) -> dict[str, Any]:
+def _calculate_cycle_summary(
+    cycles: list[list[str]],
+    graph: dict[str, list[str]],
+    project_files: list[dict[str, Any]]
+) -> dict[str, Any]:
     """Calculate summary statistics for cycle analysis.
 
     Args:
@@ -725,19 +768,30 @@ def _simplify_graph_for_output(graph: dict[str, list[str]]) -> dict[str, Any]:
     # Don't include the full graph in output (can be very large)
     # Instead, provide summary statistics
 
-    most_dependencies = max(graph.keys(), key=lambda k: len(graph[k])) if graph else None
-    most_depended_on = max(graph.keys(), key=lambda k: sum(1 for deps in graph.values() if k in deps)) if graph else None
+    most_dependencies = (
+        max(graph.keys(), key=lambda k: len(graph[k])) if graph else None
+    )
+    most_depended_on = (
+        max(
+            graph.keys(),
+            key=lambda k: sum(1 for deps in graph.values() if k in deps)
+        ) if graph else None
+    )
 
     return {
         "total_files": len(graph),
         "total_dependencies": sum(len(deps) for deps in graph.values()),
-        "avg_dependencies_per_file": round(sum(len(deps) for deps in graph.values()) / max(len(graph), 1), 2),
+        "avg_dependencies_per_file": round(
+            sum(len(deps) for deps in graph.values()) / max(len(graph), 1), 2
+        ),
         "file_with_most_dependencies": {
             "file": most_dependencies,
             "dependency_count": len(graph.get(most_dependencies, []))
         } if most_dependencies else None,
         "most_depended_on_file": {
             "file": most_depended_on,
-            "dependent_count": sum(1 for deps in graph.values() if most_depended_on in deps)
+            "dependent_count": sum(
+                1 for deps in graph.values() if most_depended_on in deps
+            )
         } if most_depended_on else None
     }

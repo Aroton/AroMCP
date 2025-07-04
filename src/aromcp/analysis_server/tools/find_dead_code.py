@@ -1,12 +1,15 @@
 """Tool for finding unused code that can potentially be removed."""
 
 import ast
+import logging
 import re
 from pathlib import Path
 from typing import Any
 
 from ...filesystem_server.tools.get_target_files import get_target_files_impl
 from .._security import validate_file_path_legacy
+
+logger = logging.getLogger(__name__)
 
 
 def find_dead_code_impl(
@@ -66,7 +69,10 @@ def find_dead_code_impl(
                     )
                     if validated_path.exists():
                         validated_entry_points.append(str(validated_path))
-                except Exception:
+                except Exception as e:
+                    logger.warning(
+                        "Failed to validate entry point %s: %s", entry_point, str(e)
+                    )
                     continue
             entry_points = validated_entry_points
 
@@ -200,16 +206,24 @@ def _detect_entry_points(
         # Check for executable scripts (Python)
         if file_path.endswith('.py'):
             try:
-                content = Path(absolute_path).read_text(encoding='utf-8', errors='ignore')
+                content = Path(absolute_path).read_text(
+                    encoding='utf-8', errors='ignore'
+                )
                 if 'if __name__ == "__main__"' in content:
                     entry_points.append(absolute_path)
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "Failed to read file %s for entry point detection: %s",
+                    absolute_path, str(e)
+                )
                 continue
 
     return list(set(entry_points))  # Remove duplicates
 
 
-def _analyze_code_usage(project_files: list[dict[str, Any]], entry_points: list[str]) -> dict[str, Any]:
+def _analyze_code_usage(
+    project_files: list[dict[str, Any]], entry_points: list[str]
+) -> dict[str, Any]:
     """Analyze code usage patterns across the project.
 
     Args:
@@ -249,8 +263,11 @@ def _analyze_code_usage(project_files: list[dict[str, Any]], entry_points: list[
             imports[absolute_path] = analysis["imports"]
             exports[absolute_path] = analysis["exports"]
 
-        except Exception:
+        except Exception as e:
             # Skip files that can't be analyzed
+            logger.warning(
+                "Failed to analyze file %s: %s", absolute_path, str(e)
+            )
             continue
 
     # Calculate usage statistics
@@ -279,7 +296,10 @@ def _analyze_code_usage(project_files: list[dict[str, Any]], entry_points: list[
         "imports": imports,
         "exports": exports,
         "usage_stats": usage_stats,
-        "total_files_analyzed": len([f for f in project_files if _analyze_single_file_safe(f.get("absolute_path", f["path"])) is not None])
+        "total_files_analyzed": len([
+            f for f in project_files
+            if _analyze_single_file_safe(f.get("absolute_path", f["path"])) is not None
+        ])
     }
 
 
@@ -493,7 +513,10 @@ def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
             identifier = match.group(1)
 
             # Skip keywords
-            if identifier in ["function", "class", "const", "let", "var", "if", "else", "for", "while", "return"]:
+            if identifier in [
+                "function", "class", "const", "let", "var", "if", "else",
+                "for", "while", "return"
+            ]:
                 continue
 
             # Skip identifiers being defined on this same line
@@ -518,7 +541,9 @@ def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
     }
 
 
-def _find_dead_code_candidates(usage_analysis: dict[str, Any], confidence_threshold: float) -> list[dict[str, Any]]:
+def _find_dead_code_candidates(
+    usage_analysis: dict[str, Any], confidence_threshold: float
+) -> list[dict[str, Any]]:
     """Find potentially dead code based on usage analysis.
 
     Args:
@@ -622,13 +647,19 @@ def _generate_dead_code_recommendations(candidates: list[dict[str, Any]]) -> lis
     medium_confidence = [c for c in candidates if 0.7 <= c["confidence"] < 0.9]
 
     if high_confidence:
-        recommendations.append(f"Review {len(high_confidence)} high-confidence dead code candidates for removal")
+        recommendations.append(
+            f"Review {len(high_confidence)} high-confidence dead code candidates "
+            f"for removal"
+        )
 
     if medium_confidence:
-        recommendations.append(f"Investigate {len(medium_confidence)} medium-confidence candidates")
+        recommendations.append(
+            f"Investigate {len(medium_confidence)} medium-confidence candidates"
+        )
 
     recommendations.extend([
-        "Consider running tests after removing dead code to ensure functionality is preserved",
+        "Consider running tests after removing dead code to ensure functionality is "
+        "preserved",
         "Use version control to safely remove dead code with ability to rollback",
         "Review dependencies - some 'dead' code might be used by external tools"
     ])
@@ -636,7 +667,11 @@ def _generate_dead_code_recommendations(candidates: list[dict[str, Any]]) -> lis
     return recommendations
 
 
-def _calculate_dead_code_summary(candidates: list[dict[str, Any]], project_files: list[dict[str, Any]], usage_analysis: dict[str, Any]) -> dict[str, Any]:
+def _calculate_dead_code_summary(
+    candidates: list[dict[str, Any]],
+    project_files: list[dict[str, Any]],
+    usage_analysis: dict[str, Any]
+) -> dict[str, Any]:
     """Calculate summary statistics for dead code analysis.
 
     Args:
@@ -668,8 +703,12 @@ def _calculate_dead_code_summary(candidates: list[dict[str, Any]], project_files
         "total_files_analyzed": len(project_files),
         "total_identifiers": total_identifiers,
         "dead_code_candidates": total_candidates,
-        "dead_code_percentage": round((total_candidates / max(total_identifiers, 1)) * 100, 2),
+        "dead_code_percentage": round(
+            (total_candidates / max(total_identifiers, 1)) * 100, 2
+        ),
         "confidence_breakdown": confidence_breakdown,
         "files_with_dead_code": files_with_dead_code,
-        "avg_confidence": round(sum(c["confidence"] for c in candidates) / max(len(candidates), 1), 2)
+        "avg_confidence": round(
+            sum(c["confidence"] for c in candidates) / max(len(candidates), 1), 2
+        )
     }

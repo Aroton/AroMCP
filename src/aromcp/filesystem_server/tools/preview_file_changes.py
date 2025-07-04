@@ -3,28 +3,31 @@
 from pathlib import Path
 from typing import Any
 
-from .._security import validate_file_path
+from .._security import get_project_root, validate_file_path
 from .apply_file_diffs import _parse_unified_diff, _validate_diff_format
 
 
 def preview_file_changes_impl(
     diffs: list[dict[str, Any]],
-    project_root: str = ".",
+    project_root: str | None = None,
     include_full_preview: bool = True,
     max_preview_lines: int = 50
 ) -> dict[str, Any]:
     """Show consolidated preview of all pending changes.
-    
+
     Args:
         diffs: List of diff objects with 'file_path' and 'diff_content' keys
         project_root: Root directory of the project
         include_full_preview: Whether to include full diff preview for each file
         max_preview_lines: Maximum lines to show in preview
-        
+
     Returns:
         Dictionary with change summary, file details, and validation status
     """
     try:
+        # Resolve project root
+        project_root = get_project_root(project_root)
+
         project_path = Path(project_root).resolve()
         files = []
         total_changes = 0
@@ -177,7 +180,7 @@ def _detect_inter_file_conflicts(files: list[dict[str, Any]]) -> list[dict[str, 
     # Check for files that might have overlapping changes
     # This is a basic implementation - could be enhanced with more sophisticated analysis
 
-    file_paths = [f["path"] for f in files]
+    [f["path"] for f in files]
 
     # Check for potential import/dependency conflicts
     # (This would need more sophisticated analysis in a real implementation)

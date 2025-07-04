@@ -1,6 +1,7 @@
 """Find imports for files implementation."""
 
 import ast
+import logging
 import os
 import re
 import time
@@ -8,19 +9,21 @@ from pathlib import Path
 from typing import Any
 
 from ...utils.pagination import paginate_list
-from .._security import validate_file_path_legacy
+from .._security import get_project_root, validate_file_path_legacy
+
+logger = logging.getLogger(__name__)
 
 
 def find_imports_for_files_impl(
     file_paths: str | list[str],
-    project_root: str = ".",
+    project_root: str | None = None,
     search_patterns: str | list[str] | None = None,
     expand_patterns: bool = True,
     page: int = 1,
     max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Identify which files import the given files (dependency analysis).
-    
+
     Args:
         file_paths: List of files or glob patterns to find importers for
         project_root: Root directory of the project
@@ -28,7 +31,7 @@ def find_imports_for_files_impl(
         expand_patterns: Whether to expand glob patterns in file_paths (default: True)
         page: Page number for pagination (1-based, default: 1)
         max_tokens: Maximum tokens per page (default: 20000)
-        
+
     Returns:
         Dictionary with paginated import analysis results
     """
@@ -42,6 +45,9 @@ def find_imports_for_files_impl(
         # Normalize search_patterns to list if string
         if isinstance(search_patterns, str):
             search_patterns = [search_patterns]
+
+        # Resolve project root
+        project_root = get_project_root(project_root)
 
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
@@ -130,12 +136,15 @@ def find_imports_for_files_impl(
                         import_results[target_file]["importers"].append({
                             "file": str(rel_search_path),
                             "imports": import_info,
-                            "import_types": list(set(imp["type"] for imp in import_info))
+                            "import_types": list({imp["type"] for imp in import_info})
                         })
                         import_results[target_file]["import_count"] += len(import_info)
 
-            except Exception:
+            except Exception as e:
                 # Skip files that can't be parsed, but don't fail the whole operation
+                logger.warning(
+                    "Failed to parse file %s for imports: %s", file_path, str(e)
+                )
                 continue
 
         # Sort importers by file path for consistent output
@@ -273,7 +282,7 @@ def _analyze_python_imports(
             def __init__(self):
                 self.imports = []
 
-            def visit_Import(self, node):
+            def visit_Import(self, node):  # noqa: N802 # Required by ast.NodeVisitor
                 for alias in node.names:
                     self.imports.append({
                         "type": "import",
@@ -282,7 +291,7 @@ def _analyze_python_imports(
                         "line": node.lineno
                     })
 
-            def visit_ImportFrom(self, node):
+            def visit_ImportFrom(self, node):  # noqa: N802 # Required by ast.NodeVisitor
                 module = node.module or ""
                 for alias in node.names:
                     self.imports.append({
@@ -302,26 +311,22 @@ def _analyze_python_imports(
             module_names = target_info["module_names"]
 
             for import_info in visitor.imports:
-                matched = False
 
                 if import_info["type"] == "import":
                     # Direct module import
                     if import_info["module"] in module_names:
                         results[target_file].append(import_info)
-                        matched = True
 
                 elif import_info["type"] == "from_import":
                     # From import - check if module matches
                     if import_info["module"] in module_names:
                         results[target_file].append(import_info)
-                        matched = True
 
                     # Also check if full path matches (module.name)
                     if import_info["module"]:
                         full_import = f"{import_info['module']}.{import_info['name']}"
                         if any(name.endswith(full_import) for name in module_names):
                             results[target_file].append(import_info)
-                            matched = True
 
         return results
 

@@ -12,18 +12,17 @@ def get_build_config_impl(
     config_files: list[str] | None = None
 ) -> dict[str, Any]:
     """Extract build configuration from various sources.
-    
+
     Args:
         project_root: Directory to search for config files (defaults to MCP_FILE_ROOT)
         config_files: Specific config files to read (defaults to common build configs)
-        
+
     Returns:
         Dictionary with extracted configuration and detected tools
     """
     try:
         # Resolve project root
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)

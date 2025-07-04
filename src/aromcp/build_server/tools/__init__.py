@@ -33,15 +33,16 @@ def register_build_tools(mcp):
             command: Command to execute (must be in whitelist)
             args: Arguments to pass to the command
             project_root: Directory to execute command in (defaults to MCP_FILE_ROOT)
-            allowed_commands: List of allowed commands (defaults to predefined whitelist)
+            allowed_commands: List of allowed commands (defaults to predefined
+                whitelist)
             timeout: Maximum execution time in seconds (default: 300)
             capture_output: Whether to capture stdout/stderr (default: True)
             env_vars: Additional environment variables to set
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
         return run_command_impl(
-            command, args, project_root, allowed_commands, timeout, capture_output, env_vars
+            command, args, project_root, allowed_commands, timeout, capture_output,
+            env_vars
         )
 
     @mcp.tool
@@ -52,11 +53,12 @@ def register_build_tools(mcp):
         """Extract build configuration from various sources.
 
         Args:
-            project_root: Directory to search for config files (defaults to MCP_FILE_ROOT)
-            config_files: Specific config files to read (defaults to common build configs)
+            project_root: Directory to search for config files (defaults to
+                MCP_FILE_ROOT)
+            config_files: Specific config files to read (defaults to common build
+                configs)
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
         return get_build_config_impl(project_root, config_files)
 
     @mcp.tool
@@ -74,16 +76,17 @@ def register_build_tools(mcp):
             check_outdated: Whether to check for outdated packages
             check_security: Whether to run security audit
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
         return check_dependencies_impl(
             project_root, package_manager, check_outdated, check_security
         )
 
     @mcp.tool
+    @json_convert
     def parse_typescript_errors(
         project_root: str | None = None,
         tsconfig_path: str = "tsconfig.json",
+        files: list[str] | None = None,
         include_warnings: bool = True,
         timeout: int = 120,
         page: int = 1,
@@ -92,17 +95,19 @@ def register_build_tools(mcp):
         """Run tsc and return structured error data.
 
         Args:
-            project_root: Directory containing TypeScript project (defaults to MCP_FILE_ROOT)
+            project_root: Directory containing TypeScript project (defaults to
+                MCP_FILE_ROOT)
             tsconfig_path: Path to tsconfig.json relative to project_root
+            files: Specific files to check (optional, defaults to all files in project)
             include_warnings: Whether to include TypeScript warnings
             timeout: Maximum execution time in seconds
             page: Page number for pagination (1-based, default: 1)
             max_tokens: Maximum tokens per page (default: 20000)
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
         return parse_typescript_errors_impl(
-            project_root, tsconfig_path, include_warnings, timeout, page, max_tokens
+            project_root, tsconfig_path, files, include_warnings, timeout, page,
+            max_tokens
         )
 
     @mcp.tool
@@ -129,10 +134,10 @@ def register_build_tools(mcp):
             page: Page number for pagination (1-based, default: 1)
             max_tokens: Maximum tokens per page (default: 20000)
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
         return parse_lint_results_impl(
-            linter, project_root, target_files, config_file, include_warnings, timeout, page, max_tokens
+            linter, project_root, target_files, config_file, include_warnings,
+            timeout, page, max_tokens
         )
 
     @mcp.tool
@@ -154,8 +159,7 @@ def register_build_tools(mcp):
             coverage: Whether to generate coverage report
             timeout: Maximum execution time in seconds
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
         return run_test_suite_impl(
             project_root, test_command, test_framework, pattern, coverage, timeout
         )
@@ -171,16 +175,17 @@ def register_build_tools(mcp):
         """Run Next.js build with categorized error reporting.
 
         Args:
-            project_root: Directory containing Next.js project (defaults to MCP_FILE_ROOT)
+            project_root: Directory containing Next.js project (defaults to
+                MCP_FILE_ROOT)
             build_command: Command to run the build (default: "npm run build")
             include_typescript_check: Whether to include TypeScript type checking
             include_lint_check: Whether to include ESLint checking
             timeout: Maximum execution time in seconds
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
         return run_nextjs_build_impl(
-            project_root, build_command, include_typescript_check, include_lint_check, timeout
+            project_root, build_command, include_typescript_check, include_lint_check,
+            timeout
         )
 
 

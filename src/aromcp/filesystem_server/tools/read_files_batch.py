@@ -7,12 +7,12 @@ from typing import Any
 import chardet
 
 from ...utils.pagination import paginate_list
-from .._security import validate_file_path_legacy
+from .._security import get_project_root, validate_file_path_legacy
 
 
 def read_files_batch_impl(
     file_paths: str | list[str],
-    project_root: str = ".",
+    project_root: str | None = None,
     encoding: str = "auto",
     expand_patterns: bool = True,
     page: int = 1,
@@ -39,6 +39,9 @@ def read_files_batch_impl(
         # Normalize file_paths to list
         if isinstance(file_paths, str):
             file_paths = [file_paths]
+
+        # Resolve project root
+        project_root = get_project_root(project_root)
 
         # Validate and normalize project root
         project_path = Path(project_root).resolve()

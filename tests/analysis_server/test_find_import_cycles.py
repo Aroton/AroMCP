@@ -260,7 +260,10 @@ export function tsFunction(): string {
             else:
                 # Each file imports the next
                 next_i = (i + 1) % num_files
-                content = f'from module_{next_i} import function_{next_i}\n\ndef function_{i}():\n    return "module_{i}"'
+                content = (
+                    f'from module_{next_i} import function_{next_i}\n\n'
+                    f'def function_{i}():\n    return "module_{i}"'
+                )
             current_file.write_text(content)
 
         # Test with shallow max_depth

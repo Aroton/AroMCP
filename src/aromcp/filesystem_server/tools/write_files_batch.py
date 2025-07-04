@@ -8,23 +8,23 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .._security import validate_file_path_legacy
+from .._security import get_project_root, validate_file_path_legacy
 
 
 def write_files_batch_impl(
     files: dict[str, str],
-    project_root: str = ".",
+    project_root: str | None = None,
     encoding: str = "utf-8",
     create_backup: bool = True
 ) -> dict[str, Any]:
     """Write multiple files atomically with automatic directory creation.
-    
+
     Args:
         files: Dictionary mapping file paths to content
         project_root: Root directory of the project
         encoding: File encoding to use
         create_backup: Whether to create backups of existing files
-        
+
     Returns:
         Dictionary with write results and metadata
     """
@@ -33,6 +33,9 @@ def write_files_batch_impl(
     temp_files = {}
 
     try:
+        # Resolve project root
+        project_root = get_project_root(project_root)
+
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
         if not project_path.exists():
@@ -119,13 +122,15 @@ def write_files_batch_impl(
                 "created": not validated_files[file_path]["exists"]
             })
 
-        duration_ms = int((time.time() - start_time) * 1000)
+        int((time.time() - start_time) * 1000)
 
         return {
             "data": {
                 "written": written_files,
-                "created_directories": sorted(list(created_directories)),
-                "backup_location": str(backup_dir.relative_to(project_path)) if backup_dir else None,
+                "created_directories": sorted(created_directories),
+                "backup_location": (
+                    str(backup_dir.relative_to(project_path)) if backup_dir else None
+                ),
                 "summary": {
                     "total_files": len(files),
                     "new_files": sum(1 for f in written_files if f["created"]),
@@ -141,7 +146,7 @@ def write_files_batch_impl(
             if os.path.exists(temp_path):
                 try:
                     os.unlink(temp_path)
-                except:
+                except Exception:  # noqa: S110, E722 # Intentionally ignoring cleanup errors
                     pass
 
         return {
@@ -154,7 +159,9 @@ def write_files_batch_impl(
 
 
 
-def _create_backup(validated_files: dict[str, dict[str, Any]], project_path: Path) -> Path:
+def _create_backup(
+    validated_files: dict[str, dict[str, Any]], project_path: Path
+) -> Path:
     """Create backup of existing files."""
 
     # Create backup directory with timestamp

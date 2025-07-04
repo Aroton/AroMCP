@@ -54,8 +54,7 @@ def hints_for_file_impl(
         Dict with hints array and totalTokens
     """
     try:
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate file path
         from pathlib import Path
@@ -123,7 +122,7 @@ def hints_for_file_impl(
         global_import_maps = {}  # Structure: { "module_name": [import_objects] }
         optimized_hints = []
 
-        for i, hint in enumerate(selected_hints):
+        for _i, hint in enumerate(selected_hints):
             # Extract import map if present
             modules_used = []
             if "importMap" in hint:

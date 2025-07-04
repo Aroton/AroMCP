@@ -217,7 +217,8 @@ class TestCreatePaginator:
 
     def test_create_paginator_custom(self):
         """Test creating paginator with custom settings."""
-        sort_key = lambda x: x["name"]
+        def sort_key(x):
+            return x["name"]
         paginator = create_paginator(
             max_tokens=10000,
             sort_key=sort_key,

@@ -23,7 +23,7 @@ class TestMainServer:
     async def test_all_tools_loaded(self):
         """Test that all expected tools are loaded."""
         tools = await mcp.get_tools()
-        tool_names = [tool for tool in tools]
+        tool_names = list(tools)
 
         # Expected tool names from each module (based on actual registrations)
         filesystem_tools = [
@@ -84,14 +84,24 @@ class TestMainServer:
     async def test_tool_categories_loaded(self):
         """Test that tools from each category are loaded."""
         tools = await mcp.get_tools()
-        tool_names = [tool for tool in tools]
+        tool_names = list(tools)
 
         # Check each category has tools
-        filesystem_present = any("files" in name or "imports" in name or "documents" in name or "diffs" in name for name in tool_names)
+        filesystem_present = any(
+            "files" in name or "imports" in name or "documents" in name or "diffs" in name
+            for name in tool_names
+        )
         state_present = any("process" in name for name in tool_names)
         build_present = any("command" in name or "test" in name or "dependencies" in name for name in tool_names)
-        analysis_present = any("dead_code" in name or "import_cycles" in name or "api_endpoints" in name for name in tool_names)
-        standards_present = any("check_updates" in name or "register" in name or "delete" in name or "update_rule" in name or "hints_for_file" in name for name in tool_names)
+        analysis_present = any(
+            "dead_code" in name or "import_cycles" in name or "api_endpoints" in name
+            for name in tool_names
+        )
+        standards_present = any(
+            "check_updates" in name or "register" in name or "delete" in name or
+            "update_rule" in name or "hints_for_file" in name
+            for name in tool_names
+        )
 
         assert filesystem_present, "No filesystem tools found"
         assert state_present, "No state management tools found"

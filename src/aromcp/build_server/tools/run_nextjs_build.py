@@ -17,21 +17,20 @@ def run_nextjs_build_impl(
     timeout: int = 600
 ) -> dict[str, Any]:
     """Run Next.js build with categorized error reporting.
-    
+
     Args:
         project_root: Directory containing Next.js project (defaults to MCP_FILE_ROOT)
         build_command: Command to run the build (default: "npm run build")
         include_typescript_check: Whether to include TypeScript type checking
         include_lint_check: Whether to include ESLint checking
         timeout: Maximum execution time in seconds
-        
+
     Returns:
         Dictionary with categorized Next.js build results
     """
     try:
         # Resolve project root
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
@@ -58,7 +57,7 @@ def run_nextjs_build_impl(
         cmd = build_command.split()
 
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 # Safe: cmd built from predetermined Next.js build commands
                 cmd,
                 cwd=project_root,
                 capture_output=True,
@@ -278,8 +277,8 @@ def _parse_nextjs_build_output(stdout: str, stderr: str) -> dict[str, Any]:
 def _run_typescript_check(project_root: str) -> dict[str, Any] | None:
     """Run TypeScript type checking separately."""
     try:
-        result = subprocess.run(
-            ["npx", "tsc", "--noEmit"],
+        result = subprocess.run(  # noqa: S603 # Safe: using predetermined TypeScript compiler command
+            ["npx", "tsc", "--noEmit"],  # noqa: S607 # Safe: using npx which is common in Node.js projects
             cwd=project_root,
             capture_output=True,
             text=True,
@@ -319,8 +318,8 @@ def _run_typescript_check(project_root: str) -> dict[str, Any] | None:
 def _run_eslint_check(project_root: str) -> dict[str, Any] | None:
     """Run ESLint checking separately."""
     try:
-        result = subprocess.run(
-            ["npx", "eslint", ".", "--format", "json"],
+        result = subprocess.run(  # noqa: S603 # Safe: using predetermined ESLint command
+            ["npx", "eslint", ".", "--format", "json"],  # noqa: S607 # Safe: using npx which is common in Node.js projects
             cwd=project_root,
             capture_output=True,
             text=True,

@@ -6,11 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from ...utils.pagination import paginate_list
+from .._security import get_project_root
 
 
 def get_target_files_impl(
     patterns: str | list[str],
-    project_root: str = ".",
+    project_root: str | None = None,
     page: int = 1,
     max_tokens: int = 20000
 ) -> dict[str, Any]:
@@ -28,6 +29,9 @@ def get_target_files_impl(
     start_time = time.time()
 
     try:
+        # Resolve project root
+        project_root = get_project_root(project_root)
+
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
         if not project_path.exists():

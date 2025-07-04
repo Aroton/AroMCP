@@ -27,7 +27,7 @@ def run_command_impl(
     env_vars: dict[str, str] | None = None
 ) -> dict[str, Any]:
     """Execute whitelisted commands with structured output.
-    
+
     Args:
         command: Command to execute (must be in whitelist)
         args: Arguments to pass to the command
@@ -36,7 +36,7 @@ def run_command_impl(
         timeout: Maximum execution time in seconds (default: 300)
         capture_output: Whether to capture stdout/stderr (default: True)
         env_vars: Additional environment variables to set
-        
+
     Returns:
         Dictionary with command results and metadata
     """
@@ -44,8 +44,7 @@ def run_command_impl(
 
     try:
         # Resolve project root
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
@@ -81,7 +80,7 @@ def run_command_impl(
 
         # Execute command
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 # Safe: command validated against whitelist of predetermined commands
                 cmd_list,
                 cwd=project_root,
                 capture_output=capture_output,

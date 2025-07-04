@@ -4,27 +4,30 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .._security import validate_file_path
+from .._security import get_project_root, validate_file_path
 
 
 def validate_diffs_impl(
     diffs: list[dict[str, Any]],
-    project_root: str = ".",
+    project_root: str | None = None,
     check_conflicts: bool = True,
     check_syntax: bool = True
 ) -> dict[str, Any]:
     """Pre-validate diffs for conflicts and applicability.
-    
+
     Args:
         diffs: List of diff objects with 'file_path' and 'diff_content' keys
         project_root: Root directory of the project
         check_conflicts: Whether to check for conflicts between diffs
         check_syntax: Whether to validate diff syntax
-        
+
     Returns:
         Dictionary with validation results for each diff and overall status
     """
     try:
+        # Resolve project root
+        project_root = get_project_root(project_root)
+
         project_path = Path(project_root).resolve()
         validation_results = []
         overall_valid = True
@@ -140,8 +143,6 @@ def _validate_diff_syntax(diff_content: str, file_path: str, full_path: Path) ->
     hunk_count = 0
     line_changes = {"additions": 0, "deletions": 0, "context": 0}
 
-    current_hunk_old_count = 0
-    current_hunk_new_count = 0
     current_hunk_old_seen = 0
     current_hunk_new_seen = 0
     in_hunk = False
@@ -161,8 +162,8 @@ def _validate_diff_syntax(diff_content: str, file_path: str, full_path: Path) ->
             # Parse hunk header
             hunk_match = re.match(r'@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@', line)
             if hunk_match:
-                current_hunk_old_count = int(hunk_match.group(2)) if hunk_match.group(2) else 1
-                current_hunk_new_count = int(hunk_match.group(4)) if hunk_match.group(4) else 1
+                int(hunk_match.group(2)) if hunk_match.group(2) else 1
+                int(hunk_match.group(4)) if hunk_match.group(4) else 1
                 current_hunk_old_seen = 0
                 current_hunk_new_seen = 0
             else:

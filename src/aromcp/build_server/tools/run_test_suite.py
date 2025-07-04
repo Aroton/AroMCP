@@ -18,7 +18,7 @@ def run_test_suite_impl(
     timeout: int = 300
 ) -> dict[str, Any]:
     """Execute tests with parsed results.
-    
+
     Args:
         project_root: Directory to run tests in (defaults to MCP_FILE_ROOT)
         test_command: Custom test command (auto-detected if None)
@@ -26,14 +26,13 @@ def run_test_suite_impl(
         pattern: Test file pattern to run specific tests
         coverage: Whether to generate coverage report
         timeout: Maximum execution time in seconds
-        
+
     Returns:
         Dictionary with structured test results
     """
     try:
         # Resolve project root
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
@@ -58,7 +57,9 @@ def run_test_suite_impl(
             return {
                 "error": {
                     "code": "NOT_FOUND",
-                    "message": "No test command found. Please specify test_command or ensure test framework is configured."
+                    "message": (
+                        "No test command found. Please specify test_command or ensure test framework is configured."
+                    )
                 }
             }
 
@@ -76,7 +77,7 @@ def run_test_suite_impl(
             cmd = _add_pytest_options(cmd, pattern, coverage)
 
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 # Safe: cmd built from internal functions with predetermined commands
                 cmd,
                 cwd=project_root,
                 capture_output=True,

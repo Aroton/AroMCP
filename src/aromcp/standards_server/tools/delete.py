@@ -10,17 +10,16 @@ from .hints_for_file import invalidate_index_cache
 def delete_impl(standard_id: str, project_root: str | None = None) -> dict[str, Any]:
     """
     Removes all rules and hints for a standard.
-    
+
     Args:
         standard_id: ID of the standard to delete
         project_root: Project root directory
-        
+
     Returns:
         Dict with deletion summary
     """
     try:
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate standard ID
         if not standard_id or not isinstance(standard_id, str):

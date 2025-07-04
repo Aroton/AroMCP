@@ -20,16 +20,16 @@ class JSONParameterMiddleware:
     """
     Middleware class that intercepts FastMCP tool parameters and automatically
     converts JSON strings to their appropriate Python types.
-    
+
     This solves the issue where Claude Code (or other MCP clients) pass
     lists/dicts as JSON strings instead of native Python types.
-    
+
     Usage:
         from fastmcp import FastMCP
-        
+
         mcp = FastMCP("my-server")
         middleware = JSONParameterMiddleware()
-        
+
         @mcp.tool()
         @middleware.convert
         def get_files(patterns: list[str]) -> dict:
@@ -40,7 +40,7 @@ class JSONParameterMiddleware:
     def __init__(self, debug: bool = False):
         """
         Initialize the middleware.
-        
+
         Args:
             debug: If True, print debug information about conversions
         """
@@ -49,11 +49,11 @@ class JSONParameterMiddleware:
     def _should_try_json_parse(self, value: Any, expected_type: type) -> bool:
         """
         Determine if we should attempt to parse a value as JSON.
-        
+
         Args:
             value: The actual value received
             expected_type: The expected type from the function signature
-            
+
         Returns:
             True if we should attempt JSON parsing
         """
@@ -73,7 +73,7 @@ class JSONParameterMiddleware:
             return True
 
         # Check if it's a Mapping or Sequence type
-        if origin and issubclass(origin, (Mapping, Sequence)):
+        if origin and issubclass(origin, Mapping | Sequence):
             return True
 
         # Check if the string looks like JSON
@@ -86,15 +86,15 @@ class JSONParameterMiddleware:
     def _convert_value(self, value: Any, expected_type: type, param_name: str) -> Any:
         """
         Convert a value to the expected type, parsing JSON if necessary.
-        
+
         Args:
             value: The value to convert
             expected_type: The expected type
             param_name: Parameter name (for debugging)
-            
+
         Returns:
             The converted value
-            
+
         Raises:
             ValueError: If JSON parsing fails with an invalid format
         """
@@ -133,7 +133,7 @@ class JSONParameterMiddleware:
                 parsed = json.loads(value)
 
                 if self.debug:
-                    print(f"[JSONMiddleware] Converted {param_name} from JSON string to {type(parsed).__name__}")
+                    pass
 
                 # Validate the parsed type matches expected type
                 if origin:
@@ -174,7 +174,7 @@ class JSONParameterMiddleware:
                 )
 
             except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON in parameter '{param_name}': {e}")
+                raise ValueError(f"Invalid JSON in parameter '{param_name}': {e}") from e
 
         # For list/dict parameters, validate the type even if not JSON
         if expected_type in (list, dict) or origin in (list, dict):
@@ -200,10 +200,10 @@ class JSONParameterMiddleware:
     def convert(self, func: F) -> F:
         """
         Decorator that wraps a function to automatically convert JSON parameters.
-        
+
         Args:
             func: The function to wrap
-            
+
         Returns:
             The wrapped function
         """
@@ -282,41 +282,41 @@ class JSONParameterMiddleware:
 _default_middleware = JSONParameterMiddleware()
 
 
-def json_convert(func: F) -> F:
+def json_convert[F: Callable[..., Any]](func: F) -> F:
     """
     Convenience decorator that applies JSON parameter conversion to a function.
-    
+
     This is a shorthand for @JSONParameterMiddleware().convert that can be used
     directly without creating a middleware instance.
-    
+
     Usage:
         @mcp.tool()
         @json_convert
         def my_tool(items: list[str]) -> dict:
             return {"count": len(items)}
-    
+
     Args:
         func: The function to wrap
-        
+
     Returns:
         The wrapped function with JSON parameter conversion
     """
     return _default_middleware.convert(func)
 
 
-def debug_json_convert(func: F) -> F:
+def debug_json_convert[F: Callable[..., Any]](func: F) -> F:
     """
     Debug version of json_convert that prints conversion information.
-    
+
     Usage:
         @mcp.tool()
         @debug_json_convert
         def my_tool(items: list[str]) -> dict:
             return {"count": len(items)}
-    
+
     Args:
         func: The function to wrap
-        
+
     Returns:
         The wrapped function with debug JSON parameter conversion
     """

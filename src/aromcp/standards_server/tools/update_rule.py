@@ -16,10 +16,10 @@ from .hints_for_file import invalidate_index_cache
 def _validate_eslint_rule_content(content: str) -> bool:
     """
     Validate that content is a proper module.exports ESLint rule.
-    
+
     Args:
         content: JavaScript content to validate
-        
+
     Returns:
         True if content is a valid ESLint rule, False otherwise
     """
@@ -69,20 +69,19 @@ def update_rule_impl(
 ) -> dict[str, Any]:
     """
     Stores AI hints and ESLint files for a standard.
-    
+
     Args:
         standard_id: ID of the standard to update
         clear_existing: Whether to clear existing hints before adding new ones
         ai_hints: List of AI hints to store
         eslint_files: Dict of filename -> content for ESLint JavaScript files
         project_root: Project root directory
-        
+
     Returns:
         Dict with operation results
     """
     try:
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate standard ID
         if not standard_id or not isinstance(standard_id, str):
@@ -222,7 +221,10 @@ def update_rule_impl(
                     return {
                         "error": {
                             "code": "INVALID_INPUT",
-                            "message": f"ESLint rule files cannot contain 'config' in filename: {filename}. Configuration files are managed by the API."
+                            "message": (
+                                f"ESLint rule files cannot contain 'config' in filename: {filename}. "
+                                "Configuration files are managed by the API."
+                            )
                         }
                     }
 
@@ -230,7 +232,10 @@ def update_rule_impl(
                     return {
                         "error": {
                             "code": "INVALID_INPUT",
-                            "message": f"ESLint rule files cannot be named 'index': {filename}. Index files are managed by the API."
+                            "message": (
+                                f"ESLint rule files cannot be named 'index': {filename}. "
+                                "Index files are managed by the API."
+                            )
                         }
                     }
 
@@ -248,7 +253,10 @@ def update_rule_impl(
                     return {
                         "error": {
                             "code": "INVALID_INPUT",
-                            "message": f"File '{filename}' must contain a valid module.exports ESLint rule with meta and create properties"
+                            "message": (
+                                f"File '{filename}' must contain a valid module.exports ESLint rule "
+                                "with meta and create properties"
+                            )
                         }
                     }
 

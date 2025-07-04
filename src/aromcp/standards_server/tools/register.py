@@ -24,8 +24,7 @@ def register_impl(
         Dict with standardId and isNew flag
     """
     try:
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate source path
         from pathlib import Path

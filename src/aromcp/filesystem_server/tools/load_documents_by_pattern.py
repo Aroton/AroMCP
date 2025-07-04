@@ -6,21 +6,23 @@ from typing import Any
 
 import chardet
 
+from .._security import get_project_root
+
 
 def load_documents_by_pattern_impl(
     patterns: str | list[str],
-    project_root: str = ".",
+    project_root: str | None = None,
     max_file_size: int = 1024 * 1024,  # 1MB default
     encoding: str = "auto"
 ) -> dict[str, Any]:
     """Load multiple documents matching glob patterns.
-    
+
     Args:
         patterns: List of glob patterns to match files
         project_root: Root directory of the project
         max_file_size: Maximum file size to load (bytes)
         encoding: File encoding ("auto", "utf-8", etc.)
-        
+
     Returns:
         Dictionary with loaded documents and metadata
     """
@@ -30,6 +32,9 @@ def load_documents_by_pattern_impl(
         # Normalize patterns to list
         if isinstance(patterns, str):
             patterns = [patterns]
+
+        # Resolve project root
+        project_root = get_project_root(project_root)
 
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
@@ -117,7 +122,7 @@ def load_documents_by_pattern_impl(
                     "error": str(e)
                 })
 
-        duration_ms = int((time.time() - start_time) * 1000)
+        int((time.time() - start_time) * 1000)
 
         result = {
             "data": {

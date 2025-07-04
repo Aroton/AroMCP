@@ -7,7 +7,7 @@ under 20k tokens while maintaining consistent ordering across identical inputs.
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar('T')
 
@@ -34,10 +34,10 @@ class TokenEstimator:
     def estimate_tokens(cls, data: Any) -> int:
         """
         Estimate token count for arbitrary data structures.
-        
+
         Args:
             data: The data to estimate tokens for
-            
+
         Returns:
             Estimated token count
         """
@@ -50,7 +50,7 @@ class TokenEstimator:
             # Fallback for non-serializable data
             return len(str(data)) // cls.CHARS_PER_TOKEN
 
-class PaginatedResponse(Generic[T]):
+class PaginatedResponse[T]:
     """Generic paginated response container."""
 
     def __init__(
@@ -82,10 +82,10 @@ class PaginatedResponse(Generic[T]):
             }
         }
 
-class ListPaginator(Generic[T]):
+class ListPaginator[T]:
     """
     Deterministic paginator for lists with token-based sizing.
-    
+
     Ensures consistent ordering and pagination based on token estimation
     to keep responses under the specified token limit.
     """
@@ -98,7 +98,7 @@ class ListPaginator(Generic[T]):
     ):
         """
         Initialize paginator.
-        
+
         Args:
             max_tokens: Maximum tokens per page (default 20k)
             min_items_per_page: Minimum items per page regardless of token count
@@ -117,12 +117,12 @@ class ListPaginator(Generic[T]):
     ) -> PaginatedResponse[T]:
         """
         Paginate a list of items with token-based sizing.
-        
+
         Args:
             items: List of items to paginate
             page: Page number (1-based)
             metadata: Additional metadata to include in response
-            
+
         Returns:
             PaginatedResponse with paginated items and metadata
         """
@@ -178,7 +178,7 @@ class ListPaginator(Generic[T]):
     def _calculate_page_boundaries(self, items: list[T]) -> list[tuple[int, int]]:
         """
         Calculate page boundaries based on token estimation.
-        
+
         Returns list of (start_idx, end_idx) tuples for each page.
         """
         if not items:
@@ -198,7 +198,7 @@ class ListPaginator(Generic[T]):
     def _find_page_end(self, items: list[T], start_idx: int) -> int:
         """
         Find the optimal end index for a page starting at start_idx.
-        
+
         Uses binary search to find the largest subset that fits within token limit.
         """
         total_items = len(items)
@@ -250,12 +250,12 @@ def create_paginator(
 ) -> ListPaginator:
     """
     Convenience function to create a paginator with common defaults.
-    
+
     Args:
         max_tokens: Maximum tokens per page
         sort_key: Function to extract sort key for deterministic ordering
         min_items_per_page: Minimum items per page
-        
+
     Returns:
         Configured ListPaginator instance
     """
@@ -274,14 +274,14 @@ def paginate_list(
 ) -> dict[str, Any]:
     """
     Quick utility function to paginate a list and return MCP-formatted response.
-    
+
     Args:
         items: List of items to paginate
         page: Page number (1-based)
         max_tokens: Maximum tokens per page
         sort_key: Function to extract sort key for deterministic ordering
         metadata: Additional metadata to include in response
-        
+
     Returns:
         MCP-formatted response dictionary
     """

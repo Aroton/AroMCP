@@ -12,28 +12,29 @@ from ...utils.pagination import paginate_list
 def parse_typescript_errors_impl(
     project_root: str | None = None,
     tsconfig_path: str = "tsconfig.json",
+    files: list[str] | None = None,
     include_warnings: bool = True,
     timeout: int = 120,
     page: int = 1,
     max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Run tsc and return structured error data.
-    
+
     Args:
         project_root: Directory containing TypeScript project (defaults to MCP_FILE_ROOT)
         tsconfig_path: Path to tsconfig.json relative to project_root
+        files: Specific files to check (optional, defaults to all files in project)
         include_warnings: Whether to include TypeScript warnings
         timeout: Maximum execution time in seconds
         page: Page number for pagination (1-based, default: 1)
         max_tokens: Maximum tokens per page (default: 20000)
-        
+
     Returns:
         Dictionary with paginated structured TypeScript error data
     """
     try:
         # Resolve project root
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
@@ -62,8 +63,31 @@ def parse_typescript_errors_impl(
         if tsconfig_path != "tsconfig.json":
             cmd.extend(["--project", tsconfig_path])
 
+        # Add specific files if provided
+        if files:
+            # Validate file paths
+            for file_path in files:
+                full_file_path = project_path / file_path
+                if not full_file_path.exists():
+                    return {
+                        "error": {
+                            "code": "NOT_FOUND",
+                            "message": f"File not found: {file_path}"
+                        }
+                    }
+                # Validate file path is within project
+                validation_result = validate_file_path(str(full_file_path), project_root)
+                if not validation_result.get("valid", False):
+                    return {
+                        "error": {
+                            "code": "INVALID_INPUT",
+                            "message": f"Invalid file path: {file_path}"
+                        }
+                    }
+            cmd.extend(files)
+
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 # Safe: cmd built from predetermined TypeScript compiler commands
                 cmd,
                 cwd=project_root,
                 capture_output=True,
@@ -82,8 +106,8 @@ def parse_typescript_errors_impl(
                 "total_errors": len([e for e in errors if e["severity"] == "error"]),
                 "total_warnings": len([e for e in errors if e["severity"] == "warning"]),
                 "total_issues": len(errors),
-                "files_with_errors": len(set(e["file"] for e in errors if e["severity"] == "error")),
-                "files_with_warnings": len(set(e["file"] for e in errors if e["severity"] == "warning")),
+                "files_with_errors": len({e["file"] for e in errors if e["severity"] == "error"}),
+                "files_with_warnings": len({e["file"] for e in errors if e["severity"] == "warning"}),
                 "exit_code": result.returncode,
                 "compilation_success": result.returncode == 0
             }

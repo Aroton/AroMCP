@@ -39,7 +39,7 @@ class TestSecurityValidation:
         with tempfile.TemporaryDirectory() as temp_dir:
             malicious_files = {
                 "../../../tmp/malicious.txt": "bad content",
-                "/tmp/absolute_bad.txt": "also bad"
+                "/tmp/absolute_bad.txt": "also bad"  # noqa: S108 # Test file path for security validation
             }
 
             result = write_files_batch_impl(malicious_files, temp_dir)

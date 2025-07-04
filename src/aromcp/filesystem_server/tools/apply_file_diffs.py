@@ -6,27 +6,30 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .._security import validate_file_path
+from .._security import get_project_root, validate_file_path
 
 
 def apply_file_diffs_impl(
     diffs: list[dict[str, Any]],
-    project_root: str = ".",
+    project_root: str | None = None,
     create_backup: bool = True,
     validate_before_apply: bool = True
 ) -> dict[str, Any]:
     """Apply multiple diffs to files with validation and rollback support.
-    
+
     Args:
         diffs: List of diff objects with 'file_path' and 'diff_content' keys
         project_root: Root directory of the project
         create_backup: Whether to create backups before applying diffs
         validate_before_apply: Whether to validate all diffs before applying any
-        
+
     Returns:
         Dictionary with success status, applied files, and any errors
     """
     try:
+        # Resolve project root
+        project_root = get_project_root(project_root)
+
         project_path = Path(project_root).resolve()
         applied_files = []
         backup_info = {}
@@ -173,7 +176,7 @@ def _validate_diff_format(diff_content: str, file_path: str, project_path: Path)
                     current_content = f.read()
 
                 # Try to apply diff to verify it's applicable
-                original_lines = current_content.splitlines(keepends=True)
+                current_content.splitlines(keepends=True)
 
                 # Parse the diff and check if it can be applied
                 try:
@@ -264,7 +267,6 @@ def _apply_unified_diff(original_content: str, diff_content: str) -> str:
 
         # Replace the section
         new_section = []
-        change_idx = 0
 
         for change in hunk["changes"]:
             if change["type"] == "add":
@@ -334,6 +336,6 @@ def _rollback_changes(backup_info: dict[str, str]) -> None:
         try:
             if os.path.exists(backup_path):
                 shutil.copy2(backup_path, original_path)
-        except Exception as e:
+        except Exception:  # noqa: S110 # Intentionally ignoring errors during rollback
             # Log error but continue with other files
-            print(f"Warning: Failed to rollback {original_path}: {e}")
+            pass

@@ -19,7 +19,7 @@ def parse_lint_results_impl(
     max_tokens: int = 20000
 ) -> dict[str, Any]:
     """Run linters and return categorized issues.
-    
+
     Args:
         linter: Linter to use ("eslint", "prettier", "stylelint")
         project_root: Directory to run linter in (defaults to MCP_FILE_ROOT)
@@ -29,14 +29,13 @@ def parse_lint_results_impl(
         timeout: Maximum execution time in seconds
         page: Page number for pagination (1-based, default: 1)
         max_tokens: Maximum tokens per page (default: 20000)
-        
+
     Returns:
         Dictionary with paginated categorized lint issues
     """
     try:
         # Resolve project root
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
@@ -54,7 +53,9 @@ def parse_lint_results_impl(
         elif linter == "prettier":
             result = _run_prettier(project_root, target_files, config_file, timeout, page, max_tokens)
         elif linter == "stylelint":
-            result = _run_stylelint(project_root, target_files, config_file, include_warnings, timeout, page, max_tokens)
+            result = _run_stylelint(
+                project_root, target_files, config_file, include_warnings, timeout, page, max_tokens
+            )
         else:
             return {
                 "error": {
@@ -96,7 +97,7 @@ def _run_eslint(
         cmd.extend([".", "--ext", ".js,.jsx,.ts,.tsx"])
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 # Safe: cmd built from predetermined ESLint commands
             cmd,
             cwd=project_root,
             capture_output=True,
@@ -151,7 +152,7 @@ def _run_eslint(
             "total_errors": len([i for i in issues if i["severity"] == "error"]),
             "total_warnings": len([i for i in issues if i["severity"] == "warning"]),
             "total_issues": len(issues),
-            "files_with_issues": len(set(i["file"] for i in issues)),
+            "files_with_issues": len({i["file"] for i in issues}),
             "fixable_issues": len([i for i in issues if i["fixable"]]),
             "exit_code": result.returncode
         }
@@ -211,7 +212,7 @@ def _run_prettier(
         cmd.extend(["**/*.{js,jsx,ts,tsx,json,css,scss,md}"])
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 # Safe: cmd built from predetermined Prettier commands
             cmd,
             cwd=project_root,
             capture_output=True,
@@ -306,7 +307,7 @@ def _run_stylelint(
         cmd.extend(["**/*.{css,scss,sass,less}"])
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 # Safe: cmd built from predetermined Stylelint commands
             cmd,
             cwd=project_root,
             capture_output=True,
@@ -359,7 +360,7 @@ def _run_stylelint(
             "total_errors": len([i for i in issues if i["severity"] == "error"]),
             "total_warnings": len([i for i in issues if i["severity"] == "warning"]),
             "total_issues": len(issues),
-            "files_with_issues": len(set(i["file"] for i in issues)),
+            "files_with_issues": len({i["file"] for i in issues}),
             "fixable_issues": len([i for i in issues if i["fixable"]]),
             "exit_code": result.returncode
         }

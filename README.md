@@ -128,17 +128,19 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
   - agent analyzes summary from phase 1
   - agent calls `hints_for_file` for API file path
   - agent creates files according to standards
-  - agent runs minimal validations. `parse_lint_results`, `parse_typescript_errors`, and any tests written for modified files.
-  - MANDATOR: DO NOT RUN VALIDATIONS FOR THE ENTIRE CODE BASE
-  - MANDATORY: agent DOES NOT RUN THE DEV SERVER AND TEST THE ACTION API
-  - MANDATORY: AGENT DOES NOT RUN ANY curl COMMANDS
+  - agent calls MCP APIs for targeted validation: `parse_lint_results(target_files=[...])` and `parse_typescript_errors()` ONLY for modified files
+  - **MANDATORY**: Use MCP APIs, NOT system commands (no npm, no build commands)
+  - **MANDATORY**: agent DOES NOT RUN DEV SERVERS, curl COMMANDS, or npm run commands
+  - **PHASE 2 COMPLETE**: Mark when all file operations and targeted MCP validations are finished
 
 **Phase 3: Quality Assurance** (MANDATORY for ALL operations - ONLY after ALL work is complete)
 - Wait until ALL Task agents from Phase 2 have completed their file operations
-- Run comprehensive quality checks using `parse_lint_results` and `parse_typescript_errors`
+- Run comprehensive quality checks using MCP APIs: `parse_lint_results` and `parse_typescript_errors` for all project files
 - Identify any linting errors, type errors, or other issues introduced during operations
-- Run full build and fix any issues
 - Launch additional Task agents to fix specific errors, with each agent focusing on particular files or error types
+- **MANDATORY**: Run full build command (npm run build, etc.) to ensure project compiles successfully
+- **MANDATORY**: NEVER run dev servers (npm run dev, npm start, etc.)
+- **PHASE 3 COMPLETE**: Mark when all errors are fixed and full build succeeds
 - **Example**: Even after creating one simple file, validate it integrates properly with the project
 
 **Decision Points for AI:**
@@ -157,6 +159,16 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 - **File Creation Permitted**: This workflow overrides general "avoid file creation" guidance when files are needed
 - **Token Efficiency**: Each Task agent works within manageable token limits
 - **Sub agents**: parallel work streams are run in sub agents using the task tool. Run multiple Task invocations in a SINGLE message.
+
+**Phase Completion Markers** (MANDATORY - explicitly state when each phase is done):
+- **Phase 1**: "Discovery complete, strategy determined"
+- **Phase 2**: "All file operations complete, targeted validations finished"  
+- **Phase 3**: "Quality assurance complete, full build successful"
+
+**Command Types (CRITICAL distinction)**:
+- **MCP APIs** (use these): `parse_lint_results`, `parse_typescript_errors`, `hints_for_file`, `get_target_files`, etc.
+- **System Commands** (use sparingly): `npm run build` (only in Phase 3), `uv run pytest` (only for final validation)
+- **FORBIDDEN Commands**: `npm run dev`, `npm start`, `yarn dev`, any dev server commands
 
 **Common Examples Requiring This Workflow:**
 - ✅ Creating a single new API endpoint file

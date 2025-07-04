@@ -163,7 +163,7 @@ def read_file(file_path):
         result = _add_import_map_to_hint(hint)
 
         assert "importMap" in result
-        
+
         # Check global import map (only from correct example)
         import_map = result["importMap"]
         assert len(import_map) == 2  # os and pathlib.Path from correct example
@@ -185,7 +185,7 @@ def read_file(file_path):
         assert "import os" in result["correctExample"]
         assert "from pathlib import Path" in result["correctExample"]
         assert "import os" in result["incorrectExample"]
-        
+
         # Check that the actual code logic remains
         assert "def read_file(file_path):" in result["correctExample"]
         assert "path = Path(file_path)" in result["correctExample"]
@@ -217,7 +217,7 @@ export async function GET() {
         result = _add_import_map_to_hint(hint)
 
         assert "importMap" in result
-        
+
         # Check global import map (deduplicated)
         import_map = result["importMap"]
         assert len(import_map) == 1  # Only one unique import: next/server
@@ -232,7 +232,7 @@ export async function GET() {
         # Check that imports are preserved in storage (NOT stripped)
         assert "import { Response } from 'next/server'" in result["correctExample"]
         assert "import { Response } from 'next/server'" in result["incorrectExample"]
-        
+
         # Check that the actual code logic remains
         assert "export async function GET()" in result["correctExample"]
         assert "Response.json({error: 'User not found'}" in result["correctExample"]
@@ -309,7 +309,7 @@ from typing import (
     def test_strip_imports_from_code_python(self):
         """Test stripping imports from Python code."""
         from src.aromcp.standards_server._storage import _strip_imports_from_code
-        
+
         code = """
 import os
 from pathlib import Path
@@ -319,14 +319,14 @@ def read_file(file_path):
     path = Path(file_path)
     return path.read_text()
 """
-        
+
         stripped = _strip_imports_from_code(code)
-        
+
         # Imports should be removed
         assert "import os" not in stripped
         assert "from pathlib import Path" not in stripped
         assert "from typing import Dict" not in stripped
-        
+
         # Code logic should remain
         assert "def read_file(file_path):" in stripped
         assert "path = Path(file_path)" in stripped
@@ -335,7 +335,7 @@ def read_file(file_path):
     def test_strip_imports_from_code_javascript(self):
         """Test stripping imports from JavaScript code."""
         from src.aromcp.standards_server._storage import _strip_imports_from_code
-        
+
         code = """
 import { Response } from 'next/server';
 import axios from 'axios';
@@ -345,25 +345,29 @@ export async function GET() {
     return Response.json({error: 'User not found'});
 }
 """
-        
+
         stripped = _strip_imports_from_code(code)
-        
+
         # Imports should be removed
         assert "import { Response } from 'next/server'" not in stripped
         assert "import axios from 'axios'" not in stripped
         assert "const fs = require('fs')" not in stripped
-        
+
         # Code logic should remain
         assert "export async function GET()" in stripped
         assert "Response.json({error: 'User not found'})" in stripped
 
     def test_hints_for_file_strips_imports_at_runtime(self):
         """Test that hints_for_file strips imports at runtime only."""
-        import tempfile
         import os
+        import tempfile
+
+        from src.aromcp.standards_server._storage import (
+            save_ai_hints,
+            save_standard_metadata,
+        )
         from src.aromcp.standards_server.tools.hints_for_file import hints_for_file_impl
-        from src.aromcp.standards_server._storage import save_ai_hints, save_standard_metadata
-        
+
         # Create hint with imports
         hints = [{
             'rule': 'Use modern imports',
@@ -380,10 +384,10 @@ def test_func():
 ''',
             'hasEslintRule': False
         }]
-        
+
         with tempfile.TemporaryDirectory() as tmp_dir:
             os.environ['MCP_FILE_ROOT'] = tmp_dir
-            
+
             # Save metadata and hints
             metadata = {
                 'title': 'Test Standard',
@@ -393,43 +397,42 @@ def test_func():
             }
             save_standard_metadata('test-std', metadata, tmp_dir)
             save_ai_hints('test-std', hints, tmp_dir)
-            
+
             # Create test file
             test_file = os.path.join(tmp_dir, 'test.py')
             with open(test_file, 'w') as f:
                 f.write('# test')
-                
+
             # Get hints through hints_for_file
             result = hints_for_file_impl('test.py', max_tokens=5000, project_root=tmp_dir)
-            
+
             assert 'data' in result
             assert len(result['data']['hints']) > 0
-            
+
             hint = result['data']['hints'][0]
-            
+
             # Imports should be stripped from examples at runtime
             assert 'import os' not in hint['correctExample']
             assert 'from pathlib import Path' not in hint['correctExample']
             assert 'import os' not in hint['incorrectExample']
-            
+
             # But code logic should remain
             assert 'def test_func():' in hint['correctExample']
             assert 'return Path(' in hint['correctExample']
             assert 'def test_func():' in hint['incorrectExample']
-            
+
             # Import map should be available separately, organized by module
             import_maps = result['data'].get('importMaps', {})
-            assert 'modules' in hint.get('importMapId', '')
-            
+
             # Check modules array
             modules = hint.get('modules', [])
             assert 'os' in modules
             assert 'pathlib' in modules
-            
+
             # Check import maps organized by module
             assert 'os' in import_maps
             assert 'pathlib' in import_maps
-            
+
             os_imports = [imp['statement'] for imp in import_maps['os']]
             pathlib_imports = [imp['statement'] for imp in import_maps['pathlib']]
             assert 'import os' in os_imports

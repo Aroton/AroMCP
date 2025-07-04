@@ -5,14 +5,19 @@ from pathlib import Path
 from typing import Any
 
 
-def get_project_root() -> str:
+def get_project_root(project_root: str | None = None) -> str:
     """Get project root from environment or default.
+
+    Args:
+        project_root: Provided project root, if None or "." will use environment
 
     Returns:
         Project root directory path from MCP_FILE_ROOT environment variable,
         or current directory as fallback
     """
-    return os.getenv('MCP_FILE_ROOT', '.')
+    if project_root is None or project_root == ".":
+        return os.getenv('MCP_FILE_ROOT', '.')
+    return project_root
 
 
 def validate_file_path(file_path: str, project_root: str) -> dict[str, Any]:

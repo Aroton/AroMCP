@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from ...utils.pagination import paginate_list
-from .._security import validate_file_path_legacy
+from .._security import get_project_root, validate_file_path_legacy
 
 
 def extract_method_signatures_impl(
     file_paths: str | list[str],
-    project_root: str = ".",
+    project_root: str | None = None,
     include_docstrings: bool = True,
     include_decorators: bool = True,
     expand_patterns: bool = True,
@@ -36,6 +36,9 @@ def extract_method_signatures_impl(
     start_time = time.time()
 
     try:
+        # Resolve project root
+        project_root = get_project_root(project_root)
+
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
         if not project_path.exists():
@@ -61,7 +64,8 @@ def extract_method_signatures_impl(
                     matches = list(project_path.glob(file_path))
                     if matches:
                         for match in matches:
-                            if match.is_file() and match.suffix.lower() in ['.py', '.js', '.ts', '.jsx', '.tsx']:
+                            if (match.is_file() and
+                                match.suffix.lower() in ['.py', '.js', '.ts', '.jsx', '.tsx']):
                                 try:
                                     rel_path = match.relative_to(project_path)
                                     expanded_paths.append(str(rel_path))
@@ -197,7 +201,7 @@ def _extract_python_signatures(
             def __init__(self):
                 self.class_stack = []
 
-            def visit_ClassDef(self, node):
+            def visit_classdef(self, node):
                 # Extract class signature
                 class_sig = {
                     "name": node.name,
@@ -228,10 +232,10 @@ def _extract_python_signatures(
                 self.generic_visit(node)
                 self.class_stack.pop()
 
-            def visit_FunctionDef(self, node):
+            def visit_FunctionDef(self, node):  # noqa: N802 # Required by ast.NodeVisitor
                 self._extract_function(node, "function")
 
-            def visit_AsyncFunctionDef(self, node):
+            def visit_AsyncFunctionDef(self, node):  # noqa: N802 # Required by ast.NodeVisitor
                 self._extract_function(node, "async_function")
 
             def _extract_function(self, node, func_type):
@@ -291,7 +295,10 @@ def _extract_python_signatures(
                     "signature": signature,
                     "parameters": args,
                     "docstring": ast.get_docstring(node) if include_docstrings else None,
-                    "decorators": [self._get_decorator_name(d) for d in node.decorator_list] if include_decorators else [],
+                    "decorators": (
+                        [self._get_decorator_name(d) for d in node.decorator_list]
+                        if include_decorators else []
+                    ),
                     "is_async": func_type == "async_function"
                 }
 
@@ -335,7 +342,10 @@ def _extract_python_signatures(
                     return self._get_attr_chain(annotation)
                 elif isinstance(annotation, ast.Subscript):
                     # Handle generic types like List[str]
-                    return f"{self._get_annotation_string(annotation.value)}[{self._get_annotation_string(annotation.slice)}]"
+                    return (
+                        f"{self._get_annotation_string(annotation.value)}"
+                        f"[{self._get_annotation_string(annotation.slice)}]"
+                    )
                 return "unknown_type"
 
             def _get_default_value(self, default):
@@ -361,9 +371,9 @@ def _extract_python_signatures(
         return signatures
 
     except SyntaxError as e:
-        raise Exception(f"Python syntax error: {e}")
+        raise Exception(f"Python syntax error: {e}") from e
     except Exception as e:
-        raise Exception(f"Failed to parse Python file: {e}")
+        raise Exception(f"Failed to parse Python file: {e}") from e
 
 
 def _extract_javascript_signatures(
@@ -399,17 +409,29 @@ def _extract_javascript_signatures(
         # Patterns for different function types
         patterns = [
             # Regular function declarations (top-level only)
-            (r'^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{', 'function'),
+            (
+                r'^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{',
+                'function'
+            ),
             # Arrow functions (top-level assignments)
-            (r'^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\((.*?)\)|(\w+))\s*=>\s*', 'arrow_function'),
+            (
+                r'^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\((.*?)\)|(\w+))\s*=>\s*',
+                'arrow_function'
+            ),
             # Class declarations
-            (r'^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?(?:\s+implements\s+([^{]+))?\s*{', 'class'),
+            (
+                r'^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?(?:\s+implements\s+([^{]+))?\s*{',
+                'class'
+            ),
             # Interface declarations (TypeScript)
             (r'^\s*(?:export\s+)?interface\s+(\w+)(?:\s+extends\s+([^{]+))?\s*{', 'interface'),
             # Type declarations (TypeScript)
             (r'^\s*(?:export\s+)?type\s+(\w+)\s*=\s*([^;]+);?', 'type'),
             # Method definitions (only when inside a class)
-            (r'^\s*(?:(async|static|private|protected|public|readonly)\s+)*(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{', 'method'),
+            (
+                r'^\s*(?:(async|static|private|protected|public|readonly)\s+)*(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{',
+                'method'
+            ),
         ]
 
         for line_num, line in enumerate(lines, 1):
@@ -447,7 +469,7 @@ def _extract_javascript_signatures(
         return signatures
 
     except Exception as e:
-        raise Exception(f"Failed to parse JavaScript/TypeScript file: {e}")
+        raise Exception(f"Failed to parse JavaScript/TypeScript file: {e}") from e
 
 
 def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):

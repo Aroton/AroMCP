@@ -32,8 +32,7 @@ def register_analysis_tools(mcp):
             include_tests: Whether to include test files as entry points
             confidence_threshold: Minimum confidence score to report as dead code
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Convert string to list if needed
         if isinstance(entry_points, str):
@@ -57,8 +56,7 @@ def register_analysis_tools(mcp):
             max_depth: Maximum cycle depth to search for
             include_node_modules: Whether to include node_modules in analysis
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
         return find_import_cycles_impl(project_root, max_depth, include_node_modules)
 
 
@@ -76,8 +74,7 @@ def register_analysis_tools(mcp):
             route_patterns: Glob patterns for route files (defaults to common patterns)
             include_middleware: Whether to include middleware information
         """
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Convert string to list if needed
         if isinstance(route_patterns, str):

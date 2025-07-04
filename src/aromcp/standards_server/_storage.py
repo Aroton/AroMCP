@@ -13,8 +13,7 @@ from ..filesystem_server._security import get_project_root, validate_file_path_l
 
 def get_aromcp_dir(project_root: str | None = None) -> Path:
     """Get the .aromcp directory path."""
-    if project_root is None:
-        project_root = get_project_root()
+    project_root = get_project_root(project_root)
 
     aromcp_dir = Path(project_root) / ".aromcp"
     aromcp_dir.mkdir(exist_ok=True)
@@ -215,14 +214,28 @@ def load_eslint_rules(standard_id: str, project_root: str | None = None) -> dict
 
 
 def delete_eslint_rules(standard_id: str, project_root: str | None = None) -> bool:
-    """Delete ESLint rules for a standard. Returns True if file existed."""
+    """Delete ESLint rules for a standard. Returns True if any files were deleted."""
     eslint_dir = get_eslint_dir(project_root)
+
+    # Delete JSON config file if it exists
     rules_path = eslint_dir / f"{standard_id}.json"
+    found_files = False
 
     if rules_path.exists():
         rules_path.unlink()
-        return True
-    return False
+        found_files = True
+
+    # Delete JavaScript rule files in rules/ subdirectory
+    rules_subdir = eslint_dir / "rules"
+    if rules_subdir.exists():
+        # Look for any JavaScript files that contain the standard_id
+        for rule_file in rules_subdir.glob("*.js"):
+            # Delete files that match the standard_id pattern
+            if standard_id in rule_file.stem:
+                rule_file.unlink()
+                found_files = True
+
+    return found_files
 
 
 def delete_standard(standard_id: str, project_root: str | None = None) -> dict[str, Any]:
@@ -253,8 +266,7 @@ def delete_standard(standard_id: str, project_root: str | None = None) -> dict[s
 
 def find_markdown_files(standards_path: str, project_root: str | None = None) -> list[dict[str, Any]]:
     """Find all markdown files in the standards directory."""
-    if project_root is None:
-        project_root = get_project_root()
+    project_root = get_project_root(project_root)
 
     # Validate standards path
     validate_file_path_legacy(standards_path, Path(project_root))
@@ -418,7 +430,7 @@ def _extract_python_imports(code: str) -> list[dict[str, str]]:
         tree = ast.parse(code)
 
         class ImportVisitor(ast.NodeVisitor):
-            def visit_Import(self, node):
+            def visit_Import(self, node):  # noqa: N802 # Required by ast.NodeVisitor
                 for alias in node.names:
                     imports.append({
                         "type": "import",
@@ -427,7 +439,7 @@ def _extract_python_imports(code: str) -> list[dict[str, str]]:
                         "statement": f"import {alias.name}" + (f" as {alias.asname}" if alias.asname else "")
                     })
 
-            def visit_ImportFrom(self, node):
+            def visit_ImportFrom(self, node):  # noqa: N802 # Required by ast.NodeVisitor
                 module = node.module or ""
                 for alias in node.names:
                     statement = f"from {module} import {alias.name}"

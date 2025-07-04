@@ -309,9 +309,9 @@ class TestHintsForFile:
             "severity": "warning",
             "priority": "important"
         }
-        
+
         register_impl("standards/import-test.md", import_map_metadata, self.temp_dir)
-        
+
         # Add hints with import examples
         hints_with_imports = [
             {
@@ -328,39 +328,40 @@ export async function GET() {
                 "hasEslintRule": False
             }
         ]
-        
+
         update_rule_impl(
             "import-test-standard",
             clear_existing=True,
             ai_hints=hints_with_imports,
             project_root=self.temp_dir
         )
-        
+
         # Get hints and verify structure
         result = hints_for_file_impl("api/test.py", 10000, self.temp_dir)
-        
+
         assert "data" in result
         assert "hints" in result["data"]
         assert "importMaps" in result["data"]
-        
+
         # Find our test hint
         test_hints = [h for h in result["data"]["hints"] if "proper imports" in h.get("rule", "")]
         assert len(test_hints) == 1
-        
+
         test_hint = test_hints[0]
-        
+
         # Verify import map was moved to global and hint has reference
         assert "importMap" not in test_hint  # Should be removed from hint
-        assert "importMapId" in test_hint     # Should have reference ID
-        
+        assert "modules" in test_hint         # Should have modules array
+
         # Verify global import maps
         import_maps = result["data"]["importMaps"]
         assert import_maps is not None
-        assert test_hint["importMapId"] in import_maps
-        
+        assert "next/server" in import_maps
+
         # Verify import map contains only correctExample imports (token optimization)
-        import_map = import_maps[test_hint["importMapId"]]
+        import_map = import_maps["next/server"]
         assert isinstance(import_map, list)
         assert len(import_map) == 1
         assert import_map[0]["module"] == "next/server"
-        assert import_map[0]["type"] == "es6_import"
+        # Note: 'type' field is stripped for token optimization
+        assert "type" not in import_map[0]

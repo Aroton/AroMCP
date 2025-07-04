@@ -93,8 +93,7 @@ class TestUpdateRule:
       }
     };
   }
-};''',
-            "config.json": '{"rules": {"test-rule": "error"}}'
+};'''
         }
 
         result = update_rule_impl("test-standard", False, None, eslint_files, self.temp_dir)
@@ -102,12 +101,12 @@ class TestUpdateRule:
         assert "data" in result
         assert result["data"]["hintsUpdated"] == 0
         assert result["data"]["eslintUpdated"] is True
-        assert result["data"]["eslintFilesWritten"] == 2
+        assert result["data"]["eslintFilesWritten"] == 1
         assert result["data"]["clearedExisting"] is False
 
         # Verify ESLint files were saved
         rule_file = Path(self.temp_dir) / ".aromcp" / "eslint" / "rules" / "test-standard.js"
-        config_file = Path(self.temp_dir) / ".aromcp" / "eslint" / "config.json"
+        config_file = Path(self.temp_dir) / ".aromcp" / "eslint" / "standards-config.json"
 
         assert rule_file.exists()
         assert config_file.exists()

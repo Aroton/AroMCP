@@ -1,11 +1,14 @@
 """Tool for extracting and documenting API endpoints from route files."""
 
+import logging
 import re
 from pathlib import Path
 from typing import Any
 
 from ...filesystem_server.tools.get_target_files import get_target_files_impl
 from ...filesystem_server.tools.read_files_batch import read_files_batch_impl
+
+logger = logging.getLogger(__name__)
 
 
 def extract_api_endpoints_impl(
@@ -86,7 +89,7 @@ def extract_api_endpoints_impl(
         if "error" in files_content_result:
             return files_content_result
 
-        files_content = files_content_result["data"]["files"]
+        files_content = files_content_result["data"]["items"]
 
         # Extract endpoints and middleware
         all_endpoints = []
@@ -94,8 +97,9 @@ def extract_api_endpoints_impl(
         method_stats = {}
         route_groups = {}
 
-        for file_path, file_data in files_content.items():
+        for file_data in files_content:
             try:
+                file_path = file_data["file_path"]
                 content = file_data["content"]
                 file_endpoints = _extract_endpoints_from_file(file_path, content)
                 all_endpoints.extend(file_endpoints)
@@ -113,8 +117,11 @@ def extract_api_endpoints_impl(
                     base_path = _get_base_path(endpoint["path"])
                     route_groups[base_path] = route_groups.get(base_path, 0) + 1
 
-            except Exception:
+            except Exception as e:
                 # Skip files that can't be parsed
+                logger.warning(
+                    "Failed to parse file %s: %s", file_path, str(e)
+                )
                 continue
 
         # Sort endpoints by path and method

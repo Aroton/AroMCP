@@ -57,16 +57,25 @@ module.exports = router;
             assert len(endpoints) == 5
 
             # Check GET /users
-            get_users = next(ep for ep in endpoints if ep["method"] == "GET" and ep["path"] == "/users")
+            get_users = next(
+                ep for ep in endpoints
+                if ep["method"] == "GET" and ep["path"] == "/users"
+            )
             assert get_users["is_async"]
             assert get_users["parameters"] == []
 
             # Check POST /users with middleware
-            post_users = next(ep for ep in endpoints if ep["method"] == "POST" and ep["path"] == "/users")
+            post_users = next(
+                ep for ep in endpoints
+                if ep["method"] == "POST" and ep["path"] == "/users"
+            )
             assert "validateUser" in post_users["middleware"]
 
             # Check parameterized routes
-            get_user_by_id = next(ep for ep in endpoints if ep["method"] == "GET" and "id" in ep["path"])
+            get_user_by_id = next(
+                ep for ep in endpoints
+                if ep["method"] == "GET" and "id" in ep["path"]
+            )
             assert "id" in get_user_by_id["parameters"]
 
     def test_fastapi_routes_extraction(self):

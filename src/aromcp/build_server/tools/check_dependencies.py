@@ -15,20 +15,19 @@ def check_dependencies_impl(
     check_security: bool = True
 ) -> dict[str, Any]:
     """Analyze package.json and installed dependencies.
-    
+
     Args:
         project_root: Directory containing package.json (defaults to MCP_FILE_ROOT)
         package_manager: Package manager to use ("npm", "yarn", "pnpm", or "auto")
         check_outdated: Whether to check for outdated packages
         check_security: Whether to run security audit
-        
+
     Returns:
         Dictionary with dependency analysis results
     """
     try:
         # Resolve project root
-        if project_root is None:
-            project_root = get_project_root()
+        project_root = get_project_root(project_root)
 
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
@@ -36,7 +35,9 @@ def check_dependencies_impl(
             return {
                 "error": {
                     "code": "INVALID_INPUT",
-                    "message": validation_result.get("error", "Invalid project root path")
+                    "message": validation_result.get(
+                        "error", "Invalid project root path"
+                    )
                 }
             }
 
@@ -107,7 +108,7 @@ def check_dependencies_impl(
             try:
                 outdated_cmd = _get_outdated_command(package_manager)
                 if outdated_cmd:
-                    outdated_result = subprocess.run(
+                    outdated_result = subprocess.run(  # noqa: S603 # Safe: using predetermined command from _get_outdated_command() function
                         outdated_cmd,
                         cwd=project_root,
                         capture_output=True,
@@ -118,9 +119,13 @@ def check_dependencies_impl(
                     if package_manager == "npm":
                         result["outdated"] = _parse_npm_outdated(outdated_result.stdout)
                     elif package_manager == "yarn":
-                        result["outdated"] = _parse_yarn_outdated(outdated_result.stdout)
+                        result["outdated"] = _parse_yarn_outdated(
+                            outdated_result.stdout
+                        )
                     elif package_manager == "pnpm":
-                        result["outdated"] = _parse_pnpm_outdated(outdated_result.stdout)
+                        result["outdated"] = _parse_pnpm_outdated(
+                            outdated_result.stdout
+                        )
 
             except (subprocess.TimeoutExpired, subprocess.SubprocessError):
                 result["outdated"] = {"error": "Failed to check outdated packages"}
@@ -130,7 +135,7 @@ def check_dependencies_impl(
             try:
                 audit_cmd = _get_audit_command(package_manager)
                 if audit_cmd:
-                    audit_result = subprocess.run(
+                    audit_result = subprocess.run(  # noqa: S603 # Safe: using predetermined command from _get_audit_command() function
                         audit_cmd,
                         cwd=project_root,
                         capture_output=True,
@@ -236,11 +241,17 @@ def _parse_npm_audit(output: str) -> dict[str, Any]:
 
         # Extract vulnerability summary
         summary = {
-            "total": data.get("metadata", {}).get("vulnerabilities", {}).get("total", 0),
+            "total": data.get("metadata", {}).get("vulnerabilities", {}).get(
+                "total", 0
+            ),
             "low": data.get("metadata", {}).get("vulnerabilities", {}).get("low", 0),
-            "moderate": data.get("metadata", {}).get("vulnerabilities", {}).get("moderate", 0),
+            "moderate": data.get("metadata", {}).get("vulnerabilities", {}).get(
+                "moderate", 0
+            ),
             "high": data.get("metadata", {}).get("vulnerabilities", {}).get("high", 0),
-            "critical": data.get("metadata", {}).get("vulnerabilities", {}).get("critical", 0)
+            "critical": data.get("metadata", {}).get("vulnerabilities", {}).get(
+                "critical", 0
+            )
         }
 
         # Extract individual vulnerabilities
