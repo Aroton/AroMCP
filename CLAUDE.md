@@ -192,6 +192,44 @@ def tool_name(
 - **Use `paginate_list()`** with appropriate sort key for deterministic ordering
 - **Preserve metadata** in pagination response
 
+### FastMCP Parameter Type Requirements
+**Critical for FastMCP compatibility**: All `@mcp.tool` parameters that accept complex types (lists, dicts) must be declared with union types to support both native types and JSON strings from MCP clients.
+
+**Required parameter patterns**:
+```python
+@mcp.tool
+@json_convert  # Required for all tools with complex type parameters
+def my_tool(
+    # For list parameters - MUST include str option for FastMCP validation
+    file_paths: str | list[str],  # NOT just list[str]
+    patterns: list[str] | None = None,  # Optional lists need str support too
+    
+    # For dict parameters - MUST include str option for FastMCP validation
+    metadata: dict[str, Any] | str,  # NOT just dict[str, Any]
+    updates: dict[str, Any] | str | None = None,  # Optional dicts need str support too
+    
+    # For complex nested types - MUST include str option
+    diffs: list[dict[str, Any]] | str,  # NOT just list[dict[str, Any]]
+    
+    # Simple types don't need union types
+    project_root: str | None = None,  # str types are fine as-is
+    count: int = 1,  # primitive types don't need str unions
+) -> dict[str, Any]:
+```
+
+**Why this is required**:
+- FastMCP validates parameter types before passing to tools
+- MCP clients (like Claude Code) pass complex parameters as JSON strings
+- `@json_convert` middleware converts JSON strings to native types after FastMCP validation
+- Without `str` in the union type, FastMCP rejects the JSON string before conversion
+
+**Key rules**:
+- **ALWAYS** use `str | list[str]` instead of `list[str]` for list parameters
+- **ALWAYS** use `dict[str, Any] | str` instead of `dict[str, Any]` for dict parameters  
+- **ALWAYS** use `list[dict[...]] | str` instead of `list[dict[...]]` for complex list parameters
+- **ALWAYS** apply `@json_convert` decorator when using union types with complex types
+- Simple types (`str`, `int`, `bool`) don't need `str` unions
+
 ### Project Root Resolution Pattern
 The updated `get_project_root()` function now accepts an optional parameter:
 ```python

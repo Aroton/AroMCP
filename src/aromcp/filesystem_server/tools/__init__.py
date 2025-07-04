@@ -65,8 +65,9 @@ def register_filesystem_tools(mcp):
         )
 
     @mcp.tool
+    @json_convert
     def write_files_batch(
-        files: dict[str, str],
+        files: dict[str, str] | str,
         project_root: str | None = None,
         encoding: str = "utf-8",
         create_backup: bool = True
@@ -160,7 +161,7 @@ def register_filesystem_tools(mcp):
     @mcp.tool
     @json_convert
     def apply_file_diffs(
-        diffs: list[dict[str, Any]],
+        diffs: list[dict[str, Any]] | str,
         project_root: str | None = None,
         create_backup: bool = True,
         validate_before_apply: bool = True
@@ -182,7 +183,7 @@ def register_filesystem_tools(mcp):
     @mcp.tool
     @json_convert
     def preview_file_changes(
-        diffs: list[dict[str, Any]],
+        diffs: list[dict[str, Any]] | str,
         project_root: str | None = None,
         include_full_preview: bool = True,
         max_preview_lines: int = 50
@@ -204,7 +205,7 @@ def register_filesystem_tools(mcp):
     @mcp.tool
     @json_convert
     def validate_diffs(
-        diffs: list[dict[str, Any]],
+        diffs: list[dict[str, Any]] | str,
         project_root: str | None = None,
         check_conflicts: bool = True,
         check_syntax: bool = True

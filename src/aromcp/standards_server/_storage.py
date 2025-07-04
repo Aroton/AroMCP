@@ -70,7 +70,7 @@ def get_eslint_dir(project_root: str | None = None) -> Path:
 
 
 def update_eslint_config(project_root: str | None = None) -> None:
-    """Update the master ESLint configuration files."""
+    """Update the master ESLint configuration files with file-specific targeting."""
     eslint_dir = get_eslint_dir(project_root)
     rules_dir = eslint_dir / "rules"
 
@@ -104,7 +104,10 @@ def update_eslint_config(project_root: str | None = None) -> None:
     with open(package_file, 'w', encoding='utf-8') as f:
         json.dump(package_json, f, indent=2)
 
-    # Generate standards config for ESLint 9.x flat config with TypeScript support
+    # Load all standards metadata to get appliesTo patterns
+    rule_patterns = _group_rules_by_patterns(rule_names, project_root)
+
+    # Generate standards config for ESLint 9.x flat config with file-specific targeting
     config_content = """const aromcpPlugin = require('./eslint-plugin-aromcp');
 
 // Try to load TypeScript parser if available
@@ -116,9 +119,15 @@ try {
 }
 
 module.exports = [
-  {
-    // Apply to TypeScript and JavaScript files
-    files: ['**/*.{js,jsx,ts,tsx}'],
+"""
+
+    # Add config blocks for each pattern group
+    for pattern_group in rule_patterns:
+        files = pattern_group["files"]
+        rules = pattern_group["rules"]
+
+        config_content += f"""  {{
+    files: {json.dumps(files)},
     ignores: [
       '.aromcp/**',
       'node_modules/**',
@@ -126,30 +135,32 @@ module.exports = [
       'build/**',
       '.next/**'
     ],
-    languageOptions: {
-      ...(tsParser && { parser: tsParser }),
-      parserOptions: {
+    languageOptions: {{
+      ...(tsParser && {{ parser: tsParser }}),
+      parserOptions: {{
         ecmaVersion: 'latest',
         sourceType: 'module',
-        ecmaFeatures: {
+        ecmaFeatures: {{
           jsx: true
-        },
-        ...(tsParser && {
+        }},
+        ...(tsParser && {{
           project: false, // Don't require tsconfig for performance
           tsconfigRootDir: undefined
-        })
-      }
-    },
-    plugins: {
+        }})
+      }}
+    }},
+    plugins: {{
       aromcp: aromcpPlugin,
-    },
-    rules: {
+    }},
+    rules: {{
 """
-    for rule_name in rule_names:
-        config_content += f"      'aromcp/{rule_name}': 'error',\n"
-    config_content += """    },
+        for rule_name in rules:
+            config_content += f"      'aromcp/{rule_name}': 'error',\n"
+        config_content += """    },
   },
-];
+"""
+
+    config_content += """];
 """
 
     config_file = eslint_dir / "standards-config.js"
@@ -158,13 +169,79 @@ module.exports = [
 
     # Also create a JSON version for easier parsing
     config_json = {
-        "plugins": ["aromcp"],
-        "rules": {f"aromcp/{rule_name}": "error" for rule_name in rule_names}
+        "configs": []
     }
+
+    for pattern_group in rule_patterns:
+        config_json["configs"].append({
+            "files": pattern_group["files"],
+            "rules": {f"aromcp/{rule_name}": "error" for rule_name in pattern_group["rules"]}
+        })
 
     config_json_file = eslint_dir / "standards-config.json"
     with open(config_json_file, 'w', encoding='utf-8') as f:
         json.dump(config_json, f, indent=2)
+
+
+def _group_rules_by_patterns(rule_names: list[str], project_root: str | None = None) -> list[dict[str, Any]]:
+    """Group rules by their appliesTo patterns from standards metadata."""
+    # Load all standards metadata to get appliesTo patterns
+    hints_dir = get_hints_dir(project_root)
+    pattern_groups = {}
+    rules_without_patterns = []
+
+    for rule_name in rule_names:
+        # Try to find the corresponding standard metadata
+        # Rule names might have standard_id prefix, so check different possibilities
+        standard_id = None
+
+        # First try exact match
+        potential_standard_dir = hints_dir / rule_name
+        if potential_standard_dir.exists():
+            standard_id = rule_name
+        else:
+            # Try to find standard by checking if rule name contains standard prefix
+            for standard_dir in hints_dir.iterdir():
+                if standard_dir.is_dir() and rule_name.startswith(standard_dir.name):
+                    standard_id = standard_dir.name
+                    break
+
+        if standard_id:
+            metadata = load_standard_metadata(standard_id, project_root)
+            if metadata and "appliesTo" in metadata:
+                applies_to = metadata["appliesTo"]
+                if applies_to:
+                    # Use tuple for hashable key
+                    pattern_key = tuple(sorted(applies_to))
+                    if pattern_key not in pattern_groups:
+                        pattern_groups[pattern_key] = {
+                            "files": applies_to,
+                            "rules": []
+                        }
+                    pattern_groups[pattern_key]["rules"].append(rule_name)
+                    continue
+
+        # If no patterns found, add to rules without patterns
+        rules_without_patterns.append(rule_name)
+
+    # Convert pattern groups to list
+    result = list(pattern_groups.values())
+
+    # Add a catch-all group for rules without specific patterns
+    if rules_without_patterns:
+        result.append({
+            "files": ["**/*.{js,jsx,ts,tsx}"],
+            "rules": rules_without_patterns
+        })
+
+    # If no pattern groups found, create a default one
+    if not result:
+        result.append({
+            "files": ["**/*.{js,jsx,ts,tsx}"],
+            "rules": rule_names
+        })
+
+    return result
 
 
 def save_standard_metadata(standard_id: str, metadata: dict[str, Any], project_root: str | None = None) -> None:

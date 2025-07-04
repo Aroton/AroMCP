@@ -351,7 +351,15 @@ class TestUpdateRule:
         with open(config_json_file) as f:
             config_data = json.load(f)
 
-        # Check for new aromcp/ rule format in JSON
-        assert "aromcp/test-rule" in config_data["rules"]
-        assert "aromcp/another-rule" in config_data["rules"]
-        assert config_data["plugins"] == ["aromcp"]
+        # Check for new aromcp/ rule format in JSON (new configs format)
+        assert "configs" in config_data
+        assert len(config_data["configs"]) >= 1
+
+        # Find the config that contains our rules
+        rules_found = []
+        for config in config_data["configs"]:
+            if "rules" in config:
+                rules_found.extend(config["rules"].keys())
+
+        assert "aromcp/test-rule" in rules_found
+        assert "aromcp/another-rule" in rules_found

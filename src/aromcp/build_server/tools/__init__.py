@@ -86,13 +86,13 @@ def register_build_tools(mcp):
     def parse_typescript_errors(
         project_root: str | None = None,
         tsconfig_path: str = "tsconfig.json",
-        files: list[str] | None = None,
+        files: str | list[str] | None = None,
         include_warnings: bool = True,
         timeout: int = 120,
         page: int = 1,
         max_tokens: int = 20000
     ) -> dict[str, Any]:
-        """Run tsc and return structured error data.
+        """Run tsc and return structured error data. Compile typescript and find build errors.
 
         Args:
             project_root: Directory containing TypeScript project (defaults to
@@ -123,7 +123,7 @@ def register_build_tools(mcp):
         page: int = 1,
         max_tokens: int = 20000
     ) -> dict[str, Any]:
-        """Run linters and return categorized issues.
+        """Run linters and return categorized issues. Find style errors.
 
         Args:
             linter: Linter to use ("eslint", "prettier", "stylelint")

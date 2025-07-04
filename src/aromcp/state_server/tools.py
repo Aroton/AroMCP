@@ -3,6 +3,8 @@
 import uuid
 from typing import Any
 
+from ..utils.json_parameter_middleware import json_convert
+
 
 def register_state_tools(mcp):
     """Register state management tools with the MCP server."""
@@ -27,7 +29,8 @@ def register_state_tools(mcp):
         }
 
     @mcp.tool
-    def update_process_state(process_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+    @json_convert
+    def update_process_state(process_id: str, updates: dict[str, Any] | str) -> dict[str, Any]:
         """Update arbitrary fields in process state."""
         return {
             "status": "success",
@@ -45,7 +48,8 @@ def register_state_tools(mcp):
         }
 
     @mcp.tool
-    def complete_work_item(process_id: str, item_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    @json_convert
+    def complete_work_item(process_id: str, item_id: str, result: dict[str, Any] | str) -> dict[str, Any]:
         """Mark items as complete, update progress."""
         return {
             "status": "success",

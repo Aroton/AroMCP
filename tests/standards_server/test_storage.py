@@ -3,6 +3,7 @@
 import tempfile
 
 from aromcp.standards_server._storage import (
+    _group_rules_by_patterns,
     build_index,
     get_aromcp_dir,
     load_ai_hints,
@@ -12,6 +13,7 @@ from aromcp.standards_server._storage import (
     save_ai_hints,
     save_manifest,
     save_standard_metadata,
+    update_eslint_config,
 )
 
 
@@ -140,3 +142,120 @@ class TestStorage:
             assert standard_index["appliesTo"] == ["*.py"]
             assert standard_index["priority"] == "required"
             assert standard_index["hintCount"] == 1
+
+    def test_group_rules_by_patterns(self):
+        """Test grouping rules by appliesTo patterns."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create metadata for different standards with different patterns
+            api_metadata = {
+                "id": "api-standard",
+                "name": "API Standard",
+                "category": "api",
+                "appliesTo": ["api/**/*.js", "routes/**/*.js"],
+                "priority": "required"
+            }
+
+            component_metadata = {
+                "id": "component-standard",
+                "name": "Component Standard",
+                "category": "components",
+                "appliesTo": ["components/**/*.tsx", "ui/**/*.tsx"],
+                "priority": "recommended"
+            }
+
+            global_metadata = {
+                "id": "global-standard",
+                "name": "Global Standard",
+                "category": "general",
+                "appliesTo": [],  # No specific patterns
+                "priority": "important"
+            }
+
+            # Save metadata
+            save_standard_metadata("api-standard", api_metadata, temp_dir)
+            save_standard_metadata("component-standard", component_metadata, temp_dir)
+            save_standard_metadata("global-standard", global_metadata, temp_dir)
+
+            # Test grouping with rules that match standards
+            rule_names = ["api-standard", "component-standard", "global-standard", "unknown-rule"]
+            groups = _group_rules_by_patterns(rule_names, temp_dir)
+
+            # Should have 3 groups: api+routes, components+ui, catch-all
+            assert len(groups) == 3
+
+            # Find each group
+            api_group = next((g for g in groups if "api/**/*.js" in g["files"]), None)
+            component_group = next((g for g in groups if "components/**/*.tsx" in g["files"]), None)
+            catchall_group = next((g for g in groups if g["files"] == ["**/*.{js,jsx,ts,tsx}"]), None)
+
+            assert api_group is not None
+            assert component_group is not None
+            assert catchall_group is not None
+
+            # Check rules are in correct groups
+            assert "api-standard" in api_group["rules"]
+            assert "component-standard" in component_group["rules"]
+            assert "global-standard" in catchall_group["rules"]
+            assert "unknown-rule" in catchall_group["rules"]
+
+            # Check file patterns
+            assert set(api_group["files"]) == {"api/**/*.js", "routes/**/*.js"}
+            assert set(component_group["files"]) == {"components/**/*.tsx", "ui/**/*.tsx"}
+
+    def test_update_eslint_config_with_patterns(self):
+        """Test ESLint config generation with file-specific patterns."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create metadata for standards with different patterns
+            api_metadata = {
+                "id": "api-validation",
+                "name": "API Validation",
+                "category": "api",
+                "appliesTo": ["api/**/*.js"],
+                "priority": "required"
+            }
+
+            component_metadata = {
+                "id": "component-props",
+                "name": "Component Props",
+                "category": "components",
+                "appliesTo": ["components/**/*.tsx"],
+                "priority": "recommended"
+            }
+
+            save_standard_metadata("api-validation", api_metadata, temp_dir)
+            save_standard_metadata("component-props", component_metadata, temp_dir)
+
+            # Create dummy rule files
+            from aromcp.standards_server._storage import get_eslint_dir
+            eslint_dir = get_eslint_dir(temp_dir)
+            rules_dir = eslint_dir / "rules"
+            rules_dir.mkdir(exist_ok=True)
+
+            # Create dummy rule files
+            (rules_dir / "api-validation.js").write_text("module.exports = { meta: {}, create: () => ({}) };")
+            (rules_dir / "component-props.js").write_text("module.exports = { meta: {}, create: () => ({}) };")
+
+            # Update ESLint config
+            update_eslint_config(temp_dir)
+
+            # Check that config files were created
+            assert (eslint_dir / "standards-config.js").exists()
+            assert (eslint_dir / "standards-config.json").exists()
+
+            # Read and verify JSON config
+            import json
+            with open(eslint_dir / "standards-config.json") as f:
+                config = json.load(f)
+
+            assert "configs" in config
+            assert len(config["configs"]) == 2  # Two different pattern groups
+
+            # Check that rules are properly grouped by patterns
+            api_config = next((c for c in config["configs"] if "api/**/*.js" in c["files"]), None)
+            component_config = next((c for c in config["configs"] if "components/**/*.tsx" in c["files"]), None)
+
+            assert api_config is not None
+            assert component_config is not None
+
+            assert "aromcp/api-validation" in api_config["rules"]
+            assert "aromcp/component-props" in component_config["rules"]
