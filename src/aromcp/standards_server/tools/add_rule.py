@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from ...filesystem_server._security import get_project_root
-from .._storage import build_index, get_eslint_dir, load_manifest
+from .._storage import build_index, get_eslint_dir, load_manifest, update_eslint_config
 from .hints_for_file import invalidate_index_cache
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,9 @@ def add_rule_impl(
             f.write(rule_content)
 
         logger.info(f"Added ESLint rule {rule_name} to standard {standard_id}")
+
+        # Update ESLint configuration files after adding the rule
+        update_eslint_config(project_root)
 
         # Rebuild index and invalidate cache
         build_index(project_root)
