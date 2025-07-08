@@ -5,9 +5,10 @@ import os
 import tempfile
 from pathlib import Path
 
+from aromcp.standards_server._storage import save_ai_hints
+from aromcp.standards_server.tools.add_rule import add_rule_impl
 from aromcp.standards_server.tools.delete import delete_impl
 from aromcp.standards_server.tools.register import register_impl
-from aromcp.standards_server.tools.update_rule import update_rule_impl
 
 
 class TestDelete:
@@ -63,10 +64,13 @@ class TestDelete:
 };'''
             }
 
-            update_result = update_rule_impl(
-                "test-standard", False, ai_hints, eslint_rules, temp_dir
-            )
-            assert "data" in update_result
+            # Save hints and ESLint rules
+            save_ai_hints("test-standard", ai_hints, temp_dir)
+            # Add individual ESLint rules
+            for rule_name, rule_content in eslint_rules.items():
+                clean_name = rule_name.replace("rules/", "").replace(".js", "")
+                rule_result = add_rule_impl("test-standard", clean_name, rule_content, temp_dir)
+                assert "data" in rule_result
 
             # Now delete the standard
             delete_result = delete_impl("test-standard", temp_dir)
@@ -159,7 +163,7 @@ class TestDelete:
                 }
             ]
 
-            update_rule_impl("hints-only", False, ai_hints, None, temp_dir)
+            save_ai_hints("hints-only", ai_hints, temp_dir)
 
             # Delete the standard
             result = delete_impl("hints-only", temp_dir)
@@ -209,7 +213,10 @@ class TestDelete:
 };'''
             }
 
-            update_rule_impl("eslint-only", False, None, eslint_rules, temp_dir)
+            # Add individual ESLint rules
+            for rule_name, rule_content in eslint_rules.items():
+                clean_name = rule_name.replace("rules/", "").replace(".js", "")
+                add_rule_impl("eslint-only", clean_name, rule_content, temp_dir)
 
             # Delete the standard
             result = delete_impl("eslint-only", temp_dir)

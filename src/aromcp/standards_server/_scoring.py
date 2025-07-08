@@ -81,7 +81,12 @@ def select_hints_by_budget(
     total_tokens = 0
 
     for hint, score in sorted_hints:
-        hint_tokens = hint.get("tokens", _estimate_tokens(hint))
+        tokens_data = hint.get("tokens", _estimate_tokens(hint))
+        # Handle TokenCount dict structure
+        if isinstance(tokens_data, dict):
+            hint_tokens = tokens_data.get("standard", tokens_data.get("full", _estimate_tokens(hint)))
+        else:
+            hint_tokens = tokens_data
 
         if total_tokens + hint_tokens <= max_tokens:
             # Add score to response
@@ -126,7 +131,7 @@ def filter_by_eslint_coverage(hints: list[dict[str, Any]], deprioritize_factor: 
     """
     filtered = []
     for hint in hints:
-        if hint.get("hasEslintRule", False):
+        if hint.get("has_eslint_rule", False):
             # Reduce relevance score for ESLint-covered rules
             if "relevanceScore" in hint:
                 hint["relevanceScore"] *= deprioritize_factor

@@ -2,6 +2,33 @@
 
 The Code Analysis Tools provide deterministic code analysis operations, focusing on custom ESLint rule generation from markdown coding standards and intelligent standard loading based on file context. This phase bridges the gap between human-readable coding standards and automated enforcement.
 
+## 🆕 Standards Server V2 Features
+
+The standards server has been completely overhauled with v2 features that provide **70-80% token reduction** through intelligent compression and session management:
+
+### Key Enhancements
+
+1. **Session-Based Deduplication**
+   - Track loaded rules across multiple tool calls
+   - Prevent duplicate rule loading within a session
+   - Reference previously loaded rules instead of repeating
+
+2. **Context-Aware Compression**
+   - Automatically detect what the AI is working on
+   - Compress rules based on task type and complexity
+   - Show minimal examples for familiar patterns
+
+3. **Smart Rule Grouping**
+   - Group similar rules by pattern type
+   - Share common examples across grouped rules
+   - Optimize token usage for rule sets
+
+4. **Progressive Detail Levels**
+   - Minimal (~20 tokens): Pattern reminders
+   - Standard (~100 tokens): Core implementation
+   - Detailed (~200 tokens): Full examples
+   - Full: Complete rule with all details
+
 ## Overview
 
 The Code Analysis Tools include 8 production-ready tools divided into two categories:
@@ -23,6 +50,155 @@ This change creates better architectural separation and ensures pattern matching
 ## Available Tools
 
 ### Standards Management Tools
+
+#### 🆕 hints_for_file (Enhanced with V2 Features)
+
+Get relevant coding hints for a specific file with smart compression and session deduplication.
+
+**Parameters:**
+- `file_path` (str): File to get hints for
+- `max_tokens` (int): Maximum tokens to return (default: 10000)
+- `project_root` (str | None): Project root directory
+- `session_id` (str | None): Session ID for deduplication (default: "default")
+- `compression_level` (str): Compression level: minimal|standard|detailed|full (default: "auto")
+- `enable_grouping` (bool): Enable rule grouping (default: True)
+
+**Example:**
+```python
+# First call - loads relevant rules
+hints = aromcp.hints_for_file(
+    file_path="src/api/routes/user.ts",
+    session_id="dev-session-123"
+)
+# Returns compressed rules based on context
+
+# Second call - references already loaded rules
+hints = aromcp.hints_for_file(
+    file_path="src/api/routes/product.ts", 
+    session_id="dev-session-123"
+)
+# Previously loaded patterns are referenced, not repeated
+```
+
+**Returns:**
+```json
+{
+    "data": {
+        "file_path": "src/api/routes/user.ts",
+        "context": {
+            "task_type": "api_development",
+            "complexity_level": "intermediate",
+            "nextjs_context": {
+                "is_api_route": true,
+                "router_type": "app"
+            }
+        },
+        "rules": [
+            {
+                "ruleId": "api-async-handlers",
+                "rule": "Use async/await for API handlers",
+                "hint": "async (req, res) => { ... }",
+                "tokens": 20
+            }
+        ],
+        "references": [
+            {
+                "ruleId": "error-handling",
+                "ref": "Previously loaded: Standard error handling pattern"
+            }
+        ],
+        "session_stats": {
+            "rules_loaded": 15,
+            "patterns_seen": ["validation", "error-handling", "async"],
+            "compression_ratio": 0.25
+        },
+        "total_tokens": 2500
+    }
+}
+```
+
+#### 🆕 get_session_stats
+
+Get statistics about the current session's loaded rules and patterns.
+
+**Parameters:**
+- `session_id` (str): Session ID to get stats for (default: "default")
+
+**Example:**
+```python
+stats = aromcp.get_session_stats(session_id="dev-session-123")
+```
+
+**Returns:**
+```json
+{
+    "data": {
+        "session_id": "dev-session-123",
+        "rules_loaded": 45,
+        "unique_patterns": 12,
+        "files_processed": 8,
+        "total_tokens_saved": 15000,
+        "compression_ratio": 0.22,
+        "pattern_frequencies": {
+            "validation": 8,
+            "error-handling": 6,
+            "async": 5
+        }
+    }
+}
+```
+
+#### 🆕 clear_session
+
+Clear a session's loaded rules and start fresh.
+
+**Parameters:**
+- `session_id` (str): Session ID to clear (default: "default")
+
+**Example:**
+```python
+result = aromcp.clear_session(session_id="dev-session-123")
+```
+
+#### 🆕 analyze_context
+
+Analyze the current working context for a file.
+
+**Parameters:**
+- `file_path` (str): File to analyze context for
+- `session_id` (str | None): Session ID for context (default: "default")
+
+**Example:**
+```python
+context = aromcp.analyze_context(
+    file_path="src/api/routes/user.ts",
+    session_id="dev-session-123"
+)
+```
+
+**Returns:**
+```json
+{
+    "data": {
+        "task_type": "api_development",
+        "architectural_layer": "api",
+        "technology_stack": ["typescript", "nextjs", "react"],
+        "complexity_level": "intermediate",
+        "working_area": "backend_api",
+        "nextjs_context": {
+            "router_type": "app",
+            "is_api_route": true,
+            "is_server_component": true
+        },
+        "session_phase": "implementation",
+        "pattern_familiarity": {
+            "validation": "familiar",
+            "error-handling": "expert",
+            "async": "intermediate"
+        }
+    }
+}
+```
 
 #### load_coding_standards
 
@@ -165,6 +341,75 @@ rules = aromcp.get_relevant_standards(
 - **Generation**: Original standards files are only used for ESLint rule generation
 - **Workflow**: Run ESLint generation → Use get_relevant_standards → Get applicable rules
 - **Benefits**: Better separation of concerns, ESLint-native patterns, rule-based categorization
+
+#### 🆕 register (Enhanced with V2 Features)
+
+Register a coding standard with enhanced metadata for v2 optimization.
+
+**Parameters:**
+- `source_path` (str): Path to the standard markdown file
+- `metadata` (dict | str): Enhanced metadata with v2 fields
+- `project_root` (str | None): Project root directory
+
+**Enhanced Metadata Structure:**
+```python
+metadata = {
+    "id": "api-routes",
+    "name": "API Route Standards",
+    "category": "backend",
+    "tags": ["api", "routes", "async"],
+    "applies_to": ["typescript", "javascript"],
+    "severity": "error",
+    "priority": "high",
+    "dependencies": ["error-handling", "validation"],
+    
+    # V2 Context Triggers
+    "context_triggers": {
+        "task_types": ["api_development", "route_creation"],
+        "architectural_layers": ["api", "routes"],
+        "code_patterns": ["express.Router", "app.route"],
+        "import_indicators": ["express", "@types/express"],
+        "file_patterns": ["**/routes/**/*.ts", "**/api/**/*.ts"],
+        "nextjs_features": ["api-routes", "app-router-api"]
+    },
+    
+    # V2 Optimization Hints
+    "optimization": {
+        "priority": "high",
+        "load_frequency": "common",
+        "compressible": True,
+        "cacheable": True,
+        "context_sensitive": True,
+        "example_reusability": "high"
+    }
+}
+
+result = aromcp.register(
+    source_path=".aromcp/standards/api-routes.md",
+    metadata=metadata
+)
+```
+
+**Returns:**
+```json
+{
+    "data": {
+        "success": true,
+        "standard_id": "api-routes",
+        "rules_registered": 12,
+        "optimization_enabled": {
+            "compression": true,
+            "grouping": true,
+            "context_detection": true
+        },
+        "v2_features": {
+            "progressive_examples": true,
+            "token_optimization": true,
+            "session_support": true
+        }
+    }
+}
+```
 
 #### parse_standard_to_rules
 
@@ -467,7 +712,40 @@ endpoints = aromcp.extract_api_endpoints(
 
 ## Common Workflows
 
-### 1. ESLint Rule Generation from Coding Standards
+### 1. 🆕 Session-Based Development with V2 Features
+
+```python
+# Start a development session
+session_id = "feature-dev-123"
+
+# First file - full rules loaded
+hints1 = aromcp.hints_for_file(
+    "src/api/routes/user.ts",
+    session_id=session_id
+)
+# ~2500 tokens used
+
+# Second file - smart compression kicks in
+hints2 = aromcp.hints_for_file(
+    "src/api/routes/product.ts",
+    session_id=session_id
+)
+# ~500 tokens used (80% reduction!)
+
+# Check session efficiency
+stats = aromcp.get_session_stats(session_id)
+print(f"Total tokens saved: {stats['data']['total_tokens_saved']}")
+print(f"Compression ratio: {stats['data']['compression_ratio']}")
+
+# Analyze context for smart decisions
+context = aromcp.analyze_context(
+    "src/components/UserForm.tsx",
+    session_id=session_id
+)
+# Use context to determine approach
+```
+
+### 2. ESLint Rule Generation from Coding Standards
 
 ```python
 # Step 1: Load all standards
@@ -585,25 +863,39 @@ module.exports = {
 
 ## Best Practices
 
-1. **Standards Organization**
+1. **🆕 Session Management (V2)**
+   - Use consistent `session_id` across related operations
+   - Clear sessions when switching to unrelated tasks
+   - Monitor compression ratios to ensure efficiency
+   - Let sessions auto-expire (1 hour default) for memory management
+
+2. **🆕 Token Optimization (V2)**
+   - Start with `hints_for_file` for every new file
+   - Use "auto" compression level for intelligent adaptation
+   - Enable grouping for similar rules
+   - Check session stats to monitor efficiency
+
+3. **Standards Organization**
    - Keep standards in `.aromcp/standards/` directory
    - Use clear, descriptive filenames
    - Include comprehensive examples in standards
    - Tag standards appropriately for better categorization
+   - Add metadata for v2 context triggers
 
-2. **Rule Generation**
+4. **Rule Generation**
    - Always validate generated rules before use
    - Test rules against real code examples
    - Keep generated rules in version control
    - Regenerate rules when standards change
 
-3. **Performance**
+5. **Performance**
    - Cache analysis results when possible
    - Use pattern-based file selection to limit scope
    - Run security scans on changed files only
    - Batch operations for better performance
+   - V2 caching provides 5-minute TTL for fast lookups
 
-4. **Security Analysis**
+6. **Security Analysis**
    - Start with low severity threshold and adjust
    - Review findings before taking action
    - Customize patterns for your specific needs

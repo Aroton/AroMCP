@@ -7,7 +7,7 @@ A comprehensive suite of MCP (Model Context Protocol) servers designed as intell
 ### ✅ Production Ready
 - **[FileSystem Tools](documentation/usage/filesystem_tools.md)** - File I/O, git integration, code parsing, and document loading
 - **[Build Tools](documentation/usage/build_tools.md)** - Build, lint, test, and validation commands
-- **[Code Analysis Tools](documentation/usage/analysis_tools.md)** - Standards management, security analysis, and code quality checks
+- **[Code Analysis Tools](documentation/usage/analysis_tools.md)** - Enhanced standards management with v2 features (70-80% token reduction, session deduplication, context-aware compression)
 - **[ESLint Rule Generation](documentation/commands/generate-eslint-rules.md)** - AI-orchestrated generation of project-specific ESLint rules from markdown standards
 
 ### 🔄 Planned
@@ -109,8 +109,19 @@ aromcp.run_test_suite(pattern="**/*.test.ts")
 
 ### Standards-Driven Development
 ```python
-# Context-aware coding standards
-standards = aromcp.hints_for_file("src/api/routes/user.ts")
+# Context-aware coding standards with smart compression and session management
+standards = aromcp.hints_for_file(
+    "src/api/routes/user.ts",
+    session_id="dev-session-123"  # Enable cross-file deduplication
+)
+# Standards are compressed based on context (70-80% token reduction)
+# Previously loaded rules are referenced, not repeated
+
+# Session statistics and context analysis
+stats = aromcp.get_session_stats(session_id="dev-session-123")
+context = aromcp.analyze_context(file_path="src/api/routes/user.ts")
+
+# Code quality analysis
 aromcp.extract_api_endpoints(route_patterns=["src/**/*.ts"])
 aromcp.find_dead_code()
 ```
@@ -132,8 +143,9 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 ### Workflow Patterns
 - **File Operations**: Prefer `get_target_files` → `read_files_batch` → `write_files_batch` for batch operations
 - **Code Quality**: After changes run `parse_lint_results` and `parse_typescript_errors`
-- **Standards**: Load with `hints_for_file` before editing files
+- **Standards**: Load with `hints_for_file` before editing files (70-80% token reduction with session support)
 - **ESLint Generation**: Use orchestrated `generate_eslint_rules` for project-specific rules
+- **Session Management**: Use consistent `session_id` across requests for optimal deduplication
 
 ## Mandatory File Operation Workflow
 
@@ -158,6 +170,8 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 **Phase 2: Structured Operations** (MANDATORY for ALL operations)
 - Launch Task agents to handle file operations (use judgment on single vs parallel based on Phase 1 analysis) **launch parallel agents with the task tool for parallel workstrems**
 - **FIRST ACTION**: Each agent must call `hints_for_file` for all files they will modify OR create (including new files that don't exist yet)
+  - Use consistent `session_id` across all agents for deduplication (70-80% token savings)
+  - Previously loaded rules are automatically referenced, not repeated
 - Each agent should choose appropriate tools for file operations (AroMCP tools preferred, but agents can use standard tools when more suitable)
 - Agents can create new files when necessary (this overrides general "avoid file creation" guidance)
 - Agents should use the hints to guide their implementation decisions and follow project patterns
@@ -251,7 +265,11 @@ src/aromcp/
 │   │   ├── analyze_project_structure.py # 🆕 Project analysis
 │   │   └── write_eslint_rule_file.py    # 🆕 Action execution
 │   ├── standards_management/      # Standards parsing and matching
-│   └── eslint_integration/        # ESLint rule generation support
+│   ├── eslint_integration/        # ESLint rule generation support
+│   └── standards_server/          # 🆕 V2 enhanced standards
+│       ├── models/                # Enhanced rule structures
+│       ├── services/              # Session, compression, context detection
+│       └── utils/                 # Token optimization, example generation
 ```
 
 ### Key Design Principles

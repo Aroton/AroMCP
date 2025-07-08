@@ -2,7 +2,9 @@
 
 **Command**: `generate-standards`
 
-**Description**: Processes markdown standards files through AI parsing to generate AI hints and ESLint rules using the new standards-server MCP tools.
+**Description**: Processes markdown standards files through AI parsing to generate enhanced AI hints with context awareness and smart compression support.
+
+**Features**: Session management, context-aware compression, and 70-80% token reduction through intelligent rule deduplication and progressive detail levels.
 
 ## Usage
 
@@ -15,26 +17,32 @@ claude generate-standards --standards-dir=custom/standards
 
 # Generate with custom project root
 claude generate-standards --project-root=/path/to/project
+
+# Generate with session support (for testing hints_for_file)
+claude generate-standards --session-id=test-session-123
 ```
 
 ## Parameters
 
 - `--standards-dir` (optional): Directory containing markdown standards files (default: `standards`)
 - `--project-root` (optional): Project root path (auto-detected if not specified)
+- `--session-id` (optional): Session ID for testing hints_for_file deduplication (only affects hints_for_file calls, not register calls)
 
 ## Process Overview
 
-This command uses the new standards-server MCP tools to:
+This command:
 
 1. **Discovery**: Find all markdown standards files that need processing
-2. **AI Parsing**: Use AI agents to parse markdown and extract structured metadata + hints
-3. **Registration**: Register standards with metadata in the MCP server
-4. **Rule Generation**: Generate AI hints and ESLint rules from parsed content
-5. **Storage**: Store everything via MCP APIs only (no direct file system access)
+2. **AI Parsing**: Use AI agents to parse markdown and extract metadata + enhanced rules
+3. **Registration**: Register standards with metadata only (clears existing hints/rules)
+4. **Iterative Hint Addition**: Add AI hints one by one via add_hint
+5. **Iterative Rule Addition**: Add ESLint rules one by one via add_rule
+6. **Verification**: Confirm all standards are properly registered and rules are available
 
-**IMPORTANT**: AI agents must NEVER write files directly to disk or use any MCP file writing tools. All storage is handled by the standards-server MCP APIs only.
-
-**JSON PARSING CRITICAL NOTE**: When passing data to MCP APIs, ALWAYS use Python objects/lists directly, NOT JSON strings. Multi-line code examples with newlines and quotes will cause JSON parsing errors if passed as strings. Use raw Python strings (triple quotes) for code examples.
+**Key Points:**
+- **register()** handles only metadata and clears existing data
+- **add_hint()** handles individual AI hints
+- **add_rule()** handles individual ESLint JavaScript files
 
 ## Implementation Steps
 
@@ -53,32 +61,30 @@ print(f"{update_result['data']['upToDate']} standards are up to date")
 needs_update = update_result['data']['needsUpdate']
 ```
 
-### Step 2: Process Standards Files in Batches Using AI Agents
+### Step 2: Process Standards Files with AI Parsing
 
 ```python
-# Process standards in batches with maximum parallelization
-# Always use at least 7-parallel-Task method for efficiency
-# Run multiple Task invocations in a SINGLE message
+# Process standards in batches with enhanced metadata extraction
 from math import ceil
 batch_size = 2
 num_batches = ceil(len(needs_update) / batch_size)
 
-print(f"Processing {len(needs_update)} standards in {num_batches} batches with maximum parallelization")
+print(f"Processing {len(needs_update)} standards in {num_batches} batches")
 
-# Create tasks for all batches immediately (maximum parallelization)
+# Create tasks for all batches with enhanced parsing
 batch_tasks = []
 for batch_num in range(num_batches):
     start_idx = batch_num * batch_size
     end_idx = min(start_idx + batch_size, len(needs_update))
     batch_standards = needs_update[start_idx:end_idx]
 
-    # Create comprehensive task prompt for the entire batch
-    batch_task_prompt = f"""Process batch {batch_num + 1}/{num_batches} of coding standards files.
+    # Create comprehensive task prompt for parsing
+    batch_task_prompt = f"""Process batch {batch_num + 1}/{num_batches} of coding standards files with metadata extraction and rule generation.
 
 **BATCH CONTENTS ({len(batch_standards)} standards):**
 """
 
-    # Add each standard's info to the batch prompt (Task will handle file reading)
+    # Add each standard's info to the batch prompt
     for standard_info in batch_standards:
         standard_id = standard_info['standardId']
         source_path = standard_info['sourcePath']
@@ -94,65 +100,340 @@ for batch_num in range(num_batches):
     batch_task_prompt += f"""
 ---
 
-**INSTRUCTIONS**:
+**PARSING INSTRUCTIONS**:
 
-1. **First, read all the markdown files for this batch using the Read tool**:
-   - Use the Read tool to read each source path listed above
-   - Extract the markdown content from each file
+1. **First, read all markdown files using the Read tool**
 
-2. **Then, for EACH standard in this batch, parse the markdown content and extract:**
+2. **For EACH standard, extract metadata**:
 
-1. **Metadata** (following the exact schema):
-   - id: Use the Standard ID provided above
-   - name: Human-readable name
-   - category: Main category (api, components, testing, etc.)
-   - tags: Array of relevant tags
-   - appliesTo: Array of file patterns (*.py, *.js, components/*.tsx, etc.)
-   - severity: "error", "warning", or "info"
-   - priority: "required", "important", or "recommended"
-
-2. **AI Hints** (actionable coding guidelines):
-   - rule: Concise rule statement
-   - context: Why this matters / background
-   - correctExample: Good code example (with proper imports)
-   - incorrectExample: Bad code example (with proper imports)
-   - hasEslintRule: true if this can be enforced by ESLint, false otherwise
-   - importMap: Auto-generated from code examples (handled by system)
-
-3. **ESLint Rules** (if applicable):
-   - Generate actual ESLint rule implementations (JavaScript code)
-   - Include both the rule logic AND configuration
-   - Only for patterns that can be automatically detected via AST analysis
-
-**IMPORTANT**:
-- Extract 3-8 AI hints per standard (focus on most important rules)
-- Each hint should be actionable and specific
-- Include both positive and negative examples with **complete, runnable code** including all necessary imports
-- Mark hasEslintRule=true only for patterns ESLint can actually detect via AST
-- **NEVER write files to disk directly** - use ONLY the MCP APIs (register, update_rule)
-- **DO NOT create any folders or files** - all storage is handled by the MCP server
-- **Code examples MUST include imports**: Always show the necessary import statements for classes/functions used in examples
-- **CRITICAL**: When passing data to MCP APIs, use Python objects/lists directly - DO NOT pass JSON strings to avoid escaping issues
-
-**For ESLint Rules:**
-- Only generate if the pattern can be detected by analyzing the Abstract Syntax Tree (AST)
-- Must be pure module.exports rule definitions ONLY (no configuration)
-- Use ESLint selector syntax for AST pattern matching
-- Test your selector logic - ensure it matches the intended patterns
-- Include proper error messages that guide developers to the correct approach
-- **CRITICAL**: Any recursive AST traversal functions MUST limit recursion depth to maximum 10 levels and include cycle detection to prevent infinite loops
-
-**ESLint File Rules (CRITICAL):**
-- **Filename MUST**: Be in format `rules/rule-name.js` (e.g., `rules/api-mandatory-pipeline.js`)
-- **Filename CANNOT**: Contain "config", "index", or start with "index"
-- **Content MUST**: Be `module.exports = { meta: {...}, create: function(context) {...} }`
-- **Content CANNOT**: Include any ESLint configuration (plugins, rules, extends, etc.)
-- **API manages**: All configuration files, plugin indexes, and rule registration
-
-**Output the results using these MCP calls:**
-
-1. Register the standard:
 ```python
+metadata = {{
+    # Basic fields (required)
+    "id": "{standard_id}",
+    "name": "Human-readable name",
+    "category": "api|frontend|backend|testing|security|performance",
+    "tags": ["tag1", "tag2", ...],
+    "applies_to": ["**/api/**/*.ts", "**/*.tsx", ...],  # File patterns
+    "severity": "error|warning|info",
+    "priority": "required|important|recommended",
+    "dependencies": ["other-standard-ids"],
+
+    # Context triggers (for smart loading)
+    "context_triggers": {{
+        "task_types": ["api_development", "component_development", "testing", "refactoring"],
+        "architectural_layers": ["api", "service", "presentation", "data"],
+        "code_patterns": ["export const GET", "useState", "z.object"],
+        "import_indicators": ["zod", "next/server", "@/lib/Pipeline"],
+        "file_patterns": ["**/routes/**/*.ts", "**/api/**/*.ts"],
+        "nextjs_features": ["app-router", "server-components", "server-actions"]
+    }},
+
+    # Optimization hints
+    "optimization": {{
+        "priority": "critical|high|medium|low",
+        "load_frequency": "always|common|conditional|rare",
+        "compressible": true,  # Can examples be compressed?
+        "cacheable": true,
+        "example_reusability": "high|medium|low",
+        "context_sensitive": true  # Load based on context?
+    }},
+
+    # Relationships
+    "relationships": {{
+        "similar_to": ["validation-standards"],  # For grouping
+        "commonly_used_with": ["error-handling"],
+        "conflicts_with": []
+    }},
+
+    # Next.js specific configuration (optional)
+    "nextjs_config": {{
+        "router_preference": "app",  # app|pages
+        "rendering_strategy": "server"  # server|client|static
+    }}
+}}
+```
+
+3. **Generate AI hints with multiple compression formats**:
+
+For each rule/hint, create this structure:
+
+```python
+{{
+    "rule": "Clear, actionable rule statement",
+    "rule_id": "unique-rule-id",  # e.g., "validate-input-zod"
+    "context": "Why this matters and when to apply it",
+
+    # Metadata for smart loading
+    "metadata": {{
+        "pattern_type": "validation|error-handling|routing|security|performance",
+        "complexity": "basic|intermediate|advanced|expert",
+        "rule_type": "must|should|may|must-not",  # RFC 2119
+        "nextjs_api": ["app-router", "pages-router", "api-routes"],
+        "client_server": "client-only|server-only|isomorphic|edge"
+    }},
+
+    # Compression configuration
+    "compression": {{
+        "example_sharable": true,  # Can share with similar rules?
+        "pattern_extractable": true,  # Can extract to template?
+        "progressive_detail": ["minimal", "standard", "detailed", "full"]
+    }},
+
+    # MULTIPLE EXAMPLE FORMATS (this is critical!)
+    "examples": {{
+        # Minimal: Ultra-compact pattern reminder (~20 tokens)
+        "minimal": "schema.parse(input)",
+
+        # Standard: Core pattern with context (~100 tokens)
+        "standard": '''const validated = schema.parse(await request.json());
+return createResponse(validated);''',
+
+        # Detailed: More complete example (~200 tokens)
+        "detailed": '''import {{ z }} from 'zod';
+
+const schema = z.object({{ name: z.string() }});
+export async function POST(request: Request) {{
+  const validated = schema.parse(await request.json());
+  return Response.json(validated);
+}}''',
+
+        # Full: Complete implementation (current format)
+        "full": '''[YOUR CURRENT FULL EXAMPLE]''',
+
+        # Reference to real file
+        "reference": "See UserService.ts for production example",
+
+        # Context-specific variants (optional)
+        "context_variants": {{
+            "app_router": "app router specific example",
+            "pages_router": "pages router specific example"
+        }}
+    }},
+
+    # Token counts for each format
+    "tokens": {{
+        "minimal": 20,
+        "standard": 100,
+        "detailed": 200,
+        "full": 400  # Calculate actual count
+    }},
+
+    # Relationships to other rules
+    "relationships": {{
+        "similar_rules": ["validate-output-zod"],  # For grouping
+        "prerequisite_rules": ["setup-zod"],  # Must understand first
+        "see_also": ["error-handling"]
+    }},
+
+    # Integration fields
+    "has_eslint_rule": true,
+    "import_map": [...]  # Auto-generated
+}}
+```
+
+**CRITICAL REQUIREMENTS FOR EXAMPLES**:
+
+1. **Minimal Format** (~20 tokens):
+   - Just the core pattern/function call
+   - No imports, no context
+   - Example: `schema.parse(input)` or `createHandler(config)`
+
+2. **Standard Format** (~100 tokens):
+   - Core implementation pattern
+   - Key imports if critical
+   - 3-5 lines max
+   - Example: Basic function with main logic
+
+3. **Detailed Format** (~200 tokens):
+   - More complete but still focused
+   - Includes imports and structure
+   - 8-12 lines max
+   - Shows the pattern in context
+
+4. **Full Format** (existing):
+   - Complete, runnable example
+   - All imports and error handling
+   - Your current format
+
+**PATTERN TYPE GUIDELINES**:
+- "validation": Input/output validation patterns
+- "error-handling": Error responses and handling
+- "routing": Route structure and patterns
+- "security": Auth, permissions, sanitization
+- "performance": Optimization patterns
+- "data-fetching": API calls, database queries
+- "state-management": State patterns
+- "testing": Test patterns and strategies
+
+**COMPLEXITY GUIDELINES**:
+- "basic": Can be understood immediately
+- "intermediate": Requires some context
+- "advanced": Needs experience to implement well
+- "expert": Complex patterns requiring deep knowledge
+
+**EXAMPLE - Enhanced Rule for Validation**:
+
+```python
+{{
+    "rule": "ALWAYS VALIDATE INPUT - Use Zod schemas for all user input",
+    "rule_id": "validate-input-zod",
+    "context": "Input validation prevents runtime errors and security vulnerabilities",
+
+    "metadata": {{
+        "pattern_type": "validation",
+        "complexity": "intermediate",
+        "rule_type": "must",
+        "nextjs_api": ["app-router", "api-routes"],
+        "client_server": "server-only"
+    }},
+
+    "compression": {{
+        "example_sharable": true,
+        "pattern_extractable": true,
+        "progressive_detail": ["minimal", "standard", "detailed", "full"]
+    }},
+
+    "examples": {{
+        "minimal": "schema.parse(input)",
+
+        "standard": """const inputSchema = z.object({{ email: z.string().email() }});
+const validated = inputSchema.parse(body);""",
+
+        "detailed": """import {{ z }} from 'zod';
+
+const createUserSchema = z.object({{
+  email: z.string().email(),
+  name: z.string().min(1)
+}});
+
+export async function POST(request: Request) {{
+  const body = await request.json();
+  const validated = createUserSchema.parse(body);
+  return Response.json({{ success: true, data: validated }});
+}}""",
+
+        "full": """import {{ z }} from 'zod';
+import {{ NextRequest, NextResponse }} from 'next/server';
+import {{ createUser }} from '@/services/userService';
+
+const createUserSchema = z.object({{
+  email: z.string().email(),
+  name: z.string().min(1).max(100),
+  role: z.enum(['user', 'admin']).default('user')
+}});
+
+type CreateUserInput = z.infer<typeof createUserSchema>;
+
+export async function POST(request: NextRequest) {{
+  try {{
+    const body = await request.json();
+    const validatedInput = createUserSchema.parse(body);
+
+    const user = await createUser(validatedInput);
+
+    return NextResponse.json({{
+      success: true,
+      data: user
+    }}, {{ status: 201 }});
+  }} catch (error) {{
+    if (error instanceof z.ZodError) {{
+      return NextResponse.json({{
+        success: false,
+        errors: error.errors
+      }}, {{ status: 400 }});
+    }}
+
+    return NextResponse.json({{
+      success: false,
+      error: 'Internal server error'
+    }}, {{ status: 500 }});
+  }}
+}}""",
+
+        "reference": "See src/app/api/users/route.ts",
+
+        "context_variants": {{
+            "pages_router": "export default withValidation(schema, handler)"
+        }}
+    }},
+
+    "tokens": {{
+        "minimal": 5,
+        "standard": 25,
+        "detailed": 120,
+        "full": 380
+    }},
+
+    "relationships": {{
+        "similar_rules": ["validate-output-zod", "validate-params-zod"],
+        "prerequisite_rules": ["setup-zod-schemas"],
+        "see_also": ["error-handling-api"]
+    }},
+
+    "has_eslint_rule": true,
+    "import_map": [
+        {{
+            "type": "es6_import",
+            "module": "zod",
+            "imported_items": "{{ z }}",
+            "statement": "import {{ z }} from 'zod'"
+        }}
+    ]
+}}
+```
+
+4. **Generate ESLint rules** (if applicable):
+
+For rules where `has_eslint_rule: true`, generate JavaScript implementations:
+
+```javascript
+// Example ESLint rule structure
+module.exports = {
+    meta: {
+        type: 'problem',
+        docs: {
+            description: 'Require async handlers for API routes',
+            category: 'Best Practices',
+            recommended: true
+        },
+        messages: {
+            missingAsync: 'API handler must be an async function'
+        },
+        fixable: 'code'
+    },
+    create(context) {
+        return {
+            // AST selector for route handlers
+            'CallExpression[callee.property.name=/^(get|post|put|delete|patch)$/]': function(node) {
+                const handler = node.arguments[node.arguments.length - 1];
+                if (handler && handler.type === 'ArrowFunctionExpression' && !handler.async) {
+                    context.report({
+                        node: handler,
+                        messageId: 'missingAsync',
+                        fix(fixer) {
+                            return fixer.insertTextBefore(handler, 'async ');
+                        }
+                    });
+                }
+            }
+        };
+    }
+};
+```
+
+ESLint Rule Requirements:
+- Only for patterns detectable via AST analysis
+- Use proper ESLint AST selectors
+- Include helpful error messages
+- Provide automatic fixes when possible
+- Limit recursion depth to prevent infinite loops
+
+**OUTPUT using MCP calls (NEW ITERATIVE FLOW):**
+
+```python
+# 1. FIRST: Register standard with metadata ONLY (clears existing hints/rules)
+# IMPORTANT: register() now ONLY handles metadata and clears existing data
+# NOTE: register() does NOT accept session_id parameter - only hints_for_file() does
 register_result = mcp.register(
     source_path="{source_path}",
     metadata={{
@@ -160,229 +441,158 @@ register_result = mcp.register(
         "name": "...",
         "category": "...",
         "tags": [...],
-        "appliesTo": [...],
+        "applies_to": [...],
         "severity": "...",
-        "priority": "..."
-    }}
-)
-```
-
-2. Store the AI hints and ESLint files:
-```python
-# Prepare ESLint rule files if needed (ONLY pure rule definitions)
-eslint_files = None
-if has_eslint_rules:
-    eslint_files = {{
-        "rules/descriptive-rule-name.js": '''module.exports = {{
-  meta: {{
-    type: "problem",
-    docs: {{
-      description: "Descriptive rule explanation",
-      category: "Possible Errors"
+        "priority": "...",
+        "dependencies": [...],
+        "context_triggers": {{...}},
+        "optimization": {{...}},
+        "relationships": {{...}},
+        "nextjs_config": {{...}}
+        # NO RULES HERE - rules are added separately
     }},
-    schema: []
-  }},
-  create: function(context) {{
-    return {{
-      'CallExpression': function(node) {{
-        // Rule implementation logic
-        if (shouldReport(node)) {{
-          context.report({{
-            node: node,
-            message: 'Clear error message explaining the violation'
-          }});
+    enhanced_format=True  # REQUIRED for enhanced metadata processing
+)
+
+# 2. ITERATIVELY add each hint/rule to avoid MCP limits
+# For each enhanced rule, make a separate add_hint() call
+for rule_data in enhanced_rules:
+    hint_result = mcp.add_hint(
+        standard_id="{standard_id}",
+        hint_data={{
+            "rule": "Clear, actionable rule statement",
+            "rule_id": "unique-rule-id",
+            "context": "Why this matters and when to apply it",
+            "metadata": {{
+                "pattern_type": "validation|error-handling|routing|security|performance",
+                "complexity": "basic|intermediate|advanced|expert",
+                "rule_type": "must|should|may|must-not",
+                "nextjs_api": ["app-router", "pages-router", "api-routes"],
+                "client_server": "client-only|server-only|isomorphic|edge"
+            }},
+            "compression": {{
+                "example_sharable": true,
+                "pattern_extractable": true,
+                "progressive_detail": ["minimal", "standard", "detailed", "full"]
+            }},
+            "examples": {{
+                "minimal": "schema.parse(input)",
+                "standard": "const validated = schema.parse(body);",
+                "detailed": "Full example with imports and structure",
+                "full": "Complete, runnable example",
+                "reference": "See UserService.ts for production example",
+                "context_variants": {{
+                    "app_router": "app router specific example",
+                    "pages_router": "pages router specific example"
+                }}
+            }},
+            "tokens": {{
+                "minimal": 20,
+                "standard": 100,
+                "detailed": 200,
+                "full": 400
+            }},
+            "relationships": {{
+                "similar_rules": ["validate-output-zod"],
+                "prerequisite_rules": ["setup-zod"],
+                "see_also": ["error-handling"]
+            }},
+            "has_eslint_rule": true,  # Flag for ESLint rule generation
+            "import_map": [...]
         }}
-      }}
-    }};
-  }}
-}};'''
-    }}
+    )
 
-# CRITICAL: ESLint files are ONLY rule definitions
-# - Filename format: rules/descriptive-rule-name.js
-# - Content: module.exports with meta + create only
-# - NO configuration, plugins, extends, or index files
+    print(f"Added hint {{hint_result['data']['hintId']}} as hint-{{hint_result['data']['hintNumber']:03d}}.json")
 
-# Store AI hints and ESLint files in the standards system
-# IMPORTANT: Pass Python lists/objects directly, NOT JSON strings
-mcp.update_rule(
-    standard_id="{standard_id}",
-    clear_existing=True,
-    ai_hints=[
-        {{
-            "rule": "...",
-            "context": "...",
-            "correctExample": "...",  # Multi-line strings will be handled automatically
-            "incorrectExample": "...",
-            "hasEslintRule": True  # Use Python boolean, not string
-        }},
-        # ... more hints
-    ],
-    eslint_files=eslint_files
-)
+# 3. ITERATIVELY add ESLint rules for hints that have has_eslint_rule: true
+# For each rule where has_eslint_rule is true, make a separate add_rule() call
+for rule_data in eslint_rules:
+    rule_result = mcp.add_rule(
+        standard_id="{standard_id}",
+        rule_name=rule_data["rule_id"],  # e.g., "validate-input-zod"
+        rule_content='''module.exports = {{
+            meta: {{
+                type: 'problem',
+                docs: {{
+                    description: 'Require async handlers for API routes',
+                    category: 'Best Practices',
+                    recommended: true
+                }},
+                messages: {{
+                    missingAsync: 'API handler must be an async function'
+                }},
+                fixable: 'code'
+            }},
+            create(context) {{
+                return {{
+                    'CallExpression[callee.property.name=/^(get|post|put|delete|patch)$/]': function(node) {{
+                        const handler = node.arguments[node.arguments.length - 1];
+                        if (handler && handler.type === 'ArrowFunctionExpression' && !handler.async) {{
+                            context.report({{
+                                node: handler,
+                                messageId: 'missingAsync',
+                                fix(fixer) {{
+                                    return fixer.insertTextBefore(handler, 'async ');
+                                }}
+                            }});
+                        }}
+                    }}
+                }};
+            }}
+        }};'''
+    )
+
+    print(f"Added ESLint rule {{rule_result['data']['ruleName']}} to {{rule_result['data']['ruleFile']}}")
+
+# 4. Optional: List all rules for verification
+rules_list = mcp.list_rules(standard_id="{standard_id}")
+print(f"Total ESLint rules for {{standard_id}}: {{len(rules_list['data']['rules'])}}")
 ```
 
-**CRITICAL RESTRICTIONS**:
-- **DO NOT write any files to disk directly** (no open(), write(), etc.)
-- **DO NOT create directories** (no mkdir, makedirs, etc.)
-- **DO NOT use MCP write_files_batch or any file writing tools**
-- **USE ONLY the MCP APIs**: mcp.register() and mcp.update_rule()
-- **All file storage is handled automatically** by the MCP server
-- **Your job is ONLY parsing and API calls** - no direct file system operations
+**NEW WORKFLOW CLARIFICATION:**
 
-**Note**: The APIs accept both JSON strings and Python objects, so you can pass the data either way.
+1. **register()** - Handles ONLY metadata and clears existing data
+   - Parameters: `source_path`, `metadata`, `project_root`, `enhanced_format`
+   - Does NOT accept `session_id` parameter
+   - Clears existing hints and ESLint rules to start fresh
+   - Saves only metadata, no rules
 
-Process the file completely and report success."""
+2. **add_hint()** - Adds a single enhanced rule (AI hint)
+   - Parameters: `standard_id`, `hint_data`, `project_root`
+   - Does NOT accept `session_id` parameter
+   - Saves single hint to `.aromcp/hints/{standard_id}/hint-XXX.json`
+   - Call this once per rule to avoid MCP limits
 
-**For EACH standard in the batch, make these MCP calls:**
+3. **add_rule()** - Adds a single ESLint JavaScript rule
+   - Parameters: `standard_id`, `rule_name`, `rule_content`, `project_root`
+   - Does NOT accept `session_id` parameter
+   - Saves ESLint rule to `.aromcp/eslint/rules/{standard_id}-{rule_name}.js`
+   - Call this once per ESLint rule
 
-1. Register the standard:
-```python
-register_result = mcp.register(
-    source_path="SOURCE_PATH_FROM_ABOVE",
-    metadata={{
-        "id": "STANDARD_ID_FROM_ABOVE",
-        "name": "...",
-        "category": "...",
-        "tags": [...],
-        "appliesTo": [...],
-        "severity": "...",
-        "priority": "..."
-    }}
-)
-```
+4. **list_rules()** - Lists all ESLint rules for a standard
+   - Parameters: `standard_id`, `project_root`
+   - Returns array of rule info for verification
 
-2. Store AI hints and ESLint files:
-```python
-# IMPORTANT: Use Python objects directly, NOT JSON strings
-mcp.update_rule(
-    standard_id="STANDARD_ID_FROM_ABOVE",
-    clear_existing=True,
-    ai_hints=[
-        {{
-            "rule": "...",
-            "context": "...",
-            "correctExample": "...",  # Multi-line code will be handled automatically
-            "incorrectExample": "...",
-            "hasEslintRule": True  # Python boolean
-        }},
-        # ... more hints
-    ],
-    eslint_files=eslint_files_if_any
-)
-```
+5. **hints_for_file()** - Loads hints for a specific file (unchanged)
+   - Parameters: `file_path`, `max_tokens`, `project_root`, `session_id`, etc.
+   - ONLY this function accepts `session_id` for deduplication
 
-**CRITICAL RESTRICTIONS**:
-- **DO NOT write any files to disk directly** (no open(), write(), etc.)
-- **DO NOT create directories** (no mkdir, makedirs, etc.)
-- **DO NOT use MCP write_files_batch or any file writing tools**
-- **USE ONLY the MCP APIs**: mcp.register() and mcp.update_rule()
-- **All file storage is handled automatically** by the MCP server
-- **Your job is ONLY parsing and API calls** - no direct file system operations
-- **ALWAYS include full imports** - whenever imports are available, always include them.
+Process all standards in this batch and report success."""
 
-**COMPLETE EXAMPLE** - Process a standard called "api-error-handling":
-
-```python
-# Step 1: Register the standard
-register_result = mcp.register(
-    source_path="standards/api/error-handling.md",
-    metadata={
-        "id": "api-error-handling",
-        "name": "API Error Handling Standards",
-        "category": "api",
-        "tags": ["error", "http", "response"],
-        "appliesTo": ["api/*.py", "*/api/*", "routes/*.js"],
-        "severity": "error",
-        "priority": "required"
-    }
-)
-
-# Step 2: Store AI hints and ESLint rules
-# CRITICAL: Use raw Python strings (triple quotes) for multi-line code examples
-mcp.update_rule(
-    standard_id="api-error-handling",
-    clear_existing=True,
-    ai_hints=[
-        {
-            "rule": "Always return structured error responses",
-            "context": "Consistent error format helps frontend handle errors predictably",
-            "correctExample": """import { Response } from 'next/server';
-
-export async function GET() {
-  return Response.json({error: 'User not found', code: 404}, {status: 404});
-}""",
-            "incorrectExample": """import { Response } from 'next/server';
-
-export async function GET() {
-  return Response.json('Error!');
-}""",
-            "hasEslintRule": True
-        },
-        {
-            "rule": "Use appropriate HTTP status codes",
-            "context": "Status codes communicate error type to clients",
-            "correctExample": """import { Response } from 'next/server';
-
-// Validation error
-return Response.json({error: 'Invalid input'}, {status: 400});
-
-// Not found
-return Response.json({error: 'User not found'}, {status: 404});
-
-// Server error
-return Response.json({error: 'Internal error'}, {status: 500});""",
-            "incorrectExample": """import { Response } from 'next/server';
-
-// Always returning 200 OK with error in body
-return Response.json({error: 'User not found'}, {status: 200});""",
-            "hasEslintRule": False
-        }
-    ],
-    eslint_files={
-        "rules/api-structured-error-response.js": '''module.exports = {
-  meta: {
-    type: "problem",
-    docs: {
-      description: "Enforce structured error response format in API routes",
-      category: "Possible Errors"
-    },
-    schema: []
-  },
-  create: function(context) {
-    return {
-      'CallExpression[callee.object.name="Response"][callee.property.name="json"]': function(node) {
-        const arg = node.arguments[0];
-        if (arg && arg.type === 'Literal' && typeof arg.value === 'string') {
-          context.report({
-            node: node,
-            message: 'Use structured error objects instead of string responses'
-          });
-        }
-      }
-    };
-  }
-};'''
-    }
-)
-```
-
-Process all standards in this batch completely and report success."""
-
-    # Launch AI agent to process this entire batch
+    # Launch AI agent to process this batch
     batch_task = Task(
-        description=f"Parse batch {batch_num + 1}/{num_batches} ({len(batch_standards)} standards)",
+        description=f"Parse batch {batch_num + 1}",
         prompt=batch_task_prompt
     )
     batch_tasks.append(batch_task)
 
-print(f"✅ Launched {len(batch_tasks)} parallel AI parsing tasks for {len(needs_update)} standards")
+print(f"✅ Launched {len(batch_tasks)} parsing tasks")
 ```
 
-### Step 3: Verify Results and Get Usage Instructions
+### Step 3: Verify Results
 
 ```python
-# After all AI tasks complete, check what was processed
+# After all AI tasks complete, verify processing
 final_check = mcp.check_updates(
     standards_path="standards",
     project_root="."
@@ -390,260 +600,32 @@ final_check = mcp.check_updates(
 
 print(f"✅ Processing complete!")
 print(f"📊 Standards registered: {final_check['data']['upToDate']}")
-print(f"⚠️  Still needs work: {len(final_check['data']['needsUpdate'])}")
+print(f"📊 Standards with ESLint rules: {final_check['data']['withEslintRules']}")
 
-# Show usage example
-print(f"""
-📖 Usage Examples:
-
-# Get hints for a specific file:
-hints_result = mcp.hints_for_file(
-    file_path="src/api/users.py",
-    max_tokens=8000
+# Test the hints system with session support
+# NOTE: Only hints_for_file() accepts session_id parameter
+hints = mcp.hints_for_file(
+    file_path="src/api/users/route.ts",
+    max_tokens=10000,
+    session_id="dev-session"  # Session support for deduplication - ONLY in hints_for_file()
 )
 
-# Results include relevant hints with relevance scores and import maps
-for hint in hints_result['data']['hints']:
-    print(f"Rule: {{hint['rule']}}")
-    print(f"Score: {{hint['relevanceScore']}}")
-    print(f"Example: {{hint['correctExample']}}")
-
-    # Access import map if available
-    if 'importMapId' in hint and hints_result['data']['importMaps']:
-        import_map = hints_result['data']['importMaps'][hint['importMapId']]
-        print(f"Required imports: {{[imp['statement'] for imp in import_map]}}")
-    print("---")
-""")
+print(f"Loaded {len(hints['data']['rules'])} rules for the file")
+print(f"Context: {hints['data']['context']['task_type']}")
+print(f"Token usage: {hints['data']['total_tokens']} / {hints['data']['max_tokens']}")
 ```
 
-## ESLint Rule Structure
+## Summary
 
-ESLint rules need to be generated as actual JavaScript files and ESLint configuration. The system should create:
+The `generate-standards` command provides a complete workflow for:
 
-### 1. Rule Implementation Files (`*.js`)
-Each rule should be a separate JavaScript file:
+1. **Parsing** markdown standards files to extract structured rules
+2. **Registering** standards with rich metadata for context-aware loading
+3. **Generating** ESLint rules for patterns that can be automatically enforced
+4. **Optimizing** token usage through compression and session deduplication
 
-**File: `.aromcp/eslint/rules/api-mandatory-pipeline-pattern.js`**
-```javascript
-module.exports = {
-  meta: {
-    type: "problem",
-    docs: {
-      description: "Enforce mandatory pipeline pattern for API routes",
-      category: "Possible Errors",
-      recommended: true
-    },
-    schema: []
-  },
-  create: function(context) {
-    return {
-      'ExportNamedDeclaration': function(node) {
-        // Rule implementation logic here
-      },
-      'CallExpression': function(node) {
-        if (node.callee.type === 'MemberExpression' &&
-            node.callee.object.name === 'Response' &&
-            node.callee.property.name === 'json') {
-          context.report({
-            node: node,
-            message: 'Direct Response.json() calls are forbidden - use pipeline pattern with createHandler'
-          });
-        }
-      }
-    };
-
-    // CRITICAL: If implementing recursive AST traversal, include these safeguards:
-    // function recursiveTraversal(node, visited = new Set(), depth = 0) {
-    //   if (depth > 10 || visited.has(node)) return;
-    //   visited.add(node);
-    //   // ... traversal logic
-    // }
-  }
-};
-```
-
-### 2. ESLint Configuration
-**File: `.aromcp/eslint/config.json`**
-```json
-{
-  "plugins": ["./custom-rules"],
-  "rules": {
-    "custom-rules/api-mandatory-pipeline-pattern": "error",
-    "custom-rules/no-direct-response-returns": "error"
-  }
-}
-```
-
-### 3. Plugin Index File
-**File: `.aromcp/eslint/custom-rules.js`**
-```javascript
-module.exports = {
-  rules: {
-    'api-mandatory-pipeline-pattern': require('./rules/api-mandatory-pipeline-pattern'),
-    'no-direct-response-returns': require('./rules/no-direct-response-returns')
-  }
-};
-```
-
-### ESLint Rule Implementation Examples
-
-**Simple AST Pattern Detection:**
-```javascript
-"create": "function(context) { return { 'CallExpression[callee.object.name=\"Response\"][callee.property.name=\"json\"]': function(node) { context.report({ node, message: 'Use createHandler instead of direct Response.json()' }); } }; }"
-```
-
-**Function Declaration Pattern:**
-```javascript
-"create": "function(context) { return { 'FunctionDeclaration[id.name=/^[A-Z]/]': function(node) { context.report({ node, message: 'Function names should be camelCase' }); } }; }"
-```
-
-**Import Pattern Detection:**
-```javascript
-"create": "function(context) { return { 'ImportDeclaration[source.value=\"lodash\"]': function(node) { context.report({ node, message: 'Use tree-shakeable imports like lodash/get' }); } }; }"
-```
-
-### When to Generate ESLint Rules vs AI Hints
-
-**Generate ESLint Rules for:**
-- Specific function/method calls that can be detected (`Response.json()`, `console.log()`)
-- Import statements and module usage patterns
-- Variable/function naming conventions
-- Code structure patterns (function declarations, class usage)
-- Syntax patterns that can be matched with AST selectors
-
-**Use AI Hints for:**
-- Architecture and design patterns
-- Business logic decisions
-- Complex contextual rules that require understanding intent
-- Performance considerations that depend on use case
-- Security practices that need human judgment
-- Code organization and file structure guidelines
-
-**Example Decision Making:**
-- ✅ ESLint Rule: "No direct Response.json() calls" - detectable AST pattern
-- ❌ AI Hint: "Choose appropriate HTTP status codes based on business logic" - requires context
-- ✅ ESLint Rule: "Import from specific modules" - detectable import pattern
-- ❌ AI Hint: "Structure API routes for maintainability" - architectural decision
-
-## Key Features of New Workflow
-
-### 1. **Structured Storage**
-- Standards stored in `.aromcp/` directory
-- Each standard gets its own folder with numbered hint files
-- Fast lookup index for performance
-- Manifest tracking for update detection
-
-### 2. **Relevance Scoring**
-Standards are automatically scored for files based on:
-- **Exact folder match** (score: 1.0) - `api/users.py` matches category "api"
-- **Glob pattern match** (score: 0.8) - File matches `appliesTo` patterns
-- **Category in path** (score: 0.6) - "api" appears in file path
-- **Tag in path** (score: 0.4) - Tags appear in file path or name
-- **Priority boost** - Required: 1.2x, Important: 1.1x, Recommended: 1.0x
-
-### 3. **Token Budget Management**
-- Hints fit within specified token budget (default: 10k tokens)
-- ESLint-covered rules get 0.7x score (deprioritized)
-- Highest scoring hints returned first
-- Token counts pre-calculated for fast selection
-
-### 4. **AI-Driven Processing**
-- AI agents parse markdown and extract structured data
-- No fixed templates - AI interprets standards contextually
-- Handles variations in markdown format and content
-- Generates both human-readable hints and machine-readable ESLint rules
-
-## Example Standard Processing
-
-Given a markdown file `standards/api/error-handling.md`:
-
-```markdown
-# API Error Handling
-
-## Overview
-All API endpoints must implement consistent error handling...
-
-## Rules
-1. Always return proper HTTP status codes
-2. Use structured error response format
-3. Log errors with sufficient context
-```
-
-The AI agent will:
-1. **Extract metadata**: category="api", tags=["error", "http"], appliesTo=["api/*.py", "*/api/*"]
-2. **Generate hints**: 3-5 actionable rules with examples
-3. **Create ESLint rules**: If patterns are detectable (HTTP status usage, etc.)
-4. **Store results**: In `.aromcp/hints/api-error-handling/` directory
-
-## Usage After Generation
-
-```python
-# Get relevant hints for any file
-hints = mcp.hints_for_file("src/api/auth.py", max_tokens=5000)
-
-# Results include contextual hints with relevance scores
-for hint in hints['data']['hints']:
-    print(f"{hint['relevanceScore']:.2f}: {hint['rule']}")
-    print(f"✅ {hint['correctExample']}")
-    print(f"❌ {hint['incorrectExample']}")
-```
-
-This provides AI agents with contextual, relevant coding standards without overwhelming them with the full 70k+ token standards documentation.
-
-## Using Generated ESLint Rules in Your Project
-
-After generating standards, you can integrate the ESLint rules into your project's ESLint configuration:
-
-### Option 1: Extend the Generated Configuration
-
-**In your `.eslintrc.js`:**
-```javascript
-module.exports = {
-  extends: [
-    // Your existing configurations
-    "./.aromcp/eslint/standards-config.js"
-  ],
-  // Your other ESLint settings
-};
-```
-
-### Option 2: Manual Integration
-
-**In your `eslint.config.js` (ESLint 9+):**
-```javascript
-import standardsConfig from './.aromcp/eslint/standards-config.json';
-
-export default [
-  // Your other configurations
-  {
-    plugins: {
-      'standards': require('./.aromcp/eslint/custom-rules.js')
-    },
-    rules: {
-      // Convert the rules format
-      ...Object.fromEntries(
-        Object.entries(standardsConfig.rules).map(([rule, level]) =>
-          [rule.replace('custom-rules/', 'standards/'), level]
-        )
-      )
-    }
-  }
-];
-```
-
-### Option 3: Selective Rule Usage
-
-You can also import specific rules individually:
-```javascript
-// .eslintrc.js
-module.exports = {
-  plugins: ['standards'],
-  rules: {
-    'standards/api-mandatory-pipeline-pattern': 'error',
-    'standards/no-direct-response-returns': 'warn',
-    // Add only the rules you want
-  }
-};
-```
-
-The generated configuration automatically includes all rules from all processed standards, making it easy to enforce coding standards across your entire project.
+Key benefits:
+- **70-80% token reduction** through intelligent compression
+- **Context-aware** rule loading based on what you're working on
+- **Session management** prevents duplicate rule loading
+- **ESLint integration** for automatic enforcement

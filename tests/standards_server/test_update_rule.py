@@ -36,45 +36,8 @@ class TestUpdateRule:
         import shutil
         shutil.rmtree(self.temp_dir)
 
-    def test_add_ai_hints_only(self):
-        """Test adding only AI hints."""
-        ai_hints = [
-            {
-                "rule": "Always use proper error handling",
-                "context": "This ensures better debugging",
-                "correctExample": "try: ...",
-                "incorrectExample": "just do it",
-                "hasEslintRule": False
-            },
-            {
-                "rule": "Use meaningful variable names",
-                "context": "Improves code readability",
-                "correctExample": "user_count = 5",
-                "incorrectExample": "x = 5",
-                "hasEslintRule": True
-            }
-        ]
-
-        result = update_rule_impl("test-standard", False, ai_hints, None, self.temp_dir)
-
-        assert "data" in result
-        assert result["data"]["hintsUpdated"] == 2
-        assert result["data"]["eslintUpdated"] is False
-        assert result["data"]["clearedExisting"] is False
-
-        # Verify hints were saved
-        hints_dir = Path(self.temp_dir) / ".aromcp" / "hints" / "test-standard"
-        hint_files = list(hints_dir.glob("hint-*.json"))
-        assert len(hint_files) == 2
-
-        # Verify hint content
-        with open(hints_dir / "hint-001.json") as f:
-            hint1 = json.load(f)
-        assert hint1["rule"] == "Always use proper error handling"
-        assert "tokens" in hint1  # Token count should be added
-
-    def test_add_eslint_files_only(self):
-        """Test adding only ESLint files."""
+    def test_add_eslint_files(self):
+        """Test adding ESLint files."""
         eslint_files = {
             "rules/test-standard.js": '''module.exports = {
   meta: {
@@ -97,13 +60,12 @@ class TestUpdateRule:
 };'''
         }
 
-        result = update_rule_impl("test-standard", False, None, eslint_files, self.temp_dir)
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
         assert "data" in result
-        assert result["data"]["hintsUpdated"] == 0
         assert result["data"]["eslintUpdated"] is True
         assert result["data"]["eslintFilesWritten"] == 1
-        assert result["data"]["clearedExisting"] is False
+        assert result["data"]["standard_id"] == "test-standard"
 
         # Verify ESLint files were saved
         rule_file = Path(self.temp_dir) / ".aromcp" / "eslint" / "rules" / "test-standard.js"
@@ -117,88 +79,41 @@ class TestUpdateRule:
         assert "module.exports" in rule_content
         assert "Test rule" in rule_content
 
-    def test_add_both_hints_and_eslint(self):
-        """Test adding both AI hints and ESLint files."""
-        ai_hints = [{
-            "rule": "Test rule",
-            "context": "Test context",
-            "correctExample": "correct",
-            "incorrectExample": "incorrect",
-            "hasEslintRule": False
-        }]
-
+    def test_add_multiple_eslint_files(self):
+        """Test adding multiple ESLint files."""
         eslint_files = {
-            "rules/test-rule.js": "module.exports = { meta: {}, create: function() {} };"
+            "rules/test-rule1.js": "module.exports = { meta: {}, create: function() {} };",
+            "rules/test-rule2.js": "module.exports = { meta: {}, create: function() {} };"
         }
 
-        result = update_rule_impl("test-standard", False, ai_hints, eslint_files, self.temp_dir)
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
         assert "data" in result
-        assert result["data"]["hintsUpdated"] == 1
         assert result["data"]["eslintUpdated"] is True
-        assert result["data"]["eslintFilesWritten"] == 1
-        assert result["data"]["clearedExisting"] is False
+        assert result["data"]["eslintFilesWritten"] == 2
 
-    def test_clear_existing_hints(self):
-        """Test clearing existing hints before adding new ones."""
-        # First add some hints
-        initial_hints = [{
-            "rule": "Initial rule",
-            "context": "Initial context",
-            "correctExample": "initial correct",
-            "incorrectExample": "initial incorrect",
-            "hasEslintRule": False
-        }]
+        # Verify both files were saved
+        rule_file1 = Path(self.temp_dir) / ".aromcp" / "eslint" / "rules" / "test-rule1.js"
+        rule_file2 = Path(self.temp_dir) / ".aromcp" / "eslint" / "rules" / "test-rule2.js"
 
-        update_rule_impl("test-standard", False, initial_hints, None, self.temp_dir)
+        assert rule_file1.exists()
+        assert rule_file2.exists()
 
-        # Verify initial hints exist
-        hints_dir = Path(self.temp_dir) / ".aromcp" / "hints" / "test-standard"
-        assert len(list(hints_dir.glob("hint-*.json"))) == 1
+    def test_missing_eslint_files(self):
+        """Test calling update_rule without eslint_files."""
+        result = update_rule_impl("test-standard", None, self.temp_dir)
 
-        # Now clear and add new hints
-        new_hints = [
-            {
-                "rule": "New rule 1",
-                "context": "New context 1",
-                "correctExample": "new correct 1",
-                "incorrectExample": "new incorrect 1",
-                "hasEslintRule": False
-            },
-            {
-                "rule": "New rule 2",
-                "context": "New context 2",
-                "correctExample": "new correct 2",
-                "incorrectExample": "new incorrect 2",
-                "hasEslintRule": False
-            }
-        ]
-
-        result = update_rule_impl("test-standard", True, new_hints, None, self.temp_dir)
-
-        assert "data" in result
-        assert result["data"]["hintsUpdated"] == 2
-        assert result["data"]["clearedExisting"] is True
-        assert result["data"]["clearedCount"] == 1
-
-        # Verify only new hints exist
-        hint_files = list(hints_dir.glob("hint-*.json"))
-        assert len(hint_files) == 2
-
-        with open(hints_dir / "hint-001.json") as f:
-            hint = json.load(f)
-        assert hint["rule"] == "New rule 1"
+        assert "error" in result
+        assert result["error"]["code"] == "INVALID_INPUT"
+        assert "eslint_files is required" in result["error"]["message"]
 
     def test_nonexistent_standard(self):
         """Test updating rules for a non-existent standard."""
-        ai_hints = [{
-            "rule": "Test rule",
-            "context": "Test context",
-            "correctExample": "correct",
-            "incorrectExample": "incorrect"
-        }]
+        eslint_files = {
+            "rules/test.js": "module.exports = { meta: {}, create: function() {} };"
+        }
 
-        result = update_rule_impl("nonexistent-standard", False, ai_hints, None, self.temp_dir)
+        result = update_rule_impl("nonexistent-standard", eslint_files, self.temp_dir)
 
         assert "error" in result
         assert result["error"]["code"] == "NOT_FOUND"
@@ -206,30 +121,16 @@ class TestUpdateRule:
 
     def test_empty_standard_id(self):
         """Test updating with empty standard ID."""
-        result = update_rule_impl("", False, [], None, self.temp_dir)
+        result = update_rule_impl("", {}, self.temp_dir)
 
         assert "error" in result
         assert result["error"]["code"] == "INVALID_INPUT"
         assert "standardId must be a non-empty string" in result["error"]["message"]
 
-    def test_missing_hint_fields(self):
-        """Test adding hints with missing required fields."""
-        incomplete_hints = [{
-            "rule": "Test rule",
-            "context": "Test context"
-            # Missing correctExample and incorrectExample
-        }]
-
-        result = update_rule_impl("test-standard", False, incomplete_hints, None, self.temp_dir)
-
-        assert "error" in result
-        assert result["error"]["code"] == "INVALID_INPUT"
-        assert "missing required field" in result["error"]["message"]
-
     def test_invalid_eslint_files_type(self):
         """Test adding ESLint files with invalid type."""
         # Pass a valid JSON string that parses to a non-dict
-        result = update_rule_impl("test-standard", False, None, '"not-an-object"', self.temp_dir)
+        result = update_rule_impl("test-standard", '"not-an-object"', self.temp_dir)
 
         assert "error" in result
         assert result["error"]["code"] == "INVALID_INPUT"
@@ -241,7 +142,7 @@ class TestUpdateRule:
             "../../../etc/passwd": "malicious content"
         }
 
-        result = update_rule_impl("test-standard", False, None, eslint_files, self.temp_dir)
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
         assert "error" in result
         assert result["error"]["code"] == "INVALID_INPUT"
@@ -253,52 +154,90 @@ class TestUpdateRule:
             "rules/test.js": {"not": "a string"}  # type: ignore
         }
 
-        result = update_rule_impl("test-standard", False, None, eslint_files, self.temp_dir)
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
         assert "error" in result
         assert result["error"]["code"] == "INVALID_INPUT"
         assert "must be a string" in result["error"]["message"]
 
-    def test_default_has_eslint_rule(self):
-        """Test that hasEslintRule defaults to False."""
-        ai_hints = [{
-            "rule": "Test rule",
-            "context": "Test context",
-            "correctExample": "correct",
-            "incorrectExample": "incorrect"
-            # hasEslintRule not specified
-        }]
+    def test_eslint_files_not_in_rules_directory(self):
+        """Test ESLint files not in rules/ directory."""
+        eslint_files = {
+            "test.js": "module.exports = { meta: {}, create: function() {} };"
+        }
 
-        result = update_rule_impl("test-standard", False, ai_hints, None, self.temp_dir)
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
-        assert "data" in result
+        assert "error" in result
+        assert result["error"]["code"] == "INVALID_INPUT"
+        assert "must be in 'rules/' directory" in result["error"]["message"]
 
-        # Verify hasEslintRule was set to False
-        hints_dir = Path(self.temp_dir) / ".aromcp" / "hints" / "test-standard"
-        with open(hints_dir / "hint-001.json") as f:
-            hint = json.load(f)
-        assert hint["hasEslintRule"] is False
+    def test_eslint_files_config_in_filename(self):
+        """Test ESLint files with 'config' in filename."""
+        eslint_files = {
+            "rules/test-config.js": "module.exports = { meta: {}, create: function() {} };"
+        }
+
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
+
+        assert "error" in result
+        assert result["error"]["code"] == "INVALID_INPUT"
+        assert "cannot contain 'config' in filename" in result["error"]["message"]
+
+    def test_eslint_files_index_filename(self):
+        """Test ESLint files named 'index'."""
+        eslint_files = {
+            "rules/index.js": "module.exports = { meta: {}, create: function() {} };"
+        }
+
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
+
+        assert "error" in result
+        assert result["error"]["code"] == "INVALID_INPUT"
+        assert "cannot be named 'index'" in result["error"]["message"]
+
+    def test_eslint_files_invalid_content(self):
+        """Test ESLint files with invalid content."""
+        eslint_files = {
+            "rules/test.js": "not a valid ESLint rule"
+        }
+
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
+
+        assert "error" in result
+        assert result["error"]["code"] == "INVALID_INPUT"
+        assert "must contain a valid module.exports ESLint rule" in result["error"]["message"]
+
+    def test_eslint_files_with_config_object(self):
+        """Test ESLint files containing configuration objects."""
+        eslint_files = {
+            "rules/test.js": """module.exports = {
+                meta: {},
+                create: function() {},
+                rules: {
+                    'some-rule': 'error'
+                }
+            };"""
+        }
+
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
+
+        assert "error" in result
+        assert result["error"]["code"] == "INVALID_INPUT"
+        assert "must contain a valid module.exports ESLint rule" in result["error"]["message"]
 
     def test_index_rebuild_after_update(self):
         """Test that index is rebuilt after updating rules."""
-        ai_hints = [{
-            "rule": "Test rule",
-            "context": "Test context",
-            "correctExample": "correct",
-            "incorrectExample": "incorrect",
-            "hasEslintRule": False
-        }]
+        eslint_files = {
+            "rules/test.js": "module.exports = { meta: {}, create: function() {} };"
+        }
 
-        result = update_rule_impl("test-standard", False, ai_hints, None, self.temp_dir)
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
         assert "data" in result
 
-        # Verify index reflects the changes
+        # Verify index exists (it should be created by build_index)
         index_file = Path(self.temp_dir) / ".aromcp" / "hints" / "index.json"
-        with open(index_file) as f:
-            index = json.load(f)
-
-        assert "test-standard" in index["standards"]
-        assert index["standards"]["test-standard"]["hintCount"] == 1
+        assert index_file.exists()
 
     def test_eslint_config_files_generated(self):
         """Test that ESLint configuration files are generated when rules are added."""
@@ -307,7 +246,7 @@ class TestUpdateRule:
             "rules/another-rule.js": "module.exports = { meta: {}, create: function() {} };"
         }
 
-        result = update_rule_impl("test-standard", False, None, eslint_files, self.temp_dir)
+        result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
         assert "data" in result
 
         # Verify config files were created
@@ -363,3 +302,15 @@ class TestUpdateRule:
 
         assert "aromcp/test-rule" in rules_found
         assert "aromcp/another-rule" in rules_found
+
+    def test_json_string_input(self):
+        """Test that JSON string input is properly parsed."""
+        eslint_files_json = json.dumps({
+            "rules/test.js": "module.exports = { meta: {}, create: function() {} };"
+        })
+
+        result = update_rule_impl("test-standard", eslint_files_json, self.temp_dir)
+
+        assert "data" in result
+        assert result["data"]["eslintFilesWritten"] == 1
+        assert result["data"]["eslintUpdated"] is True

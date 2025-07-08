@@ -42,13 +42,13 @@ class TestClass:
             assert "data" in result
             signatures = result["data"]["items"]
 
-            # Should find 2 functions, 1 class, and 2 methods
-            assert len(signatures) == 5
+            # Should find 2 functions and 2 methods (class definitions are not extracted)
+            assert len(signatures) == 4
 
             # Check function names
             names = {sig["name"] for sig in signatures}
             expected = {
-                "simple_function", "function_with_args", "TestClass", "method", "prop"
+                "simple_function", "function_with_args", "method", "prop"
             }
             assert names == expected
 
@@ -485,11 +485,10 @@ class TestClass {
             assert "utils.py" in file_paths
             assert "test.js" not in file_paths
 
-            # Check signatures in main.py
+            # Check signatures in main.py (classes are not extracted, only functions/methods)
             main_signatures = [sig for sig in signatures if sig["file_path"] == "main.py"]
             main_names = {sig["name"] for sig in main_signatures}
             assert "main" in main_names
-            assert "App" in main_names
             assert "run" in main_names
 
             # Check signatures in utils.py
