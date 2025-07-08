@@ -169,9 +169,13 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 
 **Phase 2: Structured Operations** (MANDATORY for ALL operations)
 - Launch Task agents to handle file operations (use judgment on single vs parallel based on Phase 1 analysis) **launch parallel agents with the task tool for parallel workstrems**
+- **SESSION ID REQUIREMENT**: Each agent MUST use a unique `session_id` for all AroMCP tool calls within their scope
+  - Format: `{agent-type}-{task-description}-{timestamp}` (e.g., `discovery-api-routes-1734567890`, `worker-user-auth-1734567891`)
+  - **CRITICAL**: No two agents can share the same session_id - this prevents cross-agent data corruption
+  - Use consistent session_id within each agent's scope for deduplication benefits
 - **FIRST ACTION**: Each agent must call `hints_for_file` for all files they will modify OR create (including new files that don't exist yet)
-  - Use consistent `session_id` across all agents for deduplication (70-80% token savings)
-  - Previously loaded rules are automatically referenced, not repeated
+  - Use the agent's unique `session_id` for deduplication (70-80% token savings within agent scope)
+  - Previously loaded rules within the same agent session are automatically referenced, not repeated
 - Each agent should choose appropriate tools for file operations (AroMCP tools preferred, but agents can use standard tools when more suitable)
 - Agents can create new files when necessary (this overrides general "avoid file creation" guidance)
 - Agents should use the hints to guide their implementation decisions and follow project patterns
@@ -203,6 +207,7 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 
 **Key Principles:**
 - **Mandatory Workflow**: ALWAYS follow all 3 phases for ANY file operation, no exceptions
+- **Unique Session IDs**: Each agent MUST use a unique `session_id` for AroMCP tools - no sharing between agents
 - **Separate Discovery Agent**: Phase 1 must always use a dedicated Task agent for targeted discovery
 - **Hints at Work Start**: Every Phase 2 agent must call `hints_for_file` as their first action for all target files
 - **Focused Discovery**: Avoid over-broad discovery; focus on specific work requirements
