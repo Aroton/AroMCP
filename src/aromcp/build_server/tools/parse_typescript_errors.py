@@ -1,5 +1,6 @@
 """Parse TypeScript errors tool implementation for Build Tools."""
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -16,7 +17,8 @@ def parse_typescript_errors_impl(
     include_warnings: bool = True,
     timeout: int = 120,
     page: int = 1,
-    max_tokens: int = 20000
+    max_tokens: int = 20000,
+    use_build_command: bool = False
 ) -> dict[str, Any]:
     """Run tsc and return structured error data.
 
@@ -28,6 +30,7 @@ def parse_typescript_errors_impl(
         timeout: Maximum execution time in seconds
         page: Page number for pagination (1-based, default: 1)
         max_tokens: Maximum tokens per page (default: 20000)
+        use_build_command: Whether to use build command for type checking (e.g., "npm run build")
 
     Returns:
         Dictionary with paginated structured TypeScript error data
@@ -58,13 +61,56 @@ def parse_typescript_errors_impl(
                 }
             }
 
-        # Run TypeScript compiler
-        cmd = ["npx", "tsc", "--noEmit", "--pretty", "false"]
-        if tsconfig_path != "tsconfig.json":
-            cmd.extend(["--project", tsconfig_path])
+        # Choose command based on use_build_command flag
+        if use_build_command:
+            # Try to use build command which often has better module resolution
+            # First check if package.json exists to determine build command
+            package_json_path = project_path / "package.json"
+            if package_json_path.exists():
+                try:
+                    with open(package_json_path, encoding='utf-8') as f:
+                        package_json = json.load(f)
 
-        # Add specific files if provided
-        if files:
+                    scripts = package_json.get("scripts", {})
+                    if "type-check" in scripts:
+                        cmd = ["npm", "run", "type-check"]
+                    elif "build" in scripts:
+                        cmd = ["npm", "run", "build"]
+                    else:
+                        # Fallback to tsc if no suitable script found
+                        cmd = ["npx", "tsc", "--noEmit", "--pretty", "false"]
+                        cmd.extend(["--project", str(tsconfig_full_path)])
+                except (json.JSONDecodeError, FileNotFoundError):
+                    # Fallback to tsc if package.json can't be read
+                    cmd = ["npx", "tsc", "--noEmit", "--pretty", "false"]
+                    cmd.extend(["--project", str(tsconfig_full_path)])
+            else:
+                # Fallback to tsc if no package.json
+                cmd = ["npx", "tsc", "--noEmit", "--pretty", "false"]
+                cmd.extend(["--project", str(tsconfig_full_path)])
+        else:
+            # Use direct tsc command (original behavior)
+            cmd = ["npx", "tsc", "--noEmit", "--pretty", "false"]
+
+            # Always explicitly specify the tsconfig.json path for better path resolution
+            cmd.extend(["--project", str(tsconfig_full_path)])
+
+            # Try to read tsconfig.json to ensure proper module resolution
+            try:
+                with open(tsconfig_full_path, encoding='utf-8') as f:
+                    tsconfig_content = json.load(f)
+
+                # Check if baseUrl is set, if not, ensure TypeScript uses the project root
+                compiler_options = tsconfig_content.get("compilerOptions", {})
+                if "baseUrl" not in compiler_options and "paths" in compiler_options:
+                    # Add explicit baseUrl parameter if paths are defined but baseUrl is not
+                    cmd.extend(["--baseUrl", str(project_path)])
+            except (json.JSONDecodeError, FileNotFoundError, KeyError):
+                # If we can't read the tsconfig, continue with the default behavior
+                pass
+
+        # Add specific files if provided (only for tsc command, not build command)
+        if files and not use_build_command:
             # Validate file paths
             for file_path in files:
                 full_file_path = project_path / file_path
@@ -85,6 +131,10 @@ def parse_typescript_errors_impl(
                         }
                     }
             cmd.extend(files)
+        elif files and use_build_command:
+            # When using build command, we can't specify individual files
+            # Log this limitation in the metadata
+            pass
 
         try:
             result = subprocess.run(  # noqa: S603 # Safe: cmd built from predetermined TypeScript compiler commands
@@ -117,8 +167,13 @@ def parse_typescript_errors_impl(
                 "summary": summary,
                 "categories": error_categories,
                 "tsconfig_path": str(tsconfig_full_path),
-                "command": " ".join(cmd)
+                "command": " ".join(cmd),
+                "used_build_command": use_build_command
             }
+
+            # Add note about file limitations when using build command
+            if files and use_build_command:
+                metadata["note"] = "Individual file checking not supported with build command; checked entire project"
 
             # Apply pagination with deterministic sorting
             # Sort by file, then by line, then by column for consistent ordering

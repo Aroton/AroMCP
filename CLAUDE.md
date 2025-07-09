@@ -299,6 +299,48 @@ All tools must follow consistent error response format:
 - **Usage Examples**: README.md should contain practical examples for each tool
 - **Implementation Notes**: Complex logic should include inline comments explaining the approach
 
+### Tool Description Standards (Added 2025-07-09)
+All tool descriptions must follow this enhanced template to improve AI agent discovery:
+
+```python
+@mcp.tool
+def tool_name(...) -> dict[str, Any]:
+    """
+    [One-line summary of what the tool does]
+    
+    Use this tool when:
+    - [Specific scenario when this tool is appropriate]
+    - [Another specific use case]
+    - [Third scenario differentiating from similar tools]
+    - [Fourth scenario if applicable]
+    
+    [Detailed explanation of functionality, behavior, and limitations]
+    
+    Args:
+        param1: [Clear description with example values]
+        param2: [Description with valid options listed]
+        
+    Example:
+        tool_name("example_input")
+        → {"data": {"result": "example_output"}}
+        
+    Note: [Cross-references to related tools or important caveats]
+    """
+```
+
+**Key requirements for tool descriptions**:
+- **"Use this tool when" section is mandatory** - 3-5 specific scenarios
+- **Examples must show realistic input/output** - Not abstract placeholders
+- **Note section should reference related tools** - Help agents choose correctly
+- **Differentiate from similar tools** - e.g., read_files vs load_project_documents
+
+### Simplified Tool Aliases
+The project uses simplified tool aliases as the primary interface for AI agents:
+- **Prefer simplified names**: `lint_project` over `parse_lint_results`
+- **Use 2-3 parameters**: Simplified tools have sensible defaults
+- **Include "Perfect for..." phrases**: Quick understanding of use cases
+- **Keep original tools**: For backward compatibility and advanced use
+
 
 ## Testing Architecture
 
@@ -355,3 +397,42 @@ All list-returning tools support pagination to stay under 20k token limits:
 - **All list-returning tools now support pagination** - Use `page` and `max_tokens` parameters for large result sets
 - Pagination maintains deterministic ordering and includes comprehensive metadata
 - Token estimation uses conservative 4:1 character ratio to stay under 20k token limit
+
+## Tool Discovery and Agent Guidance (Added 2025-07-09)
+
+### Primary Tool Recommendations
+When implementing AI agent features, prefer these simplified tools:
+- **File Operations**: `list_files`, `read_files`, `write_files`
+- **Quality Checks**: `lint_project`, `check_typescript`, `run_tests`
+- **Code Analysis**: `find_who_imports`, `find_dead_code`, `find_import_cycles`
+- **Commands**: `execute_command` (instead of `run_command`)
+- **Composite**: `quality_check` (runs lint + TypeScript + tests)
+
+### Common Workflows
+Implement these patterns for common tasks:
+
+```python
+# Pre-commit validation
+1. lint_project()      # Check code style
+2. check_typescript()  # Verify types
+3. run_tests()        # Ensure tests pass
+
+# Safe file modification
+1. read_files(target)  # Always read first
+2. write_files(...)    # Make changes
+3. lint_project()      # Verify quality
+
+# Dependency analysis before deletion
+1. find_who_imports(file)  # Check dependencies
+2. if no imports: safe to delete
+```
+
+### Tool Naming Patterns
+- **Action-Target format**: `find_dead_code`, `check_dependencies`, `run_tests`
+- **Avoid generic names**: Not "analyze" or "process"
+- **Clear differentiation**: `read_files` for code, `load_project_documents` for docs
+
+### Documentation Locations
+- **Tool Selection Guide**: See `TOOL_GUIDE.md` for decision trees and workflows
+- **Agent Guidance**: `src/aromcp/utils/agent_guidance.py` (for reference only)
+- **Tool Categories**: Defined in `pyproject.toml` under `[tool.aromcp]`

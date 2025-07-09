@@ -9,6 +9,7 @@ A comprehensive suite of MCP (Model Context Protocol) servers designed as intell
 - **[Build Tools](documentation/usage/build_tools.md)** - Build, lint, test, and validation commands
 - **[Code Analysis Tools](documentation/usage/analysis_tools.md)** - Enhanced standards management with v2 features (70-80% token reduction, session deduplication, context-aware compression)
 - **[ESLint Rule Generation](documentation/commands/generate-eslint-rules.md)** - AI-orchestrated generation of project-specific ESLint rules from markdown standards
+- **🆕 [Simplified Tools](documentation/ai-agent-improvements.md)** - Intuitive aliases with 2-3 parameters for better AI agent adoption
 
 ### 🔄 Planned
 - **State Management Tools** - Persistent state for long-running processes
@@ -90,21 +91,36 @@ action_plan = aromcp.generate_eslint_rules(
 # Result: Complete ESLint ruleset + AI context tailored to your project
 ```
 
-### Comprehensive File Operations
+### Simplified Tools (Recommended for AI Agents)
 ```python
-# Efficient file discovery and batch operations
-files = aromcp.get_target_files(patterns=["**/*.ts"])
-content = aromcp.read_files_batch(file_paths=["src/main.ts", "src/utils.ts"])
-# Access files from paginated results: content["data"]["items"]
-aromcp.write_files_batch(files={"output.json": json.dumps(analysis)})
+# Simple, intuitive operations with 2-3 parameters
+files = aromcp.list_files(patterns=["**/*.ts"])
+content = aromcp.read_files(file_paths=["src/main.ts", "src/utils.ts"])
+aromcp.write_files(files={"output.json": json.dumps(analysis)})
+
+# Quality checks made simple
+aromcp.lint_project(linter="eslint")
+aromcp.check_typescript()
+aromcp.run_tests()
+
+# One-command workflow
+aromcp.quality_check(include_typescript=True, include_tests=True)
 ```
 
-### Build & Quality Automation
+### Advanced File Operations (Power Users)
 ```python
-# Integrated build, lint, and test workflows
-aromcp.parse_lint_results(target_files=["src/**/*.ts"])
-aromcp.parse_typescript_errors()
-aromcp.run_test_suite(pattern="**/*.test.ts")
+# Full-featured operations with advanced options
+files = aromcp.get_target_files(patterns=["**/*.ts"], page=1, max_tokens=20000)
+content = aromcp.read_files_batch(file_paths=["src/main.ts"], encoding="auto", expand_patterns=True)
+aromcp.write_files_batch(files={"output.json": json.dumps(analysis)}, create_backup=True)
+```
+
+### Advanced Build & Quality Automation
+```python
+# Advanced workflows with full configuration
+aromcp.parse_lint_results(target_files=["src/**/*.ts"], use_standards_eslint=True)
+aromcp.parse_typescript_errors(include_warnings=True, use_build_command=False)
+aromcp.run_test_suite(pattern="**/*.test.ts", coverage=True)
 ```
 
 ### Standards-Driven Development

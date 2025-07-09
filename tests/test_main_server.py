@@ -35,7 +35,12 @@ class TestMainServer:
             "load_documents_by_pattern",
             "apply_file_diffs",
             "preview_file_changes",
-            "validate_diffs"
+            "validate_diffs",
+            # Simplified aliases
+            "find_who_imports",
+            "list_files",
+            "read_files",
+            "write_files"
         ]
 
         # state_tools = []  # Not yet implemented
@@ -47,7 +52,13 @@ class TestMainServer:
             "parse_typescript_errors",
             "parse_lint_results",
             "run_test_suite",
-            "run_nextjs_build"
+            "run_nextjs_build",
+            # Simplified aliases
+            "lint_project",
+            "check_typescript",
+            "run_tests",
+            "execute_command",
+            "quality_check"
         ]
 
         analysis_tools = [
