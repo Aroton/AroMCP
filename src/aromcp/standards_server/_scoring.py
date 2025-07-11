@@ -89,22 +89,51 @@ def select_hints_by_budget(
             hint_tokens = tokens_data
 
         if total_tokens + hint_tokens <= max_tokens:
-            # Add score to response
+            # Add score to response - handle both legacy and enhanced formats
             response_hint = {
                 "rule": hint.get("rule", ""),
                 "context": hint.get("context", ""),
-                "correctExample": hint.get("correctExample", ""),
-                "incorrectExample": hint.get("incorrectExample", ""),
                 "relevanceScore": round(score, 2)
             }
+
+            # Handle examples - support both legacy and enhanced formats
+            if "examples" in hint and isinstance(hint["examples"], dict):
+                # Enhanced format - extract examples from examples object
+                examples = hint["examples"]
+                if examples.get("standard"):
+                    response_hint["correctExample"] = examples["standard"]
+                elif examples.get("full"):
+                    response_hint["correctExample"] = examples["full"]
+                elif examples.get("minimal"):
+                    response_hint["correctExample"] = examples["minimal"]
+                else:
+                    response_hint["correctExample"] = ""
+                
+                # Add other example formats if available
+                if examples.get("minimal"):
+                    response_hint["minimalExample"] = examples["minimal"]
+                if examples.get("detailed"):
+                    response_hint["detailedExample"] = examples["detailed"]
+                
+                response_hint["incorrectExample"] = hint.get("incorrectExample", "")
+            else:
+                # Legacy format - use existing fields
+                response_hint["correctExample"] = hint.get("correctExample", "")
+                response_hint["incorrectExample"] = hint.get("incorrectExample", "")
 
             # Include import map if present
             if "importMap" in hint:
                 response_hint["importMap"] = hint["importMap"]
+            elif "import_map" in hint:
+                response_hint["importMap"] = hint["import_map"]
 
             # Include standard ID if present for reference
             if "standardId" in hint:
                 response_hint["standardId"] = hint["standardId"]
+            
+            # Include other useful fields
+            if "has_eslint_rule" in hint:
+                response_hint["has_eslint_rule"] = hint["has_eslint_rule"]
             selected.append(response_hint)
             total_tokens += hint_tokens
         else:

@@ -212,13 +212,13 @@ def register_filesystem_tools(mcp):
         check_syntax: bool = True
     ) -> dict[str, Any]:
         """Validate diff patches for correctness before applying them.
-        
+
         Use this tool when:
         - Checking if generated diffs are valid and will apply cleanly
         - Detecting conflicts between multiple diffs targeting same files
         - Validating diff syntax before batch operations
         - Ensuring diffs match current file content
-        
+
         This tool performs comprehensive validation including syntax checks,
         conflict detection, and content matching without modifying files.
 
@@ -228,7 +228,7 @@ def register_filesystem_tools(mcp):
             project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             check_conflicts: Whether to check for conflicts between diffs
             check_syntax: Whether to validate diff syntax
-            
+
         Example:
             validate_diffs([{"file_path": "src/app.js", "diff_content": "@@ -1 +1 @@..."}])
             → {"data": {
@@ -236,114 +236,12 @@ def register_filesystem_tools(mcp):
                 "issues": [],
                 "summary": {"total_diffs": 1, "valid_diffs": 1, "conflicts": 0}
               }}
-              
+
         Note: This is a validation-only tool - no changes are made.
         Use apply_file_diffs after validation passes.
         """
         project_root = get_project_root(project_root)
         return validate_diffs_impl(diffs, project_root, check_conflicts, check_syntax)
-
-    # Simplified tools for better AI agent adoption - these are aliases with sensible defaults
-    @mcp.tool
-    @json_convert
-    def find_who_imports(
-        file_paths: str | list[str],
-        project_root: str | None = None
-    ) -> dict[str, Any]:
-        """Find which files import the given files.
-
-        Simple tool to understand file dependencies by finding what imports a file.
-        Perfect for understanding code relationships and impact analysis.
-
-        Args:
-            file_paths: File or list of files to find importers for
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-        """
-        project_root = get_project_root(project_root)
-        # Call the full implementation with sensible defaults
-        return find_imports_for_files_impl(
-            file_paths=file_paths,
-            project_root=project_root,
-            search_patterns=None,    # Use default patterns
-            expand_patterns=True,    # Enable pattern expansion
-            page=1,                  # First page
-            max_tokens=20000         # Standard limit
-        )
-
-    @mcp.tool
-    @json_convert
-    def list_files(
-        patterns: str | list[str],
-        project_root: str | None = None
-    ) -> dict[str, Any]:
-        """List files matching patterns.
-
-        Simple tool to find files in your project by pattern.
-        Perfect for discovering what files exist and their basic info.
-
-        Args:
-            patterns: File patterns to match (e.g., "*.py", "src/**/*.ts")
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-        """
-        project_root = get_project_root(project_root)
-        # Call the full implementation with sensible defaults
-        return get_target_files_impl(
-            patterns=patterns,
-            project_root=project_root,
-            page=1,              # First page
-            max_tokens=20000     # Standard limit
-        )
-
-    @mcp.tool
-    @json_convert
-    def read_files(
-        file_paths: str | list[str],
-        project_root: str | None = None
-    ) -> dict[str, Any]:
-        """Read multiple files at once.
-
-        Simple tool to read the contents of one or more files.
-        Perfect for understanding what's in files without complex options.
-
-        Args:
-            file_paths: File paths to read (can be patterns or specific files)
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-        """
-        project_root = get_project_root(project_root)
-        # Call the full implementation with sensible defaults
-        return read_files_batch_impl(
-            file_paths=file_paths,
-            project_root=project_root,
-            encoding="auto",         # Auto-detect encoding
-            expand_patterns=True,    # Enable pattern expansion
-            page=1,                  # First page
-            max_tokens=20000         # Standard limit
-        )
-
-    @mcp.tool
-    @json_convert
-    def write_files(
-        files: dict[str, str] | str,
-        project_root: str | None = None
-    ) -> dict[str, Any]:
-        """Write multiple files at once.
-
-        Simple tool to create or update files in your project.
-        Perfect for making changes to multiple files atomically.
-
-        Args:
-            files: Dictionary mapping file paths to content
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-        """
-        project_root = get_project_root(project_root)
-        # Call the full implementation with sensible defaults
-        return write_files_batch_impl(
-            files=files,
-            project_root=project_root,
-            encoding="utf-8",        # Standard encoding
-            create_backup=True       # Always create backups
-        )
-
 
 __all__ = [
     "get_target_files_impl",

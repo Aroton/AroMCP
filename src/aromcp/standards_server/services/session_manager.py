@@ -20,6 +20,7 @@ class SessionState:
         self.last_activity: datetime = datetime.now()
         self.context_cache: dict[str, Any] = {}
         self.pattern_frequency: dict[str, int] = {}  # Track how often patterns are used
+        self.rule_visit_counts: dict[str, int] = {}  # Track how many times each rule has been seen
 
     def update_activity(self) -> None:
         """Update last activity timestamp."""
@@ -31,6 +32,7 @@ class SessionState:
         self.loaded_patterns.add(pattern_type)
         self.token_count += tokens
         self.pattern_frequency[pattern_type] = self.pattern_frequency.get(pattern_type, 0) + 1
+        self.rule_visit_counts[rule_id] = self.rule_visit_counts.get(rule_id, 0) + 1
 
     def add_file(self, file_path: str) -> None:
         """Add a file to the session history."""
@@ -51,6 +53,10 @@ class SessionState:
         """Check if a pattern type has been seen."""
         return pattern_type in self.loaded_patterns
 
+    def get_rule_visit_count(self, rule_id: str) -> int:
+        """Get how many times a rule has been visited."""
+        return self.rule_visit_counts.get(rule_id, 0)
+
     def get_recent_files(self, count: int = 5) -> list[str]:
         """Get recent files from history."""
         return self.file_history[-count:] if self.file_history else []
@@ -64,6 +70,7 @@ class SessionState:
             "files_processed": len(self.file_history),
             "total_tokens": self.token_count,
             "pattern_frequency": dict(self.pattern_frequency),
+            "rule_visit_counts": dict(self.rule_visit_counts),
             "last_activity": self.last_activity.isoformat(),
             "session_duration": (datetime.now() - self.last_activity).total_seconds()
         }

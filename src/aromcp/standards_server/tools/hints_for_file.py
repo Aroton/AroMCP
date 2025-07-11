@@ -240,21 +240,37 @@ def hints_for_file_impl(
                                 if module_name not in modules_used:
                                     modules_used.append(module_name)
 
-                # Create optimized hint
-                optimized_hint = {k: v for k, v in rule.items() if k not in ("importMap", "metadata", "standardId")}
+                # Create optimized hint - exclude complex nested objects
+                optimized_hint = {k: v for k, v in rule.items() if k not in ("importMap", "metadata", "standardId", "examples", "compression", "relationships")}
+
+                # Handle examples - convert enhanced format to legacy format for backward compatibility
+                if "examples" in rule and isinstance(rule["examples"], dict):
+                    examples = rule["examples"]
+                    # Use standard example as primary, fall back to full, then minimal
+                    if examples.get("standard"):
+                        optimized_hint["correctExample"] = examples["standard"]
+                    elif examples.get("full"):
+                        optimized_hint["correctExample"] = examples["full"]
+                    elif examples.get("minimal"):
+                        optimized_hint["correctExample"] = examples["minimal"]
+                    
+                    # Add other example variants if available
+                    if examples.get("minimal"):
+                        optimized_hint["minimalExample"] = examples["minimal"]
+                    if examples.get("detailed"):
+                        optimized_hint["detailedExample"] = examples["detailed"]
+                    if examples.get("reference"):
+                        optimized_hint["referenceExample"] = examples["reference"]
 
                 # Add modules array
                 if modules_used:
                     optimized_hint["modules"] = sorted(modules_used)
 
-                # Apply import stripping as fallback for existing hints
+                # Apply import stripping to all example fields
                 from .._storage import _strip_imports_from_code
-                if "correctExample" in optimized_hint:
-                    optimized_hint["correctExample"] = _strip_imports_from_code(optimized_hint["correctExample"])
-                if "incorrectExample" in optimized_hint:
-                    optimized_hint["incorrectExample"] = _strip_imports_from_code(optimized_hint["incorrectExample"])
-                if "example" in optimized_hint:
-                    optimized_hint["example"] = _strip_imports_from_code(optimized_hint["example"])
+                for example_field in ["correctExample", "incorrectExample", "example", "minimalExample", "detailedExample"]:
+                    if example_field in optimized_hint and optimized_hint[example_field]:
+                        optimized_hint[example_field] = _strip_imports_from_code(optimized_hint[example_field])
 
                 optimized_hints.append(optimized_hint)
 
@@ -292,31 +308,74 @@ def hints_for_file_impl(
 def _convert_hint_to_enhanced_rule(
     hint: dict[str, Any], metadata: dict[str, Any], standard_id: str, relevance_score: float
 ) -> EnhancedRule | None:
-    """Convert legacy hint format to enhanced rule format."""
+    """Convert hint to enhanced rule format, handling both legacy and modern formats."""
+    from ..models.enhanced_rule import EnhancedRule, RuleExamples, RuleMetadata, TokenCount
+    from ..utils.token_utils import calculate_token_counts
+    
     try:
-        from ..models.enhanced_rule import EnhancedRule, RuleExamples, RuleMetadata, TokenCount
-        from ..utils.token_utils import calculate_token_counts
+        # Validate that hint is a dictionary
+        if not isinstance(hint, dict):
+            logger.error(f"Expected hint to be a dictionary, got {type(hint)}: {hint}")
+            return None
 
         # Extract rule information
         rule_text = hint.get("rule", "")
         rule_id = hint.get("rule_id", f"{standard_id}_{hash(rule_text)}")
         context = hint.get("context", "")
 
-        # Create metadata
-        rule_metadata = RuleMetadata(
-            pattern_type=metadata.get("category", "general"),
-            complexity=metadata.get("complexity", "intermediate"),
-            rule_type=metadata.get("priority", "should"),
-            nextjs_api=metadata.get("nextjs_features", []),
-            client_server=metadata.get("client_server", "isomorphic")
-        )
+        # Handle metadata - check if hint already has enhanced metadata
+        hint_metadata = hint.get("metadata", {})
+        if hint_metadata:
+            # Use hint's metadata if present (modern format)
+            rule_metadata = RuleMetadata(
+                pattern_type=hint_metadata.get("pattern_type", metadata.get("category", "general")),
+                complexity=hint_metadata.get("complexity", metadata.get("complexity", "intermediate")),
+                rule_type=hint_metadata.get("rule_type", metadata.get("priority", "should")),
+                nextjs_api=hint_metadata.get("nextjs_api", metadata.get("nextjs_features", [])),
+                client_server=hint_metadata.get("client_server", metadata.get("client_server", "isomorphic"))
+            )
+        else:
+            # Fallback to standard metadata (legacy format)
+            rule_metadata = RuleMetadata(
+                pattern_type=metadata.get("category", "general"),
+                complexity=metadata.get("complexity", "intermediate"),
+                rule_type=metadata.get("priority", "should"),
+                nextjs_api=metadata.get("nextjs_features", []),
+                client_server=metadata.get("client_server", "isomorphic")
+            )
 
-        # Create examples
-        examples = RuleExamples(
-            full=hint.get("correctExample", ""),
-            standard=hint.get("correctExample", "")[:500] if hint.get("correctExample") else None,
-            minimal=hint.get("rule", "")[:100] if hint.get("rule") else None
-        )
+        # Handle examples - check if hint already has enhanced examples
+        hint_examples = hint.get("examples", {})
+        if hint_examples:
+            # Use hint's examples if present (modern format)
+            examples = RuleExamples(
+                minimal=hint_examples.get("minimal"),
+                standard=hint_examples.get("standard"),
+                detailed=hint_examples.get("detailed"),
+                full=hint_examples.get("full", ""),
+                reference=hint_examples.get("reference"),
+                context_variants=hint_examples.get("context_variants", {})
+            )
+        else:
+            # Fallback to legacy example fields
+            correct_example = hint.get("correctExample", "")
+            examples = RuleExamples(
+                full=correct_example,
+                standard=correct_example[:500] if correct_example else None,
+                minimal=rule_text[:100] if rule_text else None
+            )
+
+        # Handle tokens - use existing if present and is a dict
+        hint_tokens = hint.get("tokens", {})
+        if isinstance(hint_tokens, dict) and hint_tokens:
+            tokens = TokenCount(
+                minimal=hint_tokens.get("minimal", 25),
+                standard=hint_tokens.get("standard", 50),
+                detailed=hint_tokens.get("detailed", 75),
+                full=hint_tokens.get("full", 100)
+            )
+        else:
+            tokens = TokenCount(full=100, detailed=75, standard=50, minimal=25)  # Placeholder
 
         # Create enhanced rule
         enhanced_rule = EnhancedRule(
@@ -325,13 +384,15 @@ def _convert_hint_to_enhanced_rule(
             context=context,
             metadata=rule_metadata,
             examples=examples,
-            tokens=TokenCount(full=100, detailed=75, standard=50, minimal=25),  # Placeholder
+            tokens=tokens,
             import_map=hint.get("import_map", []),
-            has_eslint_rule=hint.get("has_eslint_rule", False)
+            has_eslint_rule=hint.get("has_eslint_rule", False),
+            relationships=hint.get("relationships", {})
         )
 
-        # Calculate actual token counts
-        enhanced_rule.tokens = calculate_token_counts(enhanced_rule)
+        # Calculate actual token counts if they weren't provided as a dict
+        if not isinstance(hint_tokens, dict) or not hint_tokens:
+            enhanced_rule.tokens = calculate_token_counts(enhanced_rule)
 
         return enhanced_rule
 

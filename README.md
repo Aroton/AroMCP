@@ -156,99 +156,56 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 ```markdown
 ## AroMCP Development Tools
 
-### Workflow Patterns
-- **File Operations**: Prefer `get_target_files` → `read_files_batch` → `write_files_batch` for batch operations
-- **Code Quality**: After changes run `parse_lint_results` and `parse_typescript_errors`
-- **Standards**: Load with `hints_for_file` before editing files (70-80% token reduction with session support)
-- **ESLint Generation**: Use orchestrated `generate_eslint_rules` for project-specific rules
-- **Session Management**: Use consistent `session_id` across requests for optimal deduplication
+### The Core Principle
+**The ONE mandatory requirement**: Always call `hints_for_file()` before editing any file to get project standards.
 
-## Mandatory File Operation Workflow
+### Essential Tools
+1. **`hints_for_file(filepath, session_id?)`** - Get project standards and coding rules (MANDATORY before edits)
+2. **`parse_typescript_errors()` or `check_typescript()`** - Validate TypeScript compilation
+3. **`parse_lint_results()` or `lint_project()`** - Check code style and quality
 
-**CRITICAL**: For ANY file operation (single file or multiple files - create, modify, delete, analyze), you MUST follow this structured workflow. This applies to everything from creating a single "hello world" file to complex multi-file refactoring:
+### Usage Pattern
 
-**Phase 1: Discovery & Planning** (MANDATORY for ALL operations - MUST use separate Task agent)
-- Launch a dedicated Task agent for discovery that focuses on the specific work at hand
-- This task has the following goals:
-  - Determine what files need to be created
-  - Summarize standards that should be used
-  - Determine optimal agent strategy (single vs parallel) for the actual work phase
-- Use targeted AroMCP file discovery tools to understand relevant project context (avoid reading all files of a type)
-- Always load coding standards FIRST for target files.
-- Analyze the scope and complexity of operations needed based on the specific task requirements
-- **Example**:
-  - I am creating a new file in "api/test/route.ts"
-  - Call `hints_for_file` for "api/test/route.ts"
-  - Analyze hints, and determine what standards must be followed
-  - Look up any other files if unclear on standards
-  - Determine whether files should be processed in parallel. Determine file batches to process in each sub agent.
+```python
+# Simple file edit
+hints = hints_for_file("src/api/user.ts", session_id="fix-user-api-123")
+# Make changes following the standards...
+errors = check_typescript()  # Quick validation
 
-**Phase 2: Structured Operations** (MANDATORY for ALL operations)
-- Launch Task agents to handle file operations (use judgment on single vs parallel based on Phase 1 analysis) **launch parallel agents with the task tool for parallel workstrems**
-- **SESSION ID REQUIREMENT**: Each agent MUST use a unique `session_id` for all AroMCP tool calls within their scope
-  - Format: `{agent-type}-{task-description}-{timestamp}` (e.g., `discovery-api-routes-1734567890`, `worker-user-auth-1734567891`)
-  - **CRITICAL**: No two agents can share the same session_id - this prevents cross-agent data corruption
-  - Use consistent session_id within each agent's scope for deduplication benefits
-- **FIRST ACTION**: Each agent must call `hints_for_file` for all files they will modify OR create (including new files that don't exist yet)
-  - Use the agent's unique `session_id` for deduplication (70-80% token savings within agent scope)
-  - Previously loaded rules within the same agent session are automatically referenced, not repeated
-- Each agent should choose appropriate tools for file operations (AroMCP tools preferred, but agents can use standard tools when more suitable)
-- Agents can create new files when necessary (this overrides general "avoid file creation" guidance)
-- Agents should use the hints to guide their implementation decisions and follow project patterns
-- **Example**:
-  - agent analyzes summary from phase 1
-  - agent calls `hints_for_file` for API file path
-  - agent creates files according to standards
-  - agent calls MCP APIs for targeted validation: `parse_lint_results(target_files=[...])` and `parse_typescript_errors()` ONLY for modified files
-  - **MANDATORY**: Use MCP APIs, NOT system commands (no npm, no build commands)
-  - **MANDATORY**: agent DOES NOT RUN DEV SERVERS, curl COMMANDS, or npm run commands
-  - **PHASE 2 COMPLETE**: Mark when all file operations and targeted MCP validations are finished
+# Multiple files - reuse session for efficiency
+session = "refactor-auth-1234"
+hints_for_file("src/auth/login.ts", session_id=session)
+hints_for_file("src/auth/logout.ts", session_id=session)  # 70-80% token savings
+# Make changes...
+parse_typescript_errors()  # Full validation
+parse_lint_results(target_files=["src/auth/*.ts"])
+```
 
-**Phase 3: Quality Assurance** (MANDATORY for ALL operations - ONLY after ALL work is complete)
-- Wait until ALL Task agents from Phase 2 have completed their file operations
-- Run comprehensive quality checks using MCP APIs: `parse_lint_results` and `parse_typescript_errors` for all project files
-- Identify any linting errors, type errors, or other issues introduced during operations
-- Launch additional Task agents to fix specific errors, with each agent focusing on particular files or error types
-- **MANDATORY**: Run full build command (npm run build, etc.) to ensure project compiles successfully
-- **MANDATORY**: NEVER run dev servers (npm run dev, npm start, etc.)
-- **PHASE 3 COMPLETE**: Mark when all errors are fixed and full build succeeds
-- **Example**: Even after creating one simple file, validate it integrates properly with the project
+### Scale to Your Task
+- **Quick fix** (1 file): Standards → Edit → Done (validate only if needed)
+- **Small feature** (2-5 files): Load all standards first → Edit → Validate changed files
+- **Major refactor**: Consider parallel processing, validate comprehensively, run full build
 
-**Decision Points for AI:**
-- **Batch Size**: Agents decide optimal file grouping based on file size, complexity, and relationships
-- **Agent Strategy**: Determine whether to use parallel agents (tasks) or single agent (todowrite) based on task complexity
-- **Error Handling**: Choose appropriate strategies for fixing different types of errors
-- **File Dependencies**: Consider import relationships and dependencies when organizing work
-- **Operation Type**: Adapt strategy based on whether creating, modifying, or deleting files
+### Other Useful Tools
+Discover available tools via MCP, but these are commonly helpful:
+- **`read_files()`/`write_files()`** - Batch file operations
+- **`find_who_imports()`** - Check dependencies before changes
+- **`execute_command()`** - Run builds and tests safely
+- **`quality_check()`** - Combined lint + TypeScript + tests
 
-**Key Principles:**
-- **Mandatory Workflow**: ALWAYS follow all 3 phases for ANY file operation, no exceptions
-- **Unique Session IDs**: Each agent MUST use a unique `session_id` for AroMCP tools - no sharing between agents
-- **Separate Discovery Agent**: Phase 1 must always use a dedicated Task agent for targeted discovery
-- **Hints at Work Start**: Every Phase 2 agent must call `hints_for_file` as their first action for all target files
-- **Focused Discovery**: Avoid over-broad discovery; focus on specific work requirements
-- **Complete Before Validate**: Phase 3 validation only starts after ALL Phase 2 work is complete
-- **File Creation Permitted**: This workflow overrides general "avoid file creation" guidance when files are needed
-- **Token Efficiency**: Each Task agent works within manageable token limits
-- **Sub agents**: parallel work streams are run in sub agents using the task tool. Run multiple Task invocations in a SINGLE message.
+### Best Practices
+✅ Always check standards before editing (the one hard rule)
+✅ Use consistent `session_id` within operations for token efficiency
+✅ Focus validation on changed files
+✅ Let task complexity guide your approach
 
-**Phase Completion Markers** (MANDATORY - explicitly state when each phase is done):
-- **Phase 1**: "Discovery complete, strategy determined"
-- **Phase 2**: "All file operations complete, targeted validations finished"  
-- **Phase 3**: "Quality assurance complete, full build successful"
+❌ Don't skip `hints_for_file()` - ever
+❌ Don't run dev servers (`npm run dev`, etc.)
+❌ Don't over-process simple tasks
+❌ Don't validate unchanged files unless debugging
 
-**Command Types (CRITICAL distinction)**:
-- **MCP APIs** (use these): `parse_lint_results`, `parse_typescript_errors`, `hints_for_file`, `get_target_files`, etc.
-- **System Commands** (use sparingly): `npm run build` (only in Phase 3), `uv run pytest` (only for final validation)
-- **FORBIDDEN Commands**: `npm run dev`, `npm start`, `yarn dev`, any dev server commands
-
-**Common Examples Requiring This Workflow:**
-- ✅ Creating a single new API endpoint file
-- ✅ Modifying one configuration file
-- ✅ Adding a new utility function file
-- ✅ Deleting unused files
-- ✅ Complex multi-file refactoring
-- ✅ ANY file operation, regardless of size or complexity
+### The Bottom Line
+Check standards before editing. Everything else adapts to what you're doing. Simple tasks need simple workflows.
 ```
 
 **[Complete Integration Guide →](documentation/claude_code.md)**

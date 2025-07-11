@@ -20,6 +20,63 @@ class RuleCompressor:
             "reference": self._format_for_reference
         }
 
+    def _get_example_by_visit_count(self, rule: EnhancedRule, visit_count: int) -> str:
+        """Get example based on visit count, progressing from largest to smallest."""
+        # Order examples from largest to smallest
+        examples_by_size = []
+        
+        # Collect all available examples with their lengths
+        if rule.examples.full and rule.examples.full.strip():
+            examples_by_size.append(("full", rule.examples.full, len(rule.examples.full)))
+        if rule.examples.detailed and rule.examples.detailed.strip():
+            examples_by_size.append(("detailed", rule.examples.detailed, len(rule.examples.detailed)))
+        if rule.examples.standard and rule.examples.standard.strip():
+            examples_by_size.append(("standard", rule.examples.standard, len(rule.examples.standard)))
+        if rule.examples.minimal and rule.examples.minimal.strip():
+            examples_by_size.append(("minimal", rule.examples.minimal, len(rule.examples.minimal)))
+        
+        # Sort by length descending (largest first)
+        examples_by_size.sort(key=lambda x: x[2], reverse=True)
+        
+        # Select example based on visit count (0-indexed)
+        if examples_by_size:
+            index = min(visit_count, len(examples_by_size) - 1)
+            return examples_by_size[index][1]
+        
+        # Fallback to rule text if no examples
+        return rule.rule or ""
+
+    def _estimate_example_tokens(self, example: str) -> int:
+        """Estimate token count for an example."""
+        from ..utils.token_utils import estimate_tokens
+        return estimate_tokens(example)
+
+    def _get_expert_example_by_visit_count(self, rule: EnhancedRule, visit_count: int) -> str:
+        """Get example for experts, starting from smallest and progressing up."""
+        # Order examples from smallest to largest for experts
+        examples_by_size = []
+        
+        # Collect all available examples with their lengths
+        if rule.examples.minimal and rule.examples.minimal.strip():
+            examples_by_size.append(("minimal", rule.examples.minimal, len(rule.examples.minimal)))
+        if rule.examples.standard and rule.examples.standard.strip():
+            examples_by_size.append(("standard", rule.examples.standard, len(rule.examples.standard)))
+        if rule.examples.detailed and rule.examples.detailed.strip():
+            examples_by_size.append(("detailed", rule.examples.detailed, len(rule.examples.detailed)))
+        if rule.examples.full and rule.examples.full.strip():
+            examples_by_size.append(("full", rule.examples.full, len(rule.examples.full)))
+        
+        # Sort by length ascending (smallest first for experts)
+        examples_by_size.sort(key=lambda x: x[2])
+        
+        # Select example based on visit count (0-indexed)
+        if examples_by_size:
+            index = min(visit_count, len(examples_by_size) - 1)
+            return examples_by_size[index][1]
+        
+        # Fallback to rule text if no examples
+        return rule.rule or ""
+
     def compress_rule(self, rule: EnhancedRule, context: dict[str, Any], session: SessionState) -> dict[str, Any]:
         """Apply smart compression to a rule."""
         try:
@@ -63,6 +120,10 @@ class RuleCompressor:
         self, rule: EnhancedRule, context: dict[str, Any], session: SessionState
     ) -> dict[str, Any]:
         """Format rule for first-time viewing."""
+        # Get progressive example based on visit count
+        visit_count = session.get_rule_visit_count(rule.rule_id)
+        example = self._get_example_by_visit_count(rule, visit_count)
+        
         detail_level = self._determine_detail_level(rule, context, session)
 
         if detail_level == "detailed":
@@ -70,51 +131,65 @@ class RuleCompressor:
                 "rule_id": rule.rule_id,
                 "rule": rule.rule,
                 "context": rule.context,
-                "example": rule.examples.detailed or rule.examples.standard or rule.examples.full,
+                "example": example,
                 "imports": rule.import_map,
                 "metadata": {
                     "pattern_type": rule.metadata.pattern_type,
                     "complexity": rule.metadata.complexity,
                     "rule_type": rule.metadata.rule_type
                 },
-                "tokens": rule.tokens.detailed if rule.examples.detailed else rule.tokens.standard,
-                "has_eslint_rule": rule.has_eslint_rule
+                "tokens": self._estimate_example_tokens(example),
+                "has_eslint_rule": rule.has_eslint_rule,
+                "visit_count": visit_count
             }
         else:
             return {
                 "rule_id": rule.rule_id,
                 "rule": rule.rule,
                 "context": rule.context[:200] + "..." if len(rule.context) > 200 else rule.context,
-                "example": rule.examples.standard or rule.examples.full,
+                "example": example,
                 "imports": rule.import_map,
                 "pattern_type": rule.metadata.pattern_type,
-                "tokens": rule.tokens.standard,
-                "has_eslint_rule": rule.has_eslint_rule
+                "tokens": self._estimate_example_tokens(example),
+                "has_eslint_rule": rule.has_eslint_rule,
+                "visit_count": visit_count
             }
 
     def _format_for_familiar(
         self, rule: EnhancedRule, context: dict[str, Any], session: SessionState
     ) -> dict[str, Any]:
         """Format rule for familiar patterns."""
+        # Get progressive example based on visit count
+        visit_count = session.get_rule_visit_count(rule.rule_id)
+        example = self._get_example_by_visit_count(rule, visit_count)
+        
         return {
             "rule_id": rule.rule_id,
             "rule": rule.rule,
             "hint": rule.examples.minimal or f"Apply {rule.metadata.pattern_type} pattern",
-            "example": rule.examples.standard or rule.examples.minimal,
+            "example": example,
             "imports": rule.import_map if rule.import_map else None,
-            "tokens": rule.tokens.standard if rule.examples.standard else rule.tokens.minimal,
-            "has_eslint_rule": rule.has_eslint_rule
+            "tokens": self._estimate_example_tokens(example),
+            "has_eslint_rule": rule.has_eslint_rule,
+            "visit_count": visit_count
         }
 
     def _format_for_expert(self, rule: EnhancedRule, context: dict[str, Any], session: SessionState) -> dict[str, Any]:
         """Format rule for expert users."""
+        # Even experts get progressive examples, but starting from smaller ones
+        visit_count = session.get_rule_visit_count(rule.rule_id)
+        # For experts, start from minimal examples and progress
+        expert_example = self._get_expert_example_by_visit_count(rule, visit_count)
+        
         return {
             "rule_id": rule.rule_id,
             "rule": rule.rule,
             "hint": rule.examples.minimal or f"{rule.metadata.pattern_type}",
+            "example": expert_example,
             "imports": rule.import_map if rule.import_map else None,
-            "tokens": rule.tokens.minimal,
-            "has_eslint_rule": rule.has_eslint_rule
+            "tokens": self._estimate_example_tokens(expert_example),
+            "has_eslint_rule": rule.has_eslint_rule,
+            "visit_count": visit_count
         }
 
     def _format_for_reference(
