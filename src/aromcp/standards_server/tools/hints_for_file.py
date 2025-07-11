@@ -241,7 +241,11 @@ def hints_for_file_impl(
                                     modules_used.append(module_name)
 
                 # Create optimized hint - exclude complex nested objects
-                optimized_hint = {k: v for k, v in rule.items() if k not in ("importMap", "metadata", "standardId", "examples", "compression", "relationships")}
+                excluded_keys = (
+                    "importMap", "metadata", "standardId",
+                    "examples", "compression", "relationships"
+                )
+                optimized_hint = {k: v for k, v in rule.items() if k not in excluded_keys}
 
                 # Handle examples - convert enhanced format to legacy format for backward compatibility
                 if "examples" in rule and isinstance(rule["examples"], dict):
@@ -253,7 +257,7 @@ def hints_for_file_impl(
                         optimized_hint["correctExample"] = examples["full"]
                     elif examples.get("minimal"):
                         optimized_hint["correctExample"] = examples["minimal"]
-                    
+
                     # Add other example variants if available
                     if examples.get("minimal"):
                         optimized_hint["minimalExample"] = examples["minimal"]
@@ -268,7 +272,11 @@ def hints_for_file_impl(
 
                 # Apply import stripping to all example fields
                 from .._storage import _strip_imports_from_code
-                for example_field in ["correctExample", "incorrectExample", "example", "minimalExample", "detailedExample"]:
+                example_fields = [
+                    "correctExample", "incorrectExample", "example",
+                    "minimalExample", "detailedExample"
+                ]
+                for example_field in example_fields:
                     if example_field in optimized_hint and optimized_hint[example_field]:
                         optimized_hint[example_field] = _strip_imports_from_code(optimized_hint[example_field])
 
@@ -311,7 +319,7 @@ def _convert_hint_to_enhanced_rule(
     """Convert hint to enhanced rule format, handling both legacy and modern formats."""
     from ..models.enhanced_rule import EnhancedRule, RuleExamples, RuleMetadata, TokenCount
     from ..utils.token_utils import calculate_token_counts
-    
+
     try:
         # Validate that hint is a dictionary
         if not isinstance(hint, dict):

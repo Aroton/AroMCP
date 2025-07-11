@@ -276,8 +276,8 @@ class TestRuleCompressor:
         for i in range(5):
             # Create large examples that will actually use significant tokens
             large_example = f"function validateExample{i}() {{\n" + \
-                           f"  const result = validateInput(data);\n" * 10 + \
-                           f"  return processValidation(result);\n" + \
+                           "  const result = validateInput(data);\n" * 10 + \
+                           "  return processValidation(result);\n" + \
                            "}"
             rule = EnhancedRule(
                 rule=f"Rule {i}",

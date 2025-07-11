@@ -24,7 +24,7 @@ class RuleCompressor:
         """Get example based on visit count, progressing from largest to smallest."""
         # Order examples from largest to smallest
         examples_by_size = []
-        
+
         # Collect all available examples with their lengths
         if rule.examples.full and rule.examples.full.strip():
             examples_by_size.append(("full", rule.examples.full, len(rule.examples.full)))
@@ -34,15 +34,15 @@ class RuleCompressor:
             examples_by_size.append(("standard", rule.examples.standard, len(rule.examples.standard)))
         if rule.examples.minimal and rule.examples.minimal.strip():
             examples_by_size.append(("minimal", rule.examples.minimal, len(rule.examples.minimal)))
-        
+
         # Sort by length descending (largest first)
         examples_by_size.sort(key=lambda x: x[2], reverse=True)
-        
+
         # Select example based on visit count (0-indexed)
         if examples_by_size:
             index = min(visit_count, len(examples_by_size) - 1)
             return examples_by_size[index][1]
-        
+
         # Fallback to rule text if no examples
         return rule.rule or ""
 
@@ -55,7 +55,7 @@ class RuleCompressor:
         """Get example for experts, starting from smallest and progressing up."""
         # Order examples from smallest to largest for experts
         examples_by_size = []
-        
+
         # Collect all available examples with their lengths
         if rule.examples.minimal and rule.examples.minimal.strip():
             examples_by_size.append(("minimal", rule.examples.minimal, len(rule.examples.minimal)))
@@ -65,15 +65,15 @@ class RuleCompressor:
             examples_by_size.append(("detailed", rule.examples.detailed, len(rule.examples.detailed)))
         if rule.examples.full and rule.examples.full.strip():
             examples_by_size.append(("full", rule.examples.full, len(rule.examples.full)))
-        
+
         # Sort by length ascending (smallest first for experts)
         examples_by_size.sort(key=lambda x: x[2])
-        
+
         # Select example based on visit count (0-indexed)
         if examples_by_size:
             index = min(visit_count, len(examples_by_size) - 1)
             return examples_by_size[index][1]
-        
+
         # Fallback to rule text if no examples
         return rule.rule or ""
 
@@ -123,7 +123,7 @@ class RuleCompressor:
         # Get progressive example based on visit count
         visit_count = session.get_rule_visit_count(rule.rule_id)
         example = self._get_example_by_visit_count(rule, visit_count)
-        
+
         detail_level = self._determine_detail_level(rule, context, session)
 
         if detail_level == "detailed":
@@ -162,7 +162,7 @@ class RuleCompressor:
         # Get progressive example based on visit count
         visit_count = session.get_rule_visit_count(rule.rule_id)
         example = self._get_example_by_visit_count(rule, visit_count)
-        
+
         return {
             "rule_id": rule.rule_id,
             "rule": rule.rule,
@@ -180,7 +180,7 @@ class RuleCompressor:
         visit_count = session.get_rule_visit_count(rule.rule_id)
         # For experts, start from minimal examples and progress
         expert_example = self._get_expert_example_by_visit_count(rule, visit_count)
-        
+
         return {
             "rule_id": rule.rule_id,
             "rule": rule.rule,

@@ -108,13 +108,13 @@ def select_hints_by_budget(
                     response_hint["correctExample"] = examples["minimal"]
                 else:
                     response_hint["correctExample"] = ""
-                
+
                 # Add other example formats if available
                 if examples.get("minimal"):
                     response_hint["minimalExample"] = examples["minimal"]
                 if examples.get("detailed"):
                     response_hint["detailedExample"] = examples["detailed"]
-                
+
                 response_hint["incorrectExample"] = hint.get("incorrectExample", "")
             else:
                 # Legacy format - use existing fields
@@ -130,7 +130,7 @@ def select_hints_by_budget(
             # Include standard ID if present for reference
             if "standardId" in hint:
                 response_hint["standardId"] = hint["standardId"]
-            
+
             # Include other useful fields
             if "has_eslint_rule" in hint:
                 response_hint["has_eslint_rule"] = hint["has_eslint_rule"]
