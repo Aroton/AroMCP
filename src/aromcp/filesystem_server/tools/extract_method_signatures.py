@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ...utils.pagination import paginate_list
+from ...utils.pagination import simplify_pagination
 from .._security import get_project_root, validate_file_path_legacy
 
 
@@ -162,15 +162,16 @@ def extract_method_signatures_impl(
         if errors:
             metadata["errors"] = errors
 
-        # Apply pagination with deterministic sorting
-        # Sort by file_path, then by name for consistent ordering
-        return paginate_list(
+        # Apply simplified pagination with token-based sizing
+        result = simplify_pagination(
             items=all_signatures,
             page=page,
             max_tokens=max_tokens,
             sort_key=lambda x: (x.get("file_path", ""), x.get("name", "")),
             metadata=metadata
         )
+        
+        return {"data": result}
 
     except Exception as e:
         return {

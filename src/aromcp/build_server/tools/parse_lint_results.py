@@ -6,7 +6,7 @@ import subprocess
 from typing import Any
 
 from ...filesystem_server._security import get_project_root, validate_file_path
-from ...utils.pagination import paginate_list
+from ...utils.pagination import simplify_pagination
 
 
 def parse_lint_results_impl(
@@ -190,13 +190,16 @@ def _run_eslint(
         )
     }
 
-    return paginate_list(
+    # Apply simplified pagination with token-based sizing
+    result = simplify_pagination(
         items=all_issues,
         page=page,
         max_tokens=max_tokens,
         sort_key=lambda x: (x.get("file", ""), x.get("line", 0), x.get("column", 0)),
         metadata=metadata
     )
+    
+    return {"data": result}
 
 
 def _parse_eslint_output(
@@ -315,14 +318,16 @@ def _run_prettier(
             "command": " ".join(cmd)
         }
 
-        # Apply pagination with deterministic sorting by file path
-        return paginate_list(
+        # Apply simplified pagination with token-based sizing
+        result = simplify_pagination(
             items=issues,
             page=page,
             max_tokens=max_tokens,
             sort_key=lambda x: x.get("file", ""),
             metadata=metadata
         )
+        
+        return {"data": result}
 
     except subprocess.TimeoutExpired:
         return {
@@ -428,15 +433,16 @@ def _run_stylelint(
             "command": " ".join(cmd)
         }
 
-        # Apply pagination with deterministic sorting
-        # Sort by file, then by line, then by column for consistent ordering
-        return paginate_list(
+        # Apply simplified pagination with token-based sizing
+        result = simplify_pagination(
             items=issues,
             page=page,
             max_tokens=max_tokens,
             sort_key=lambda x: (x.get("file", ""), x.get("line", 0), x.get("column", 0)),
             metadata=metadata
         )
+        
+        return {"data": result}
 
     except subprocess.TimeoutExpired:
         return {

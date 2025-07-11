@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ...filesystem_server._security import get_project_root, validate_file_path
-from ...utils.pagination import paginate_list
+from ...utils.pagination import simplify_pagination
 
 
 def parse_typescript_errors_impl(
@@ -175,15 +175,16 @@ def parse_typescript_errors_impl(
             if files and use_build_command:
                 metadata["note"] = "Individual file checking not supported with build command; checked entire project"
 
-            # Apply pagination with deterministic sorting
-            # Sort by file, then by line, then by column for consistent ordering
-            return paginate_list(
+            # Apply simplified pagination with token-based sizing
+            result = simplify_pagination(
                 items=errors,
                 page=page,
                 max_tokens=max_tokens,
                 sort_key=lambda x: (x.get("file", ""), x.get("line", 0), x.get("column", 0)),
                 metadata=metadata
             )
+            
+            return {"data": result}
 
         except subprocess.TimeoutExpired:
             return {

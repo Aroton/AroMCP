@@ -5,13 +5,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ...utils.pagination import paginate_list
+from ...utils.pagination import simplify_pagination
 from .._security import get_project_root
 
 
 def get_target_files_impl(
     patterns: str | list[str],
     project_root: str | None = None,
+    details: bool = False,
     page: int = 1,
     max_tokens: int = 20000
 ) -> dict[str, Any]:
@@ -20,6 +21,7 @@ def get_target_files_impl(
     Args:
         patterns: File patterns to match (glob patterns like "**/*.py", "src/**/*.js")
         project_root: Root directory of the project
+        details: Include size, modified, absolute_path (default: False)
         page: Page number for pagination (1-based, default: 1)
         max_tokens: Maximum tokens per page (default: 20000)
 
@@ -70,23 +72,26 @@ def get_target_files_impl(
             # patterns is already a list[str]
             processed_patterns = patterns
 
-        files = _get_files_by_pattern(processed_patterns, project_path)
+        files = _get_files_by_pattern(processed_patterns, project_path, details)
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        # Apply pagination with deterministic sorting by path
+        # Create metadata
         metadata = {
             "patterns": processed_patterns,
             "duration_ms": duration_ms
         }
 
-        return paginate_list(
+        # Apply simplified pagination with token-based sizing
+        result = simplify_pagination(
             items=files,
             page=page,
             max_tokens=max_tokens,
-            sort_key=lambda x: x["path"],  # Deterministic sorting by path
+            sort_key=lambda x: x["path"],
             metadata=metadata
         )
+        
+        return {"data": result}
 
     except Exception as e:
         return {
@@ -98,7 +103,7 @@ def get_target_files_impl(
 
 
 def _get_files_by_pattern(
-    patterns: list[str], project_path: Path
+    patterns: list[str], project_path: Path, details: bool
 ) -> list[dict[str, Any]]:
     """Get files matching glob patterns."""
     files = []
@@ -115,14 +120,23 @@ def _get_files_by_pattern(
         for match in matches:
             if match.is_file():
                 rel_path = match.relative_to(project_path)
-                stat = match.stat()
-                files.append({
+                
+                # Create compact output by default
+                file_info = {
                     "path": str(rel_path),
-                    "absolute_path": str(match),
-                    "size": stat.st_size,
-                    "modified": stat.st_mtime,
-                    "pattern": pattern
-                })
+                    "matched_pattern": pattern
+                }
+                
+                # Add details only if requested
+                if details:
+                    stat = match.stat()
+                    file_info.update({
+                        "absolute_path": str(match),
+                        "size": stat.st_size,
+                        "modified": stat.st_mtime
+                    })
+                
+                files.append(file_info)
 
     # Remove duplicates based on path
     seen_paths = set()

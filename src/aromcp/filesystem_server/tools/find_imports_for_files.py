@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ...utils.pagination import paginate_list
+from ...utils.pagination import simplify_pagination
 from .._security import get_project_root, validate_file_path_legacy
 
 logger = logging.getLogger(__name__)
@@ -175,15 +175,16 @@ def find_imports_for_files_impl(
             }
         }
 
-        # Apply pagination with deterministic sorting
-        # Sort by target_file, then by importer file path
-        return paginate_list(
+        # Apply simplified pagination with token-based sizing
+        result = simplify_pagination(
             items=all_importers,
             page=page,
             max_tokens=max_tokens,
             sort_key=lambda x: (x.get("target_file", ""), x.get("file", "")),
             metadata=metadata
         )
+        
+        return {"data": result}
 
     except Exception as e:
         return {

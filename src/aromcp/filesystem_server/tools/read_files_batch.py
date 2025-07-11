@@ -6,7 +6,7 @@ from typing import Any
 
 import chardet
 
-from ...utils.pagination import paginate_list
+from ...utils.pagination import simplify_pagination
 from .._security import get_project_root, validate_file_path_legacy
 
 
@@ -161,14 +161,16 @@ def read_files_batch_impl(
         if errors:
             metadata["errors"] = errors
 
-        # Return paginated list
-        return paginate_list(
+        # Apply simplified pagination with token-based sizing
+        result = simplify_pagination(
             items=files_list,
             page=page,
             max_tokens=max_tokens,
-            sort_key=lambda x: x["file_path"],  # Sort by file path
+            sort_key=lambda x: x["file_path"],
             metadata=metadata
         )
+        
+        return {"data": result}
 
     except Exception as e:
         return {
