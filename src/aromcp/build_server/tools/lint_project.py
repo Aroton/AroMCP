@@ -127,14 +127,19 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
                 raise ValueError("ESLint not found (npx eslint)") from e
 
         # Calculate summary
+        total_issues = len(all_issues)
         fixable_count = len([i for i in all_issues if i.get("fixable", False)])
         error_count = len([i for i in all_issues if i.get("severity") == "error"])
         warning_count = len([i for i in all_issues if i.get("severity") == "warning"])
 
+        # Limit to first 100 results
+        limited_issues = all_issues[:100]
+
         return {
-            "issues": all_issues,
+            "issues": limited_issues,
             "fixable": fixable_count,
-            "total_issues": len(all_issues),
+            "total_issues": total_issues,
+            "shown_issues": len(limited_issues),
             "error_count": error_count,
             "warning_count": warning_count,
             "config_used": (" + ".join(commands_run) if len(commands_run) > 1
