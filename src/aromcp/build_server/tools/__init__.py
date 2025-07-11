@@ -37,7 +37,8 @@ def register_build_tools(mcp):
         return check_typescript_impl(files)
 
     @mcp.tool
-    def lint_project(use_standards: bool = True) -> dict[str, Any]:
+    @json_convert
+    def lint_project(use_standards: bool = True, target_files: str | list[str] | None = None) -> dict[str, Any]:
         """Run ESLint to find code style issues and potential bugs.
 
         Use this tool when:
@@ -50,14 +51,18 @@ def register_build_tools(mcp):
 
         Args:
             use_standards: Whether to use standards server generated ESLint config
+            target_files: Specific files to lint (optional, defaults to all files in src/)
 
         Example:
             lint_project()
             → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}], "fixable": 5}
 
+            lint_project(target_files=["src/components/Button.jsx"])
+            → {"issues": [], "fixable": 0}
+
         Note: Requires ESLint configuration in project. For auto-fixing, run ESLint with --fix flag manually.
         """
-        return lint_project_impl(use_standards)
+        return lint_project_impl(use_standards, target_files)
 
     @mcp.tool
     def run_test_suite(

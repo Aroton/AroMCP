@@ -8,7 +8,7 @@ from typing import Any
 from ...filesystem_server._security import get_project_root
 
 
-def lint_project_impl(use_standards: bool = True, target_files: list[str] | None = None) -> dict[str, Any]:
+def lint_project_impl(use_standards: bool = True, target_files: str | list[str] | None = None) -> dict[str, Any]:
     """Run ESLint to find code style issues and bugs.
 
     Args:
@@ -22,6 +22,10 @@ def lint_project_impl(use_standards: bool = True, target_files: list[str] | None
         # Use MCP_FILE_ROOT
         project_root = get_project_root(None)
         project_path = Path(project_root)
+
+        # Handle string input for target_files
+        if isinstance(target_files, str):
+            target_files = [target_files]
 
         is_nextjs = _is_nextjs_project(project_root)
         all_issues = []
@@ -165,7 +169,7 @@ def _is_nextjs_project(project_root: str) -> bool:
 def _get_standards_eslint_config(project_root: str) -> str | None:
     """Get path to standards-generated ESLint config if it exists."""
     aromcp_dir = Path(project_root) / ".aromcp"
-    eslint_config = aromcp_dir / "eslint" / "standards.eslint.config.js"
+    eslint_config = aromcp_dir / "eslint" / "standards-config.js"
 
     if eslint_config.exists():
         return str(eslint_config)
@@ -213,37 +217,3 @@ def _parse_eslint_output_enhanced(
     return issues
 
 
-def _parse_eslint_output(output: str) -> tuple[list[dict[str, Any]], int]:
-    """Parse ESLint JSON output into structured issues."""
-    try:
-        data = json.loads(output) if output.strip() else []
-    except json.JSONDecodeError:
-        return [], 0
-
-    issues = []
-    fixable_count = 0
-
-    for file_result in data:
-        file_path = file_result.get("filePath", "")
-        # Convert absolute path to relative
-        if file_path.startswith("/"):
-            try:
-                file_path = str(Path(file_path).relative_to(Path.cwd()))
-            except ValueError:
-                pass  # Keep absolute path if can't make relative
-
-        for message in file_result.get("messages", []):
-            issues.append({
-                "file": file_path,
-                "line": message.get("line", 0),
-                "column": message.get("column", 0),
-                "rule": message.get("ruleId", "unknown"),
-                "severity": "error" if message.get("severity") == 2 else "warning",
-                "message": message.get("message", ""),
-                "fixable": message.get("fix") is not None
-            })
-
-            if message.get("fix"):
-                fixable_count += 1
-
-    return issues, fixable_count
