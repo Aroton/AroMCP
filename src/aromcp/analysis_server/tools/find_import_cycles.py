@@ -6,8 +6,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ...filesystem_server.tools.get_target_files import get_target_files_impl
-
 logger = logging.getLogger(__name__)
 
 
@@ -106,7 +104,7 @@ def find_import_cycles_impl(
 
 def _get_project_files(
     project_root: str, patterns: list[str], include_node_modules: bool
-) -> list[dict[str, Any]]:
+) -> list[str]:
     """Get all project files matching the patterns.
 
     Args:
@@ -115,39 +113,38 @@ def _get_project_files(
         include_node_modules: Whether to include node_modules
 
     Returns:
-        List of file information dictionaries
+        List of file paths
     """
+    # Use pathlib directly instead of list_files_impl to avoid MCP_FILE_ROOT dependency
+    from pathlib import Path
+
+    project_path = Path(project_root)
     all_files = []
 
     for pattern in patterns:
-        result = get_target_files_impl(
-            patterns=[pattern],
-            project_root=project_root
-        )
+        if pattern.startswith('/'):
+            # Absolute pattern within project
+            matches = list(project_path.glob(pattern[1:]))
+        else:
+            # Relative pattern
+            matches = list(project_path.rglob(pattern))
 
-        if "data" in result:
-            files = result["data"]["items"]
+        for match in matches:
+            if match.is_file():
+                rel_path = str(match.relative_to(project_path))
 
-            # Filter out node_modules if not included
-            if not include_node_modules:
-                files = [f for f in files if "node_modules" not in f["path"]]
+                # Filter out node_modules if not included
+                if not include_node_modules and "node_modules" in rel_path:
+                    continue
 
-            all_files.extend(files)
+                all_files.append(rel_path)
 
-    # Remove duplicates based on file path
-    seen_paths = set()
-    unique_files = []
-    for file_info in all_files:
-        path = file_info["path"]
-        if path not in seen_paths:
-            seen_paths.add(path)
-            unique_files.append(file_info)
-
-    return unique_files
+    # Remove duplicates and sort
+    return sorted(set(all_files))
 
 
 def _build_dependency_graph(
-    project_files: list[dict[str, Any]], project_root: str
+    project_files: list[str], project_root: str
 ) -> dict[str, list[str]]:
     """Build a dependency graph from import statements.
 
@@ -160,25 +157,34 @@ def _build_dependency_graph(
     """
     graph = {}
 
-    for file_info in project_files:
-        file_path = file_info["path"]
-        absolute_path = file_info.get("absolute_path", file_path)
+    for file_path in project_files:
+        absolute_path = Path(project_root) / file_path
 
         try:
             # Get imports for this file
-            imports = _extract_imports_from_file(absolute_path, project_root)
+            imports = _extract_imports_from_file(str(absolute_path), project_root)
 
             # Resolve import paths to actual files
             resolved_imports = _resolve_import_paths(
-                imports, absolute_path, project_root
+                imports, str(absolute_path), project_root
             )
 
-            # Add to graph
-            graph[absolute_path] = resolved_imports
+            # Convert absolute paths to relative paths for the graph
+            relative_imports = []
+            for imp in resolved_imports:
+                try:
+                    rel_path = str(Path(imp).relative_to(Path(project_root)))
+                    relative_imports.append(rel_path)
+                except ValueError:
+                    # If it's not relative to project, skip it
+                    pass
+
+            # Add to graph (use relative path as key)
+            graph[file_path] = relative_imports
 
         except Exception:
             # Skip files that can't be analyzed
-            graph[absolute_path] = []
+            graph[file_path] = []
 
     return graph
 
@@ -489,14 +495,12 @@ def _find_cycles_in_graph(
         List of cycles (each cycle is a list of file paths)
     """
     cycles = []
-    visited = set()
-    rec_stack = set()
 
-    def dfs(node: str, path: list[str]) -> None:
+    def dfs(node: str, path: list[str], visited: set[str]) -> None:
         if len(path) > max_depth:
             return
 
-        if node in rec_stack:
+        if node in path:
             # Found a cycle
             cycle_start = path.index(node)
             cycle = path[cycle_start:] + [node]
@@ -507,28 +511,31 @@ def _find_cycles_in_graph(
             return
 
         visited.add(node)
-        rec_stack.add(node)
         path.append(node)
 
         for neighbor in graph.get(node, []):
-            dfs(neighbor, path.copy())
-
-        rec_stack.remove(node)
+            dfs(neighbor, path.copy(), visited.copy())
 
     # Start DFS from each node
     for node in graph:
-        if node not in visited:
-            dfs(node, [])
+        dfs(node, [], set())
 
     # Remove duplicate cycles
     unique_cycles = []
     seen_cycle_sets = set()
 
     for cycle in cycles:
+        if len(cycle) <= 1:  # Skip invalid cycles
+            continue
+
         # Normalize cycle (start from lexicographically smallest)
-        min_idx = cycle.index(min(cycle[:-1]))  # Exclude the duplicate last element
-        normalized = cycle[min_idx:-1] + cycle[:min_idx] + [cycle[min_idx]]
-        cycle_set = frozenset(normalized[:-1])  # Exclude duplicate last element
+        cycle_nodes = cycle[:-1]  # Remove duplicate last element
+        if not cycle_nodes:
+            continue
+
+        min_idx = cycle_nodes.index(min(cycle_nodes))
+        normalized = cycle_nodes[min_idx:] + cycle_nodes[:min_idx] + [cycle_nodes[min_idx]]
+        cycle_set = frozenset(cycle_nodes)
 
         if cycle_set not in seen_cycle_sets:
             seen_cycle_sets.add(cycle_set)

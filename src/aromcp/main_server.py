@@ -25,7 +25,6 @@ mcp = FastMCP(
 # Register all tools from different modules
 # Filesystem tools now use @json_convert decorators for automatic parameter parsing
 register_filesystem_tools(mcp)
-# register_state_tools(mcp)
 register_build_tools(mcp)
 register_analysis_tools(mcp)
 register_standards_tools(mcp)

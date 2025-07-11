@@ -5,39 +5,32 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ...utils.pagination import simplify_pagination
 from .._security import get_project_root, validate_file_path_legacy
 
 
 def extract_method_signatures_impl(
     file_paths: str | list[str],
-    project_root: str | None = None,
     include_docstrings: bool = True,
     include_decorators: bool = True,
-    expand_patterns: bool = True,
-    page: int = 1,
-    max_tokens: int = 20000
-) -> dict[str, Any]:
+    expand_patterns: bool = True
+) -> list[dict[str, Any]]:
     """Parse code files to extract function/method signatures programmatically.
 
     Args:
         file_paths: Path to code file(s) or glob pattern(s) - can be string or list
-        project_root: Root directory of the project
         include_docstrings: Whether to include function docstrings
         include_decorators: Whether to include function decorators
         expand_patterns: Whether to expand glob patterns in file_paths (default: True)
-        page: Page number for pagination (1-based, default: 1)
-        max_tokens: Maximum tokens per page (default: 20000)
 
     Returns:
-        Dictionary with paginated extracted signatures and metadata
+        List of extracted signatures
     """
     import time
-    start_time = time.time()
+    time.time()
 
     try:
-        # Resolve project root
-        project_root = get_project_root(project_root)
+        # Use MCP_FILE_ROOT
+        project_root = get_project_root(None)
 
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
@@ -145,41 +138,11 @@ def extract_method_signatures_impl(
                     "error": str(e)
                 })
 
-        duration_ms = int((time.time() - start_time) * 1000)
-
-        # Create metadata for pagination
-        metadata: dict[str, Any] = {
-            "summary": {
-                "total_files": len(actual_file_paths),
-                "input_patterns": len(input_paths),
-                "successful": files_processed,
-                "failed": len(errors),
-                "patterns_expanded": expand_patterns,
-                "duration_ms": duration_ms
-            }
-        }
-
-        if errors:
-            metadata["errors"] = errors
-
-        # Apply simplified pagination with token-based sizing
-        result = simplify_pagination(
-            items=all_signatures,
-            page=page,
-            max_tokens=max_tokens,
-            sort_key=lambda x: (x.get("file_path", ""), x.get("name", "")),
-            metadata=metadata
-        )
-        
-        return {"data": result}
+        # Return simple list of signatures
+        return all_signatures
 
     except Exception as e:
-        return {
-            "error": {
-                "code": "OPERATION_FAILED",
-                "message": f"Failed to extract signatures: {str(e)}"
-            }
-        }
+        raise ValueError(f"Failed to extract signatures: {str(e)}") from e
 
 
 

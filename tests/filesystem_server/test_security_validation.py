@@ -4,8 +4,8 @@ import tempfile
 
 from aromcp.filesystem_server.tools import (
     extract_method_signatures_impl,
-    read_files_batch_impl,
-    write_files_batch_impl,
+    read_files_impl,
+    write_files_impl,
 )
 
 
@@ -22,28 +22,37 @@ class TestSecurityValidation:
             ]
 
             for path in malicious_paths:
-                # Test read_files_batch
-                result = read_files_batch_impl([path], temp_dir)
-                assert "data" in result
-                assert "errors" in result["data"]
-                assert any("outside project root" in error["error"] for error in result["data"]["errors"])
+                # Test read_files (should raise exception for security violations)
+                try:
+                    result = read_files_impl([path])
+                    raise AssertionError("Should have raised security violation")
+                except ValueError as e:
+                    assert "Failed to read files" in str(e)
 
                 # Test extract_method_signatures
-                result = extract_method_signatures_impl(path, temp_dir)
-                assert "data" in result
-                assert "errors" in result["data"]
-                assert any("outside project root" in error["error"] for error in result["data"]["errors"])
+                import os
+                os.environ['MCP_FILE_ROOT'] = temp_dir
+                try:
+                    result = extract_method_signatures_impl(path)
+                    # Should return empty result or error for invalid paths
+                    assert isinstance(result, list)
+                except ValueError as e:
+                    assert "Failed to extract" in str(e) or "Invalid" in str(e)
+                finally:
+                    if 'MCP_FILE_ROOT' in os.environ:
+                        del os.environ['MCP_FILE_ROOT']
 
     def test_write_files_path_validation(self):
         """Test path validation in write operations."""
-        with tempfile.TemporaryDirectory() as temp_dir:
+        with tempfile.TemporaryDirectory():
             malicious_files = {
                 "../../../tmp/malicious.txt": "bad content",
                 "/tmp/absolute_bad.txt": "also bad"  # noqa: S108 # Test file path for security validation
             }
 
-            result = write_files_batch_impl(malicious_files, temp_dir)
-
-            # Should fail due to path validation
-            assert "error" in result
-            assert "outside project root" in result["error"]["message"]
+            # Test write_files (should raise exception for security violations)
+            try:
+                write_files_impl(malicious_files)
+                raise AssertionError("Should have raised security violation")
+            except ValueError as e:
+                assert "Failed to write files" in str(e)

@@ -266,26 +266,26 @@ def create_paginator(
     )
 
 def simplify_pagination(
-    items: list[Any], 
-    page: int, 
-    max_tokens: int, 
+    items: list[Any],
+    page: int,
+    max_tokens: int,
     sort_key: Callable[[Any], Any] | None = None,
     metadata: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """
     Simplified pagination pattern that uses token-based pagination but cleaner output.
-    
+
     Uses the existing token-based pagination logic but returns simplified metadata.
     For small results, skips pagination entirely.
     For larger results, uses minimal pagination metadata.
-    
+
     Args:
         items: All items to paginate (not pre-paginated)
         page: Current page number
         max_tokens: Maximum tokens per page
         sort_key: Function to extract sort key for deterministic ordering
         metadata: Additional metadata to include
-        
+
     Returns:
         Simplified response format with token-based pagination
     """
@@ -294,7 +294,7 @@ def simplify_pagination(
         if metadata:
             result.update(metadata)
         return result
-    
+
     # For small results, skip pagination entirely
     if len(items) <= 10:
         # Still sort for consistency
@@ -304,12 +304,12 @@ def simplify_pagination(
         if metadata:
             result.update(metadata)
         return result
-    
+
     # For larger results, use token-based pagination with simplified output
     paginator = create_paginator(max_tokens=max_tokens, sort_key=sort_key)
     response = paginator.paginate(items, page=page, metadata=metadata)
     full_result = response.to_dict()["data"]
-    
+
     # Simplify the pagination metadata
     pagination_info = full_result["pagination"]
     simplified_result = {
@@ -318,11 +318,11 @@ def simplify_pagination(
         "has_more": pagination_info["has_next"],
         "total": pagination_info["total_items"] if pagination_info["total_items"] < 100 else "100+"
     }
-    
+
     # Add any additional metadata
     if metadata:
         simplified_result.update(metadata)
-    
+
     return simplified_result
 
 def paginate_list(

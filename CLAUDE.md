@@ -9,17 +9,16 @@ AroMCP is a suite of MCP (Model Context Protocol) servers designed as utilities 
 ## Current State
 
 **Implementation Status:**
-- ✅ **Phase 1: FileSystem Tools** - 9 tools with file I/O, git operations, diff validation, batch operations
-- ✅ **Phase 2: Build Tools** - 7 tools with command execution, output parsing, multi-package manager support
+- ✅ **Phase 1: FileSystem Tools** - 6 simplified tools with file I/O, diff operations, code analysis
+- ✅ **Phase 2: Build Tools** - 3 simplified tools with linting, TypeScript checking, test execution
 - ✅ **Phase 4: Code Analysis Tools** - 3 tools implemented (find_dead_code, find_import_cycles, extract_api_endpoints)
 - ⚠️ Phases 3, 5-6: Other tool categories are stub implementations
 
 ## Architecture
 
 Six main tool categories:
-1. **FileSystem Tools** - File operations, git integration, code parsing, diff validation
-2. **Build Tools** - Build, lint, test execution with structured output parsing
-3. **State Management Tools** - Persistent state management (planned)
+1. **FileSystem Tools** - Simplified file operations, code parsing, diff validation
+2. **Build Tools** - Simplified lint, TypeScript, and test execution
 4. **Code Analysis Tools** - Standards-driven analysis, security detection, quality checks
 5. **Context Window Management Tools** - Token optimization (planned)
 6. **Interactive Debugging Tools** - Debugging utilities (planned)
@@ -37,7 +36,7 @@ Six main tool categories:
 - **Install dependencies**: `uv sync --dev` (uses uv package manager)
 - **Run server**: `uv run python main.py` or `uv run python -m src.aromcp.main_server`
 - **Run tests**: `uv run pytest`
-- **Run single test**: `uv run pytest tests/filesystem_server/test_get_target_files.py::TestGetTargetFiles::test_basic_functionality`
+- **Run single test**: `uv run pytest tests/filesystem_server/test_list_files.py::TestListFiles::test_basic_functionality`
 - **Code formatting**: `uv run black src/ tests/`
 - **Linting**: `uv run ruff check src/ tests/`
 - **Fix linting**: `uv run ruff check --fix src/ tests/`
@@ -49,24 +48,16 @@ Six main tool categories:
 - `src/aromcp/main_server.py` - Unified FastMCP server that combines all tools
 - `src/aromcp/filesystem_server/tools/` - FileSystem tools with registration and implementations:
   - `__init__.py` - FastMCP tool registration for filesystem operations
-  - `get_target_files.py` - File listing with git integration and pattern matching
-  - `read_files_batch.py` - Multi-file reading with encoding detection
-  - `write_files_batch.py` - Atomic multi-file writing with backup support
+  - `list_files.py` - File listing with glob pattern matching
+  - `read_files.py` - Multi-file reading with encoding detection and pagination
+  - `write_files.py` - Multi-file writing with automatic directory creation
   - `extract_method_signatures.py` - AST-based code signature extraction
-  - `find_imports_for_files.py` - Import dependency analysis
-  - `load_documents_by_pattern.py` - Pattern-based document loading with type classification
+  - `find_who_imports.py` - Import dependency analysis
   - `apply_file_diffs.py` - Apply unified diffs with validation and rollback
-  - `preview_file_changes.py` - Preview diff changes before applying
-  - `validate_diffs.py` - Pre-validate diffs for conflicts and syntax
-- `src/aromcp/state_server/tools.py` - Persistent state management tools (planned)
 - `src/aromcp/build_server/tools/` - Build tools with registration and implementations:
   - `__init__.py` - FastMCP tool registration for build operations
-  - `run_command.py` - Execute build/test commands with structured output
-  - `run_nextjs_build.py` - Next.js-specific build operations
-  - `get_build_config.py` - Extract build configuration information
-  - `parse_lint_results.py` - Parse and structure linting output
-  - `parse_typescript_errors.py` - Parse TypeScript compiler errors
-  - `check_dependencies.py` - Analyze project dependencies
+  - `lint_project.py` - ESLint integration for code style checking
+  - `check_typescript.py` - TypeScript compiler error checking
   - `run_test_suite.py` - Execute test suites with result parsing
 - `src/aromcp/analysis_server/tools/` - Code analysis tools with registration and implementations:
   - `__init__.py` - FastMCP tool registration for analysis operations
@@ -75,14 +66,12 @@ Six main tool categories:
   - `extract_api_endpoints.py` - Document API endpoints from route files
 - `main.py` - Entry point that imports and runs the main server
 - `tests/filesystem_server/` - Modular test suite with separate files per test class:
-  - `test_get_target_files.py` - Tests for file listing and pattern matching
-  - `test_read_files_batch.py` - Tests for multi-file reading operations
-  - `test_write_files_batch.py` - Tests for atomic file writing operations
+  - `test_list_files.py` - Tests for file listing and pattern matching
+  - `test_read_files.py` - Tests for multi-file reading operations with pagination
+  - `test_write_files.py` - Tests for multi-file writing operations
   - `test_extract_method_signatures.py` - Tests for code signature extraction
-  - `test_find_imports_for_files.py` - Tests for import dependency analysis
-  - `test_load_documents_by_pattern.py` - Tests for document loading and classification
+  - `test_find_who_imports.py` - Tests for import dependency analysis
   - `test_security_validation.py` - Tests for security measures across all tools
-  - `test_diff_operations.py` - Tests for diff operations (apply, preview, validate)
 - `tests/analysis_server/` - Analysis server test suite with modular structure
 
 ## Core Design Principles
@@ -184,7 +173,7 @@ def tool_name(
 ```
 
 **Key patterns**:
-- Always default `project_root` to `None` and resolve using `get_project_root(project_root)`
+- **ALWAYS use MCP_FILE_ROOT** - Do not include `project_root` parameters in new tools
 - Support both single strings and lists for file paths where appropriate
 - Use `expand_patterns=True` for glob pattern support
 - Apply `@json_convert` decorator for all tools accepting lists/dicts
@@ -203,14 +192,14 @@ def my_tool(
     # For list parameters - MUST include str option for FastMCP validation
     file_paths: str | list[str],  # NOT just list[str]
     patterns: list[str] | None = None,  # Optional lists need str support too
-    
+
     # For dict parameters - MUST include str option for FastMCP validation
     metadata: dict[str, Any] | str,  # NOT just dict[str, Any]
     updates: dict[str, Any] | str | None = None,  # Optional dicts need str support too
-    
+
     # For complex nested types - MUST include str option
     diffs: list[dict[str, Any]] | str,  # NOT just list[dict[str, Any]]
-    
+
     # Simple types don't need union types
     project_root: str | None = None,  # str types are fine as-is
     count: int = 1,  # primitive types don't need str unions
@@ -225,7 +214,7 @@ def my_tool(
 
 **Key rules**:
 - **ALWAYS** use `str | list[str]` instead of `list[str]` for list parameters
-- **ALWAYS** use `dict[str, Any] | str` instead of `dict[str, Any]` for dict parameters  
+- **ALWAYS** use `dict[str, Any] | str` instead of `dict[str, Any]` for dict parameters
 - **ALWAYS** use `list[dict[...]] | str` instead of `list[dict[...]]` for complex list parameters
 - **ALWAYS** apply `@json_convert` decorator when using union types with complex types
 - Simple types (`str`, `int`, `bool`) don't need `str` unions
@@ -307,23 +296,23 @@ All tool descriptions must follow this enhanced template to improve AI agent dis
 def tool_name(...) -> dict[str, Any]:
     """
     [One-line summary of what the tool does]
-    
+
     Use this tool when:
     - [Specific scenario when this tool is appropriate]
     - [Another specific use case]
     - [Third scenario differentiating from similar tools]
     - [Fourth scenario if applicable]
-    
-    [Detailed explanation of functionality, behavior, and limitations]
-    
+
+    Replaces bash commands: [command1, command2, command3]
+
     Args:
         param1: [Clear description with example values]
         param2: [Description with valid options listed]
-        
+
     Example:
         tool_name("example_input")
-        → {"data": {"result": "example_output"}}
-        
+        → ["result1", "result2", "result3"]
+
     Note: [Cross-references to related tools or important caveats]
     """
 ```
@@ -389,7 +378,7 @@ All list-returning tools support pagination to stay under 20k token limits:
 
 - Always use `uv run` prefix for all Python commands to ensure proper virtual environment
 - Apply `@json_convert` decorator to all tools that accept list/dict parameters
-- Default `project_root` parameters to `None` and resolve using `get_project_root()`
+- **ALWAYS use MCP_FILE_ROOT** - Do not include `project_root` parameters in new tools
 - Use `validate_file_path_legacy()` for consistent path security validation
 - Implement comprehensive error handling with structured error responses
 - ESLint rule generation is now handled via Claude Code commands for better AI-driven rule creation

@@ -5,8 +5,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ...filesystem_server.tools.get_target_files import get_target_files_impl
-from ...filesystem_server.tools.read_files_batch import read_files_batch_impl
+from ...filesystem_server.tools.list_files import list_files_impl
+from ...filesystem_server.tools.read_files import read_files_impl
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +54,26 @@ def extract_api_endpoints_impl(
                 "**/*route*.js"
             ]
 
-        # Get route files
-        route_files_result = get_target_files_impl(
-            patterns=route_patterns,
-            project_root=project_root
-        )
+        # Set the project root temporarily for list_files_impl
+        import os
+        old_project_root = os.environ.get("MCP_FILE_ROOT")
+        os.environ["MCP_FILE_ROOT"] = project_root
 
-        if "error" in route_files_result:
-            return route_files_result
+        try:
+            # Get route files
+            route_files = []
+            for pattern in route_patterns:
+                files = list_files_impl(patterns=[pattern])
+                route_files.extend(files)
 
-        route_files = [f["path"] for f in route_files_result["data"]["items"]]
+            # Remove duplicates
+            route_files = list(set(route_files))
+        finally:
+            # Restore original project root
+            if old_project_root:
+                os.environ["MCP_FILE_ROOT"] = old_project_root
+            elif "MCP_FILE_ROOT" in os.environ:
+                del os.environ["MCP_FILE_ROOT"]
 
         if not route_files:
             return {
@@ -79,17 +89,24 @@ def extract_api_endpoints_impl(
                 }
             }
 
-        # Read all route files
-        files_content_result = read_files_batch_impl(
-            file_paths=route_files,
-            project_root=project_root,
-            encoding="utf-8"
-        )
+        # Set the project root temporarily for read_files_impl
+        old_project_root = os.environ.get("MCP_FILE_ROOT")
+        os.environ["MCP_FILE_ROOT"] = project_root
 
-        if "error" in files_content_result:
-            return files_content_result
-
-        files_content = files_content_result["data"]["items"]
+        try:
+            # Read all route files
+            files_response = read_files_impl(files=route_files)
+            # Extract items from paginated response
+            if "items" in files_response:
+                files_content = files_response["items"]
+            else:
+                files_content = files_response  # Fallback for non-paginated response
+        finally:
+            # Restore original project root
+            if old_project_root:
+                os.environ["MCP_FILE_ROOT"] = old_project_root
+            elif "MCP_FILE_ROOT" in os.environ:
+                del os.environ["MCP_FILE_ROOT"]
 
         # Extract endpoints and middleware
         all_endpoints = []
@@ -98,8 +115,9 @@ def extract_api_endpoints_impl(
         route_groups = {}
 
         for file_data in files_content:
+            file_path = "unknown"  # Default value in case of early failure
             try:
-                file_path = file_data["file_path"]
+                file_path = file_data["file"]
                 content = file_data["content"]
                 file_endpoints = _extract_endpoints_from_file(file_path, content)
                 all_endpoints.extend(file_endpoints)

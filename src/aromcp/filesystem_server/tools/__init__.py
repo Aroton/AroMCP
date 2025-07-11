@@ -6,13 +6,10 @@ from ...utils.json_parameter_middleware import json_convert
 from .._security import get_project_root
 from .apply_file_diffs import apply_file_diffs_impl
 from .extract_method_signatures import extract_method_signatures_impl
-from .find_imports_for_files import find_imports_for_files_impl
-from .get_target_files import get_target_files_impl
-from .load_documents_by_pattern import load_documents_by_pattern_impl
-from .preview_file_changes import preview_file_changes_impl
-from .read_files_batch import read_files_batch_impl
-from .validate_diffs import validate_diffs_impl
-from .write_files_batch import write_files_batch_impl
+from .find_who_imports import find_who_imports_impl
+from .list_files import list_files_impl
+from .read_files import read_files_impl
+from .write_files import write_files_impl
 
 
 def register_filesystem_tools(mcp):
@@ -20,144 +17,135 @@ def register_filesystem_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def get_target_files(
-        patterns: str | list[str],
-        project_root: str | None = None,
-        page: int = 1,
-        max_tokens: int = 20000
-    ) -> dict[str, Any]:
-        """List files based on path patterns.
+    def list_files(patterns: str | list[str]) -> list[str]:
+        """List files matching glob patterns.
+
+        Use this tool when:
+        - Finding files by pattern instead of using find, ls, or grep commands
+        - Getting a clean list of file paths for processing
+        - Filtering files by extension or directory structure
+        - Building file lists for batch operations
+
+        Replaces bash commands: find, ls, locate, fd
 
         Args:
             patterns: Glob patterns to match files (e.g., "**/*.py", "src/**/*.js")
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-            page: Page number for pagination (1-based, default: 1)
-            max_tokens: Maximum tokens per page (default: 20000)
+
+        Example:
+            list_files("**/*.py")
+            → ["src/main.py", "tests/test_utils.py", "setup.py"]
+
+        Note: Returns relative paths from project root. For reading file contents, use read_files.
         """
-        project_root = get_project_root(project_root)
-        return get_target_files_impl(patterns, project_root, page, max_tokens)
+        return list_files_impl(patterns)
 
     @mcp.tool
     @json_convert
-    def read_files_batch(
-        file_paths: str | list[str],
-        project_root: str | None = None,
-        encoding: str = "auto",
-        expand_patterns: bool = True,
+    def read_files(
+        files: str | list[str],
         page: int = 1,
         max_tokens: int = 20000
     ) -> dict[str, Any]:
-        """Read multiple files in one operation.
+        """Read multiple files and return their contents.
+
+        Use this tool when:
+        - Reading file contents for analysis or processing
+        - Getting source code for multiple files at once
+        - Loading configuration or data files
+        - Examining file contents before making changes
+
+        Replaces bash commands: cat, head, tail, less
 
         Args:
-            file_paths: List of file paths or glob patterns to read
-                       (relative to project_root)
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-            encoding: File encoding ("auto", "utf-8", "ascii", etc.)
-            expand_patterns: Whether to expand glob patterns in file_paths
-                            (default: True)
-            page: Page number for pagination (1-based, default: 1)
-            max_tokens: Maximum tokens per page (default: 20000)
+            files: File paths to read
+            page: Page number (1-based) for pagination
+            max_tokens: Maximum tokens per page
+
+        Example:
+            read_files(["src/main.py", "config.json"])
+            → {"items": [{"file": "src/main.py", "content": "import os...", "encoding": "utf-8"}], "page": 1}
+
+        Note: For listing files by pattern, use list_files. Supports pagination for large file contents.
         """
-        project_root = get_project_root(project_root)
-        return read_files_batch_impl(
-            file_paths, project_root, encoding, expand_patterns, page, max_tokens
-        )
+        return read_files_impl(files, page, max_tokens)
 
     @mcp.tool
     @json_convert
-    def write_files_batch(
-        files: dict[str, str] | str,
-        project_root: str | None = None,
-        encoding: str = "utf-8",
-        create_backup: bool = True
-    ) -> dict[str, Any]:
-        """Write multiple files atomically with automatic directory creation.
+    def write_files(files: dict[str, str] | str) -> None:
+        """Write multiple files with automatic directory creation.
+
+        Use this tool when:
+        - Creating or updating multiple files at once
+        - Writing generated code or configuration files
+        - Applying changes to multiple files
+        - Creating new project structure
+
+        Replaces bash commands: echo >, tee, cp
 
         Args:
-            files: Dictionary mapping static file paths to content (no pattern support)
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-            encoding: File encoding to use
-            create_backup: Whether to create backups of existing files
+            files: Dictionary mapping file paths to content
+
+        Example:
+            write_files({"src/main.py": "print('hello')", "config.json": "{\\"debug\\": true}"})
+
+        Note: Creates directories automatically. For reading files, use read_files.
         """
-        project_root = get_project_root(project_root)
-        return write_files_batch_impl(files, project_root, encoding, create_backup)
+        return write_files_impl(files)
 
     @mcp.tool
     @json_convert
     def extract_method_signatures(
         file_paths: str | list[str],
-        project_root: str | None = None,
         include_docstrings: bool = True,
         include_decorators: bool = True,
-        expand_patterns: bool = True,
-        page: int = 1,
-        max_tokens: int = 20000
-    ) -> dict[str, Any]:
+        expand_patterns: bool = True
+    ) -> list[dict[str, Any]]:
         """Parse code files to extract function/method signatures programmatically.
+
+        Use this tool when:
+        - Analyzing code structure and API surfaces
+        - Documenting function signatures across multiple files
+        - Understanding available methods and their parameters
+        - Creating code documentation automatically
 
         Args:
             file_paths: Path to code file(s) or glob pattern(s) - can be string or list
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
             include_docstrings: Whether to include function docstrings
             include_decorators: Whether to include function decorators
             expand_patterns: Whether to expand glob patterns in file_paths
-                            (default: True)
-            page: Page number for pagination (1-based, default: 1)
-            max_tokens: Maximum tokens per page (default: 20000)
+
+        Example:
+            extract_method_signatures(\"**/*.py\")
+            → [{\"name\": \"calculate\", \"params\": [\"x\", \"y\"], \"file_path\": \"src/utils.py\"}]
         """
-        project_root = get_project_root(project_root)
         return extract_method_signatures_impl(
-            file_paths, project_root, include_docstrings, include_decorators,
-            expand_patterns, page, max_tokens
+            file_paths, include_docstrings, include_decorators, expand_patterns
         )
 
     @mcp.tool
     @json_convert
-    def find_imports_for_files(
-        file_paths: str | list[str],
-        project_root: str | None = None,
-        search_patterns: str | list[str] | None = None,
-        expand_patterns: bool = True,
-        page: int = 1,
-        max_tokens: int = 20000
-    ) -> dict[str, Any]:
-        """Identify which files import the given files (dependency analysis).
+    def find_who_imports(file_path: str) -> dict[str, Any]:
+        """Find all files that import/depend on the specified file.
+
+        Use this tool when:
+        - Planning to move or rename files (see impact)
+        - Refactoring exports (find all consumers)
+        - Deleting code (ensure it's safe)
+        - Understanding dependency chains
+
+        Replaces bash commands: grep, rg, ag
 
         Args:
-            file_paths: List of files or glob patterns to find importers for
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-            search_patterns: File patterns to search in (defaults to common code files)
-            expand_patterns: Whether to expand glob patterns in file_paths
-                            (default: True)
-            page: Page number for pagination (1-based, default: 1)
-            max_tokens: Maximum tokens per page (default: 20000)
-        """
-        project_root = get_project_root(project_root)
-        return find_imports_for_files_impl(
-            file_paths, project_root, search_patterns, expand_patterns, page, max_tokens
-        )
+            file_path: File to find importers for
 
-    @mcp.tool
-    @json_convert
-    def load_documents_by_pattern(
-        patterns: str | list[str],
-        project_root: str | None = None,
-        max_file_size: int = 1024 * 1024,
-        encoding: str = "auto"
-    ) -> dict[str, Any]:
-        """Load multiple documents matching glob patterns (for standards, configs).
+        Example:
+            find_who_imports("src/utils/helper.py")
+            → {"dependents": [{"file": "src/main.py", "imports": ["helper_func"]}], "safe_to_delete": false}
 
-        Args:
-            patterns: List of glob patterns to match files (e.g., "**/*.md", "*.json")
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-            max_file_size: Maximum file size to load (bytes)
-            encoding: File encoding ("auto", "utf-8", etc.)
+        Note: This is reverse dependency analysis - finds who imports FROM this file.
         """
-        project_root = get_project_root(project_root)
-        return load_documents_by_pattern_impl(
-            patterns, project_root, max_file_size, encoding
-        )
+        return find_who_imports_impl(file_path)
+
 
     @mcp.tool
     @json_convert
@@ -181,77 +169,14 @@ def register_filesystem_tools(mcp):
             diffs, project_root, create_backup, validate_before_apply
         )
 
-    @mcp.tool
-    @json_convert
-    def preview_file_changes(
-        diffs: list[dict[str, Any]] | str,
-        project_root: str | None = None,
-        include_full_preview: bool = True,
-        max_preview_lines: int = 50
-    ) -> dict[str, Any]:
-        """Show consolidated preview of all pending changes.
 
-        Args:
-            diffs: List of diff objects with 'file_path' and 'diff_content' keys
-                  (file_path must be static path, no pattern support)
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-            include_full_preview: Whether to include full diff preview for each file
-            max_preview_lines: Maximum lines to show in preview
-        """
-        project_root = get_project_root(project_root)
-        return preview_file_changes_impl(
-            diffs, project_root, include_full_preview, max_preview_lines
-        )
-
-    @mcp.tool
-    @json_convert
-    def validate_diffs(
-        diffs: list[dict[str, Any]] | str,
-        project_root: str | None = None,
-        check_conflicts: bool = True,
-        check_syntax: bool = True
-    ) -> dict[str, Any]:
-        """Validate diff patches for correctness before applying them.
-
-        Use this tool when:
-        - Checking if generated diffs are valid and will apply cleanly
-        - Detecting conflicts between multiple diffs targeting same files
-        - Validating diff syntax before batch operations
-        - Ensuring diffs match current file content
-
-        This tool performs comprehensive validation including syntax checks,
-        conflict detection, and content matching without modifying files.
-
-        Args:
-            diffs: List of diff objects with 'file_path' and 'diff_content' keys
-                  (file_path must be static path, no pattern support)
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-            check_conflicts: Whether to check for conflicts between diffs
-            check_syntax: Whether to validate diff syntax
-
-        Example:
-            validate_diffs([{"file_path": "src/app.js", "diff_content": "@@ -1 +1 @@..."}])
-            → {"data": {
-                "valid": true,
-                "issues": [],
-                "summary": {"total_diffs": 1, "valid_diffs": 1, "conflicts": 0}
-              }}
-
-        Note: This is a validation-only tool - no changes are made.
-        Use apply_file_diffs after validation passes.
-        """
-        project_root = get_project_root(project_root)
-        return validate_diffs_impl(diffs, project_root, check_conflicts, check_syntax)
 
 __all__ = [
-    "get_target_files_impl",
-    "read_files_batch_impl",
-    "write_files_batch_impl",
+    "list_files_impl",
+    "read_files_impl",
+    "write_files_impl",
     "extract_method_signatures_impl",
-    "find_imports_for_files_impl",
-    "load_documents_by_pattern_impl",
+    "find_who_imports_impl",
     "apply_file_diffs_impl",
-    "preview_file_changes_impl",
-    "validate_diffs_impl",
     "register_filesystem_tools"
 ]

@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ...filesystem_server.tools.get_target_files import get_target_files_impl
+from ...filesystem_server.tools.list_files import list_files_impl
 from .._security import validate_file_path_legacy
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def find_dead_code_impl(
 
         # Determine entry points
         if entry_points is None:
-            entry_points = _detect_entry_points(project_files, include_tests)
+            entry_points = _detect_entry_points(project_files, include_tests, project_root)
         else:
             # Validate provided entry points
             validated_entry_points = []
@@ -85,7 +85,7 @@ def find_dead_code_impl(
             }
 
         # Analyze code usage
-        usage_analysis = _analyze_code_usage(project_files, entry_points)
+        usage_analysis = _analyze_code_usage(project_files, entry_points, project_root)
 
         # Find potentially dead code
         dead_code_candidates = _find_dead_code_candidates(
@@ -100,7 +100,8 @@ def find_dead_code_impl(
         summary = _calculate_dead_code_summary(
             dead_code_candidates,
             project_files,
-            usage_analysis
+            usage_analysis,
+            project_root
         )
 
         return {
@@ -125,7 +126,7 @@ def find_dead_code_impl(
         }
 
 
-def _get_project_files(project_root: str, patterns: list[str]) -> list[dict[str, Any]]:
+def _get_project_files(project_root: str, patterns: list[str]) -> list[str]:
     """Get all project files matching the patterns.
 
     Args:
@@ -133,33 +134,33 @@ def _get_project_files(project_root: str, patterns: list[str]) -> list[dict[str,
         patterns: File patterns to match
 
     Returns:
-        List of file information dictionaries
+        List of file paths
     """
-    all_files = []
+    # Set the project root temporarily for list_files_impl
+    import os
+    old_project_root = os.environ.get("MCP_FILE_ROOT")
+    os.environ["MCP_FILE_ROOT"] = project_root
 
-    for pattern in patterns:
-        result = get_target_files_impl(
-            patterns=[pattern],
-            project_root=project_root
-        )
+    try:
+        all_files = []
 
-        if "data" in result:
-            all_files.extend(result["data"]["items"])
+        for pattern in patterns:
+            files = list_files_impl(patterns=[pattern])
+            all_files.extend(files)
 
-    # Remove duplicates based on file path
-    seen_paths = set()
-    unique_files = []
-    for file_info in all_files:
-        path = file_info["path"]
-        if path not in seen_paths:
-            seen_paths.add(path)
-            unique_files.append(file_info)
+        # Remove duplicates and sort
+        return sorted(set(all_files))
 
-    return unique_files
+    finally:
+        # Restore original project root
+        if old_project_root:
+            os.environ["MCP_FILE_ROOT"] = old_project_root
+        elif "MCP_FILE_ROOT" in os.environ:
+            del os.environ["MCP_FILE_ROOT"]
 
 
 def _detect_entry_points(
-    project_files: list[dict[str, Any]], include_tests: bool
+    project_files: list[str], include_tests: bool, project_root: str
 ) -> list[str]:
     """Detect entry points in the project.
 
@@ -193,14 +194,14 @@ def _detect_entry_points(
 
     all_patterns = entry_point_patterns + test_patterns
 
-    for file_info in project_files:
-        file_path = file_info["path"]
-        absolute_path = file_info.get("absolute_path", file_path)
+    for file_path in project_files:
+        # project_files is now a simple list of file paths
+        absolute_path = Path(project_root) / file_path
 
         # Check against patterns
         for pattern in all_patterns:
             if re.search(pattern, file_path):
-                entry_points.append(absolute_path)
+                entry_points.append(str(absolute_path))
                 break
 
         # Check for executable scripts (Python)
@@ -210,7 +211,7 @@ def _detect_entry_points(
                     encoding='utf-8', errors='ignore'
                 )
                 if 'if __name__ == "__main__"' in content:
-                    entry_points.append(absolute_path)
+                    entry_points.append(str(absolute_path))
             except Exception as e:
                 logger.warning(
                     "Failed to read file %s for entry point detection: %s",
@@ -222,7 +223,7 @@ def _detect_entry_points(
 
 
 def _analyze_code_usage(
-    project_files: list[dict[str, Any]], entry_points: list[str]
+    project_files: list[str], entry_points: list[str], project_root: str
 ) -> dict[str, Any]:
     """Analyze code usage patterns across the project.
 
@@ -240,12 +241,12 @@ def _analyze_code_usage(
     exports = {}      # {file: [exported_identifiers]}
 
     # Analyze each file
-    for file_info in project_files:
-        file_path = file_info["path"]
-        absolute_path = file_info.get("absolute_path", file_path)
+    for file_path in project_files:
+        # project_files is now a simple list of file paths
+        absolute_path = Path(project_root) / file_path
 
         try:
-            analysis = _analyze_single_file(absolute_path)
+            analysis = _analyze_single_file(str(absolute_path))
 
             # Store definitions
             for identifier, locations in analysis["definitions"].items():
@@ -260,8 +261,8 @@ def _analyze_code_usage(
                 usages[identifier].extend(locations)
 
             # Store imports and exports
-            imports[absolute_path] = analysis["imports"]
-            exports[absolute_path] = analysis["exports"]
+            imports[str(absolute_path)] = analysis["imports"]
+            exports[str(absolute_path)] = analysis["exports"]
 
         except Exception as e:
             # Skip files that can't be analyzed
@@ -298,7 +299,7 @@ def _analyze_code_usage(
         "usage_stats": usage_stats,
         "total_files_analyzed": len([
             f for f in project_files
-            if _analyze_single_file_safe(f.get("absolute_path", f["path"])) is not None
+            if _analyze_single_file_safe(str(Path(project_root) / f)) is not None
         ])
     }
 
@@ -669,8 +670,9 @@ def _generate_dead_code_recommendations(candidates: list[dict[str, Any]]) -> lis
 
 def _calculate_dead_code_summary(
     candidates: list[dict[str, Any]],
-    project_files: list[dict[str, Any]],
-    usage_analysis: dict[str, Any]
+    project_files: list[str],
+    usage_analysis: dict[str, Any],
+    project_root: str
 ) -> dict[str, Any]:
     """Calculate summary statistics for dead code analysis.
 

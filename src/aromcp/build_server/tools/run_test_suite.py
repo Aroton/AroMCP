@@ -10,7 +10,6 @@ from ...filesystem_server._security import get_project_root, validate_file_path
 
 
 def run_test_suite_impl(
-    project_root: str | None = None,
     test_command: str | None = None,
     test_framework: str = "auto",
     pattern: str | None = None,
@@ -20,7 +19,6 @@ def run_test_suite_impl(
     """Execute tests with parsed results.
 
     Args:
-        project_root: Directory to run tests in (defaults to MCP_FILE_ROOT)
         test_command: Custom test command (auto-detected if None)
         test_framework: Test framework ("jest", "vitest", "mocha", "pytest", "auto")
         pattern: Test file pattern to run specific tests
@@ -28,21 +26,16 @@ def run_test_suite_impl(
         timeout: Maximum execution time in seconds
 
     Returns:
-        Dictionary with structured test results
+        Dictionary with test results
     """
     try:
-        # Resolve project root
-        project_root = get_project_root(project_root)
+        # Use MCP_FILE_ROOT
+        project_root = get_project_root(None)
 
         # Validate project root path
         validation_result = validate_file_path(project_root, project_root)
         if not validation_result.get("valid", False):
-            return {
-                "error": {
-                    "code": "INVALID_INPUT",
-                    "message": validation_result.get("error", "Invalid project root path")
-                }
-            }
+            raise ValueError(validation_result.get("error", "Invalid project root path"))
 
         # Auto-detect test framework and command if needed
         if test_framework == "auto" or test_command is None:
@@ -107,30 +100,15 @@ def run_test_suite_impl(
                 "project_root": project_root
             })
 
-            return {"data": parsed_results}
+            return parsed_results
 
-        except subprocess.TimeoutExpired:
-            return {
-                "error": {
-                    "code": "TIMEOUT",
-                    "message": f"Test execution timed out after {timeout} seconds"
-                }
-            }
+        except subprocess.TimeoutExpired as e:
+            raise TimeoutError(f"Test execution timed out after {timeout} seconds") from e
         except subprocess.SubprocessError as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to run tests: {str(e)}"
-                }
-            }
+            raise RuntimeError(f"Failed to run tests: {str(e)}") from e
 
     except Exception as e:
-        return {
-            "error": {
-                "code": "OPERATION_FAILED",
-                "message": f"Failed to execute test suite: {str(e)}"
-            }
-        }
+        raise ValueError(f"Failed to execute test suite: {str(e)}") from e
 
 
 def _detect_test_setup(project_root: str) -> tuple[str, str | None]:

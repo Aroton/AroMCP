@@ -17,7 +17,7 @@ class TestMainServer:
     def test_server_initialization(self):
         """Test that the server initializes correctly."""
         assert mcp is not None
-        assert mcp.name == "AroMCP Server Suite"
+        assert mcp.name == "AroMCP Development Tools Suite"
 
     @pytest.mark.asyncio
     async def test_all_tools_loaded(self):
@@ -27,27 +27,20 @@ class TestMainServer:
 
         # Expected tool names from each module (based on actual registrations)
         filesystem_tools = [
-            "get_target_files",
-            "read_files_batch",
-            "write_files_batch",
+            "list_files",
+            "read_files",
+            "write_files",
             "extract_method_signatures",
-            "find_imports_for_files",
-            "load_documents_by_pattern",
-            "apply_file_diffs",
-            "preview_file_changes",
-            "validate_diffs"
+            "find_who_imports",
+            "apply_file_diffs"
         ]
 
         # state_tools = []  # Not yet implemented
 
         build_tools = [
-            "run_command",
-            "get_build_config",
-            "check_dependencies",
-            "parse_typescript_errors",
-            "parse_lint_results",
-            "run_test_suite",
-            "run_nextjs_build"
+            "check_typescript",
+            "lint_project",
+            "run_test_suite"
         ]
 
         analysis_tools = [
@@ -90,7 +83,7 @@ class TestMainServer:
             for name in tool_names
         )
         # state_present = any("process" in name for name in tool_names)  # Not implemented yet
-        build_present = any("command" in name or "test" in name or "dependencies" in name for name in tool_names)
+        build_present = any("typescript" in name or "lint" in name or "test" in name for name in tool_names)
         analysis_present = any(
             "dead_code" in name or "import_cycles" in name or "api_endpoints" in name
             for name in tool_names
@@ -113,8 +106,8 @@ class TestMainServer:
         """Test that individual tools can be retrieved and have proper structure."""
         # Test a tool from each implemented category
         test_tools = [
-            "get_target_files",    # filesystem
-            "run_command",         # build
+            "list_files",          # filesystem
+            "check_typescript",    # build
             "find_dead_code",      # analysis
             "check_updates",       # standards
             "get_session_stats"    # standards v2
