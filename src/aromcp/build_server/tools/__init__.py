@@ -14,7 +14,7 @@ def register_build_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def check_typescript(files: str | list[str] | None = None) -> dict[str, Any]:
+    def check_typescript(files: str | list[str] | None = None) -> dict[str, Any]:  # noqa: F841
         """Run TypeScript compiler to find type errors.
 
         Use this tool when:
@@ -38,7 +38,7 @@ def register_build_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def lint_project(use_standards: bool = True, target_files: str | list[str] | None = None) -> dict[str, Any]:
+    def lint_project(use_standards: bool = True, target_files: str | list[str] | None = None) -> dict[str, Any]:  # noqa: F841
         """Run ESLint to find code style issues and potential bugs.
 
         Use this tool when:
@@ -65,7 +65,7 @@ def register_build_tools(mcp):
         return lint_project_impl(use_standards, target_files)
 
     @mcp.tool
-    def run_test_suite(
+    def run_test_suite(  # noqa: F841
         test_command: str | None = None,
         test_framework: str = "auto",
         pattern: str | None = None,
@@ -92,6 +92,9 @@ def register_build_tools(mcp):
         Example:
             run_test_suite()
             → {"tests_passed": 42, "tests_failed": 1, "framework": "jest", "success": false}
+
+        Note: Auto-detects test framework from package.json or project files. For linting use lint_project,
+        for TypeScript checking use check_typescript. Supports parallel test execution where available.
         """
         return run_test_suite_impl(
             test_command, test_framework, pattern, coverage, timeout

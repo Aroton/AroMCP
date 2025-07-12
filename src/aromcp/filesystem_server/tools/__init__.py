@@ -107,16 +107,25 @@ def register_filesystem_tools(mcp):
         - Documenting function signatures across multiple files
         - Understanding available methods and their parameters
         - Creating code documentation automatically
+        - Auditing API consistency across a codebase
+
+        Replaces bash commands: grep -E "def |class ", ctags, cscope
 
         Args:
             file_paths: Path to code file(s) or glob pattern(s) - can be string or list
-            include_docstrings: Whether to include function docstrings
-            include_decorators: Whether to include function decorators
-            expand_patterns: Whether to expand glob patterns in file_paths
+            include_docstrings: Whether to include function docstrings (default: True)
+            include_decorators: Whether to include function decorators (default: True)
+            expand_patterns: Whether to expand glob patterns in file_paths (default: True)
 
         Example:
             extract_method_signatures(\"**/*.py\")
-            → [{\"name\": \"calculate\", \"params\": [\"x\", \"y\"], \"file_path\": \"src/utils.py\"}]
+            → [{\"name\": \"calculate_total\", \"params\": [\"items\", \"tax_rate\"], 
+                \"file_path\": \"src/utils.py\", \"line\": 42, 
+                \"decorators\": [\"@lru_cache\"], \"returns\": \"float\",
+                \"docstring\": \"Calculate total with tax\"}]
+
+        Note: For import analysis use find_who_imports. For API endpoints use extract_api_endpoints.
+        Supports Python (.py) files with full AST parsing.
         """
         return extract_method_signatures_impl(
             file_paths, include_docstrings, include_decorators, expand_patterns
@@ -157,12 +166,31 @@ def register_filesystem_tools(mcp):
     ) -> dict[str, Any]:
         """Apply multiple diffs to files with validation and rollback support.
 
+        Use this tool when:
+        - Applying code review suggestions in diff format
+        - Implementing automated code transformations
+        - Applying patches from external sources
+        - Performing bulk file modifications with safety
+        - Rolling out refactoring changes across multiple files
+
+        Replaces bash commands: patch, git apply, diff -u
+
         Args:
             diffs: List of diff objects with 'file_path' and 'diff_content' keys
                   (file_path must be static path, no pattern support)
             project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-            create_backup: Whether to create backups before applying diffs
-            validate_before_apply: Whether to validate all diffs before applying any
+            create_backup: Whether to create backups before applying diffs (default: True)
+            validate_before_apply: Whether to validate all diffs before applying any (default: True)
+
+        Example:
+            apply_file_diffs([{
+                "file_path": "src/utils.py",
+                "diff_content": "@@ -10,3 +10,4 @@\\n def helper():\\n-    return 42\\n+    # Fixed return value\\n+    return 43"
+            }])
+            → {"success": true, "files_modified": 1, "backups_created": ["src/utils.py.backup"]}
+
+        Note: Supports unified diff format. For direct file writing use write_files.
+        All diffs are validated before any are applied to ensure atomicity.
         """
         project_root = get_project_root(project_root)
         return apply_file_diffs_impl(
