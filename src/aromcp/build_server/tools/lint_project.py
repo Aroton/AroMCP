@@ -213,11 +213,8 @@ def _parse_eslint_output_enhanced(
                         "source": source
                     })
         except json.JSONDecodeError:
-            # For Next.js, check if there's a success message with no errors
-            if source == "nextjs" and result.stdout and "✔ No ESLint warnings or errors" in result.stdout:
-                # Next.js outputs success message when no errors
-                pass
             # Otherwise, silently ignore JSON parsing errors and return empty list
+            pass
 
     return issues
 

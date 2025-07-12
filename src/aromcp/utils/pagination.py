@@ -50,6 +50,7 @@ class TokenEstimator:
             # Fallback for non-serializable data
             return len(str(data)) // cls.CHARS_PER_TOKEN
 
+
 class PaginatedResponse[T]:
     """Generic paginated response container."""
 
@@ -81,6 +82,7 @@ class PaginatedResponse[T]:
                 **self.metadata
             }
         }
+
 
 class ListPaginator[T]:
     """

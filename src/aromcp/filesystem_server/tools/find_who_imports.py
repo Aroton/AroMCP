@@ -1,14 +1,12 @@
 """Find who imports implementation."""
 
 import ast
-import logging
 import re
 from pathlib import Path
 from typing import Any
 
 from .._security import get_project_root
 
-logger = logging.getLogger(__name__)
 
 
 def find_who_imports_impl(file_path: str) -> dict[str, Any]:

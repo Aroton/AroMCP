@@ -1,7 +1,6 @@
 """Extract method signatures implementation."""
 
 import ast
-import re
 from pathlib import Path
 from typing import Any
 
@@ -25,8 +24,6 @@ def extract_method_signatures_impl(
     Returns:
         List of extracted signatures
     """
-    import time
-    time.time()
 
     try:
         # Use MCP_FILE_ROOT

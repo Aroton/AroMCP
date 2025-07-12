@@ -9,6 +9,7 @@ instead of native Python types.
 import functools
 import inspect
 import json
+import types
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypeVar, get_args, get_origin, get_type_hints
 
@@ -106,7 +107,6 @@ class JSONParameterMiddleware:
         origin = get_origin(expected_type)
 
         # Handle Union types (e.g., str | list[str], list[str] | None)
-        import types
         if origin is types.UnionType:  # Union type in Python 3.10+
             args = get_args(expected_type)
             last_error = None

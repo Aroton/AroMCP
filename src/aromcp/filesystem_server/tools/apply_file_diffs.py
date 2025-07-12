@@ -1,6 +1,7 @@
 """Apply file diffs tool implementation."""
 
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -292,7 +293,6 @@ def _parse_unified_diff(diff_content: str) -> list[dict[str, Any]]:
             if current_hunk:
                 hunks.append(current_hunk)
 
-            import re
             match = re.match(r'@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@', line)
             if match:
                 old_start = int(match.group(1))

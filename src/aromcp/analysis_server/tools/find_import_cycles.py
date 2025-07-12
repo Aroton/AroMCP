@@ -3,6 +3,7 @@
 import ast
 import logging
 import re
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -92,7 +93,6 @@ def find_import_cycles_impl(
         }
 
     except Exception as e:
-        import traceback
         return {
             "error": {
                 "code": "OPERATION_FAILED",
