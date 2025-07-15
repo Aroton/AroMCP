@@ -25,9 +25,44 @@ git clone <repository-url>
 cd AroMCP
 uv sync --dev
 
+# Install Claude Code commands (optional)
+./install.sh
+
 # Start the server
 uv run python main.py
 ```
+
+### Claude Code Commands Installation
+
+AroMCP includes enhanced Claude Code commands for standards management. Install them to your Claude configuration:
+
+```bash
+# Run the install script to copy commands to ~/.claude
+./install.sh
+```
+
+**What gets installed:**
+- **Standards Commands** - `standards:create`, `standards:generate`, `standards:update`
+- **Templates** - Coding standards templates and patterns
+- **Safe Installation** - Automatically backs up existing configurations
+
+**Available Commands:**
+```bash
+# Create new coding standards interactively
+claude standards:create
+
+# Generate AI hints and ESLint rules from standards
+claude standards:generate
+
+# Update existing standards with new content
+claude standards:update
+```
+
+The install script:
+- ✅ **Safe installation** - Backs up existing `~/.claude` contents with timestamps
+- ✅ **Smart detection** - Automatically finds standards directory via `.aromcp/.standards-dir`
+- ✅ **No overrides** - Commands work with current directory as project root
+- ✅ **User confirmation** - Asks before overwriting existing files
 
 ### Development Commands
 ```bash

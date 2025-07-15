@@ -8,7 +8,6 @@ from typing import Any
 from .._security import get_project_root
 
 
-
 def find_who_imports_impl(file_path: str) -> dict[str, Any]:
     """Find all files that import the specified file.
 

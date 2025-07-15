@@ -32,13 +32,27 @@ def validate_file_path(file_path: str, project_root: str) -> dict[str, Any]:
     """
     try:
         project_path = Path(project_root).resolve()
-        path = Path(file_path)
+        # Expand user home directory (~) if present
+        path = Path(file_path).expanduser()
 
         # If it's absolute, it should be within project_root
         if path.is_absolute():
             abs_path = path.resolve()
         else:
             abs_path = (project_path / path).resolve()
+
+        # Special case: Allow access to ~/.claude directory for Claude configuration
+        claude_config_path = Path.home() / ".claude"
+        try:
+            abs_path.relative_to(claude_config_path)
+            # Path is within ~/.claude, allow access
+            return {
+                "valid": True,
+                "abs_path": abs_path
+            }
+        except ValueError:
+            # Not in ~/.claude, continue with normal validation
+            pass
 
         # Security check: ensure the resolved path is within project_root
         try:
@@ -74,14 +88,24 @@ def validate_file_path_legacy(file_path: str, project_root: Path) -> Path:
     Raises:
         ValueError: If path is invalid or outside project root
     """
-    # Convert to Path and resolve
-    path = Path(file_path)
+    # Convert to Path and resolve, expanding user home directory (~) if present
+    path = Path(file_path).expanduser()
 
     # If it's absolute, it should be within project_root
     if path.is_absolute():
         abs_path = path.resolve()
     else:
         abs_path = (project_root / path).resolve()
+
+    # Special case: Allow access to ~/.claude directory for Claude configuration
+    claude_config_path = Path.home() / ".claude"
+    try:
+        abs_path.relative_to(claude_config_path)
+        # Path is within ~/.claude, allow access
+        return abs_path
+    except ValueError:
+        # Not in ~/.claude, continue with normal validation
+        pass
 
     # Security check: ensure the resolved path is within project_root
     try:

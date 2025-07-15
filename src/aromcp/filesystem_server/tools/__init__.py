@@ -119,8 +119,8 @@ def register_filesystem_tools(mcp):
 
         Example:
             extract_method_signatures(\"**/*.py\")
-            → [{\"name\": \"calculate_total\", \"params\": [\"items\", \"tax_rate\"], 
-                \"file_path\": \"src/utils.py\", \"line\": 42, 
+            → [{\"name\": \"calculate_total\", \"params\": [\"items\", \"tax_rate\"],
+                \"file_path\": \"src/utils.py\", \"line\": 42,
                 \"decorators\": [\"@lru_cache\"], \"returns\": \"float\",
                 \"docstring\": \"Calculate total with tax\"}]
 
@@ -185,7 +185,7 @@ def register_filesystem_tools(mcp):
         Example:
             apply_file_diffs([{
                 "file_path": "src/utils.py",
-                "diff_content": "@@ -10,3 +10,4 @@\\n def helper():\\n-    return 42\\n+    # Fixed return value\\n+    return 43"
+                "diff_content": "@@ -10,3 +10,4 @@\\n def helper():\\n-    return 42\\n+    # Fixed\\n+    return 43"
             }])
             → {"success": true, "files_modified": 1, "backups_created": ["src/utils.py.backup"]}
 

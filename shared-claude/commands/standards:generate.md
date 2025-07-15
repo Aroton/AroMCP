@@ -1,32 +1,29 @@
 # Generate Standards and AI Hints
 
-**Command**: `generate-standards`
+**Command**: `standards:generate`
 
-**Description**: Processes markdown standards files through AI parsing to generate enhanced AI hints with context awareness and smart compression support.
-
-**Features**: Session management, context-aware compression, and 70-80% token reduction through intelligent rule deduplication and progressive detail levels.
+**Description**: Processes markdown standards files through AI parsing to generate enhanced AI hints with context awareness and smart compression support. Features context-aware compression, 70-80% token reduction through intelligent rule deduplication, progressive detail levels, and automated ESLint rule validation.
 
 ## Usage
 
 ```bash
-# Generate from all standards in standards/ directory
-claude generate-standards
-
-# Generate from specific standards directory
-claude generate-standards --standards-dir=custom/standards
-
-# Generate with custom project root
-claude generate-standards --project-root=/path/to/project
+# Generate from all standards (uses .aromcp/.standards-dir or defaults to "standards")
+claude standards:generate
 
 # Generate with session support (for testing hints_for_file)
-claude generate-standards --session-id=test-session-123
+claude standards:generate --session-id=test-session-123
 ```
 
 ## Parameters
 
-- `--standards-dir` (optional): Directory containing markdown standards files (default: `standards`)
-- `--project-root` (optional): Project root path (auto-detected if not specified)
-- `--session-id` (optional): Session ID for testing hints_for_file deduplication (only affects hints_for_file calls, not register calls)
+- `--session-id` (optional): Session ID for testing hints_for_file deduplication (only used in final verification step)
+
+## Standards Directory Resolution
+
+The command automatically determines the standards directory:
+1. If `.aromcp/.standards-dir` file exists, uses the path specified in that file
+2. Otherwise defaults to `"standards"` directory
+3. Project root is always the current working directory (where claude command runs)
 
 ## Process Overview
 
@@ -37,7 +34,9 @@ This command:
 3. **Registration**: Register standards with metadata only (clears existing hints/rules)
 4. **Iterative Hint Addition**: Add AI hints one by one via add_hint
 5. **Iterative Rule Addition**: Add ESLint rules one by one via add_rule
-6. **Verification**: Confirm all standards are properly registered and rules are available
+6. **ESLint Validation**: Run lint_project to validate generated rules work correctly
+7. **Rule Fixing**: Fix or disable any problematic ESLint rules found during validation
+8. **Final Verification**: Confirm all standards are properly registered and rules are functional
 
 **Key Points:**
 - **register()** handles only metadata and clears existing data
@@ -49,9 +48,15 @@ This command:
 ### Step 1: Check for Updates and Discover Standards
 
 ```python
+# Determine standards directory
+standards_dir = "standards"  # default
+if os.path.exists(".aromcp/.standards-dir"):
+    with open(".aromcp/.standards-dir", "r") as f:
+        standards_dir = f.read().strip()
+
 # Check what standards need processing
 update_result = mcp.check_updates(
-    standards_path="standards"
+    standards_path=standards_dir
 )
 
 print(f"Found {len(update_result['data']['needsUpdate'])} standards to process")
@@ -155,79 +160,63 @@ metadata = {{
 
 3. **Generate AI hints with multiple compression formats**:
 
-For each rule/hint, create this structure:
+For each rule/hint extracted from the standard, create this exact structure for hints_for_file:
 
 ```python
 {{
-    "rule": "Clear, actionable rule statement",
-    "rule_id": "unique-rule-id",  # e.g., "validate-input-zod"
-    "context": "Why this matters and when to apply it",
+    "rule": "Clear, actionable rule statement",  # Required
+    "rule_id": "unique-rule-id",  # Required, e.g., "validate-input-zod"
+    "context": "Why this matters and when to apply it",  # Required
 
-    # Metadata for smart loading
+    # Metadata for smart loading (Required - matches RuleMetadata)
     "metadata": {{
         "pattern_type": "validation|error-handling|routing|security|performance",
         "complexity": "basic|intermediate|advanced|expert",
         "rule_type": "must|should|may|must-not",  # RFC 2119
-        "nextjs_api": ["app-router", "pages-router", "api-routes"],
+        "nextjs_api": ["app-router", "pages-router", "api-routes"],  # List
         "client_server": "client-only|server-only|isomorphic|edge"
     }},
 
-    # Compression configuration
-    "compression": {{
-        "example_sharable": true,  # Can share with similar rules?
-        "pattern_extractable": true,  # Can extract to template?
-        "progressive_detail": ["minimal", "standard", "detailed", "full"]
-    }},
-
-    # MULTIPLE EXAMPLE FORMATS (this is critical!)
+    # Multiple example formats (Required - matches RuleExamples)
     "examples": {{
-        # Minimal: Ultra-compact pattern reminder (~20 tokens)
-        "minimal": "schema.parse(input)",
-
-        # Standard: Core pattern with context (~100 tokens)
-        "standard": '''const validated = schema.parse(await request.json());
-return createResponse(validated);''',
-
-        # Detailed: More complete example (~200 tokens)
-        "detailed": '''import {{ z }} from 'zod';
-
-const schema = z.object({{ name: z.string() }});
-export async function POST(request: Request) {{
-  const validated = schema.parse(await request.json());
-  return Response.json(validated);
-}}''',
-
-        # Full: Complete implementation (current format)
-        "full": '''[YOUR CURRENT FULL EXAMPLE]''',
-
-        # Reference to real file
-        "reference": "See UserService.ts for production example",
-
-        # Context-specific variants (optional)
-        "context_variants": {{
-            "app_router": "app router specific example",
-            "pages_router": "pages router specific example"
+        # All example fields should be strings or None
+        "minimal": "schema.parse(input)",  # ~20 tokens
+        "standard": "const validated = schema.parse(body);",  # ~100 tokens
+        "detailed": "Full example with imports",  # ~200 tokens
+        "full": "Complete implementation",  # Required
+        "reference": "See src/api/users/route.ts",  # Optional
+        "context_variants": {{  # Optional dict
+            "app_router": "app router example",
+            "pages_router": "pages router example"
         }}
     }},
 
-    # Token counts for each format
+    # Token counts (Required - matches TokenCount)
     "tokens": {{
         "minimal": 20,
         "standard": 100,
         "detailed": 200,
-        "full": 400  # Calculate actual count
+        "full": 400
     }},
 
-    # Relationships to other rules
+    # Relationships for grouping (Optional)
     "relationships": {{
-        "similar_rules": ["validate-output-zod"],  # For grouping
-        "prerequisite_rules": ["setup-zod"],  # Must understand first
+        "similar_rules": ["validate-output-zod"],
+        "prerequisite_rules": ["setup-zod"],
         "see_also": ["error-handling"]
     }},
 
-    # Integration fields
+    # ESLint flag (Required boolean)
     "has_eslint_rule": true,
-    "import_map": [...]  # Auto-generated
+
+    # Import map (Optional list)
+    "import_map": [
+        {{
+            "module": "zod",
+            "imported_items": "{{ z }}",
+            "statement": "import {{ z }} from 'zod'"
+        }}
+    ]
 }}
 ```
 
@@ -253,7 +242,71 @@ export async function POST(request: Request) {{
 4. **Full Format** (existing):
    - Complete, runnable example
    - All imports and error handling
-   - Your current format
+   - Production-ready code
+
+**RULE STRUCTURE REQUIREMENTS**:
+
+Each rule extracted from the standard must follow this exact structure for hints_for_file compatibility:
+
+```python
+{
+    "rule": "Clear, actionable rule statement",  # Required
+    "rule_id": "unique-rule-id",  # Required, e.g., "validate-input-zod"
+    "context": "Why this matters and when to apply it",  # Required
+
+    # Metadata for smart loading (Required - matches RuleMetadata)
+    "metadata": {
+        "pattern_type": "validation|error-handling|routing|security|performance",
+        "complexity": "basic|intermediate|advanced|expert",
+        "rule_type": "must|should|may|must-not",  # RFC 2119
+        "nextjs_api": ["app-router", "pages-router", "api-routes"],  # List
+        "client_server": "client-only|server-only|isomorphic|edge"
+    },
+
+    # Multiple example formats (Required - matches RuleExamples)
+    "examples": {
+        # All example fields should be strings or None
+        "minimal": "schema.parse(input)",  # ~20 tokens
+        "standard": "const validated = schema.parse(body);",  # ~100 tokens
+        "detailed": "Full example with imports",  # ~200 tokens
+        "full": "Complete implementation",  # Required
+        "reference": "See src/api/users/route.ts",  # Optional
+        "context_variants": {  # Optional dict
+            "app_router": "app router example",
+            "pages_router": "pages router example"
+        }
+    },
+
+    # Token counts (Required - matches TokenCount)
+    "tokens": {
+        "minimal": 20,
+        "standard": 100,
+        "detailed": 200,
+        "full": 400
+    },
+
+    # Relationships for grouping (Optional)
+    "relationships": {
+        "similar_rules": ["validate-output-zod"],
+        "prerequisite_rules": ["setup-zod"],
+        "see_also": ["error-handling"]
+    },
+
+    # ESLint flag (Required boolean)
+    "has_eslint_rule": true,
+
+    # Import map (Optional list)
+    "import_map": [
+        {
+            "module": "zod",
+            "imported_items": "{ z }",
+            "statement": "import { z } from 'zod'"
+        }
+    ]
+}
+```
+
+**METADATA FIELD GUIDELINES**:
 
 **PATTERN TYPE GUIDELINES**:
 - "validation": Input/output validation patterns
@@ -451,11 +504,12 @@ register_result = mcp.register(
         "nextjs_config": {{...}}
         # NO RULES HERE - rules are added separately
     }},
-    enhanced_format=True  # REQUIRED for enhanced metadata processing
+    enhanced_format=True  # Defaults to True for enhanced metadata processing
 )
 
 # 2. ITERATIVELY add each hint/rule to avoid MCP limits
 # For each enhanced rule, make a separate add_hint() call
+# NOTE: add_hint() does NOT accept session_id parameter
 for rule_data in enhanced_rules:
     hint_result = mcp.add_hint(
         standard_id="{standard_id}",
@@ -506,6 +560,7 @@ for rule_data in enhanced_rules:
 
 # 3. ITERATIVELY add ESLint rules for hints that have has_eslint_rule: true
 # For each rule where has_eslint_rule is true, make a separate add_rule() call
+# NOTE: add_rule() does NOT accept session_id parameter
 for rule_data in eslint_rules:
     rule_result = mcp.add_rule(
         standard_id="{standard_id}",
@@ -544,7 +599,42 @@ for rule_data in eslint_rules:
 
     print(f"Added ESLint rule {{rule_result['data']['ruleName']}} to {{rule_result['data']['ruleFile']}}")
 
-# 4. Optional: List all rules for verification
+# 4. VALIDATE ESLint rules work correctly (CRITICAL STEP)
+print("🔍 Validating generated ESLint rules...")
+validation_result = mcp.lint_project(
+    use_standards=True,  # Use standards-generated ESLint config
+    target_files=["src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "src/**/*.jsx"]
+)
+
+if validation_result.get('error'):
+    print(f"❌ ESLint validation failed: {validation_result['error']['message']}")
+    # Handle missing config or other errors
+elif validation_result['issues']:
+    print(f"⚠️ Found {validation_result['total_issues']} linting issues with generated rules")
+
+    # Check for aromcp rule failures (generated rules that don't work)
+    aromcp_errors = [issue for issue in validation_result['issues']
+                     if issue.get('rule', '').startswith('aromcp/')]
+
+    if aromcp_errors:
+        print(f"🔧 Fixing {len(aromcp_errors)} problematic generated rules...")
+
+        # Option 1: Disable broken rules temporarily
+        for error in aromcp_errors:
+            rule_name = error['rule'].replace('aromcp/', '')
+            print(f"Disabling rule: {rule_name} (caused: {error['message']})")
+            # Could implement disable_rule() or update_rule() here
+
+        # Option 2: Re-run validation after fixes
+        retry_result = mcp.lint_project(use_standards=True, target_files=["src/**/*.ts"])
+        if retry_result['total_issues'] < validation_result['total_issues']:
+            print("✅ ESLint rules fixed and validated successfully")
+    else:
+        print("✅ Generated ESLint rules work correctly")
+else:
+    print("✅ Generated ESLint rules validated successfully - no issues found")
+
+# 5. Optional: List all rules for verification
 rules_list = mcp.list_rules(standard_id="{standard_id}")
 print(f"Total ESLint rules for {{standard_id}}: {{len(rules_list['data']['rules'])}}")
 ```
@@ -589,13 +679,33 @@ Process all standards in this batch and report success."""
 print(f"✅ Launched {len(batch_tasks)} parsing tasks")
 ```
 
-### Step 3: Verify Results
+### Step 3: Validate and Verify Results
 
 ```python
-# After all AI tasks complete, verify processing
+# After all AI tasks complete, validate ESLint rules work correctly
+print("🔍 Running final ESLint validation across project...")
+project_validation = mcp.lint_project(
+    use_standards=True,  # Use all generated standards rules
+    target_files=None    # Validate entire project
+)
+
+if project_validation.get('error'):
+    print(f"❌ Project validation failed: {project_validation['error']['message']}")
+    print("Check that standards-config.js was generated properly")
+else:
+    aromcp_issues = [issue for issue in project_validation['issues']
+                     if issue.get('rule', '').startswith('aromcp/')]
+
+    if aromcp_issues:
+        print(f"⚠️ {len(aromcp_issues)} issues from generated rules need attention")
+        for issue in aromcp_issues[:5]:  # Show first 5
+            print(f"  - {issue['file']}:{issue['line']} {issue['rule']}: {issue['message']}")
+    else:
+        print("✅ All generated ESLint rules validated successfully!")
+
+# Verify processing results
 final_check = mcp.check_updates(
-    standards_path="standards",
-    project_root="."
+    standards_path=standards_dir
 )
 
 print(f"✅ Processing complete!")
@@ -617,7 +727,7 @@ print(f"Token usage: {hints['data']['total_tokens']} / {hints['data']['max_token
 
 ## Summary
 
-The `generate-standards` command provides a complete workflow for:
+The `standards:generate` command provides a complete workflow for:
 
 1. **Parsing** markdown standards files to extract structured rules
 2. **Registering** standards with rich metadata for context-aware loading

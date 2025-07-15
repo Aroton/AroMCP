@@ -1,6 +1,7 @@
 """Extract method signatures implementation."""
 
 import ast
+import re
 from pathlib import Path
 from typing import Any
 
