@@ -4,6 +4,16 @@
 
 **Description**: Processes markdown standards files through AI parsing to generate enhanced AI hints with context awareness and smart compression support. Features context-aware compression, 70-80% token reduction through intelligent rule deduplication, progressive detail levels, and automated ESLint rule validation.
 
+## ⚠️ CRITICAL FILTERING REQUIREMENT
+
+**MANDATORY**: All generated ESLint rules MUST filter files based on the `applies_to` patterns defined in the standards metadata. This ensures rules only apply to relevant files and prevents rule conflicts.
+
+**Key Requirements**:
+- Extract `applies_to` patterns from standards metadata
+- Include file pattern matching in every ESLint rule's `create()` function
+- Use micromatch library for glob pattern matching
+- Return empty object `{}` if file doesn't match patterns
+
 ## Usage
 
 ```bash
@@ -437,10 +447,17 @@ export async function POST(request: NextRequest) {{
 
 4. **Generate ESLint rules** (if applicable):
 
+**CRITICAL: Always filter ESLint rules based on standards file configuration**
+
+Before generating any ESLint rules, you MUST:
+1. Use the `applies_to` patterns from the standards metadata to determine which files the rule should target
+2. Only generate rules for patterns that match the standards file configuration
+3. Include proper file pattern matching in the ESLint rule implementation
+
 For rules where `has_eslint_rule: true`, generate JavaScript implementations:
 
 ```javascript
-// Example ESLint rule structure
+// Example ESLint rule structure with MANDATORY file filtering
 module.exports = {
     meta: {
         type: 'problem',
@@ -455,6 +472,16 @@ module.exports = {
         fixable: 'code'
     },
     create(context) {
+        // CRITICAL: Always check if rule applies to current file
+        const filename = context.getFilename();
+        const appliesToPatterns = ["**/api/**/*.ts", "**/routes/**/*.ts"]; // From standards metadata
+        
+        // Use micromatch or similar to check if file matches applies_to patterns
+        const micromatch = require('micromatch');
+        if (!micromatch.isMatch(filename, appliesToPatterns)) {
+            return {}; // Skip this file - rule doesn't apply
+        }
+        
         return {
             // AST selector for route handlers
             'CallExpression[callee.property.name=/^(get|post|put|delete|patch)$/]': function(node) {
@@ -475,11 +502,14 @@ module.exports = {
 ```
 
 ESLint Rule Requirements:
+- **MANDATORY**: Always filter by `applies_to` patterns from standards metadata
+- **MANDATORY**: Include file pattern matching in every ESLint rule's create() function
 - Only for patterns detectable via AST analysis
 - Use proper ESLint AST selectors
 - Include helpful error messages
 - Provide automatic fixes when possible
 - Limit recursion depth to prevent infinite loops
+- Use micromatch or similar library for glob pattern matching
 
 **OUTPUT using MCP calls (NEW ITERATIVE FLOW):**
 
@@ -561,11 +591,14 @@ for rule_data in enhanced_rules:
 # 3. ITERATIVELY add ESLint rules for hints that have has_eslint_rule: true
 # For each rule where has_eslint_rule is true, make a separate add_rule() call
 # NOTE: add_rule() does NOT accept session_id parameter
+# CRITICAL: Extract applies_to patterns from metadata for file filtering
 for rule_data in eslint_rules:
+    applies_to_patterns = metadata.get("applies_to", ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"])
+    
     rule_result = mcp.add_rule(
         standard_id="{standard_id}",
         rule_name=rule_data["rule_id"],  # e.g., "validate-input-zod"
-        rule_content='''module.exports = {{
+        rule_content=f'''module.exports = {{
             meta: {{
                 type: 'problem',
                 docs: {{
@@ -579,6 +612,16 @@ for rule_data in eslint_rules:
                 fixable: 'code'
             }},
             create(context) {{
+                // CRITICAL: Always check if rule applies to current file
+                const filename = context.getFilename();
+                const appliesToPatterns = {applies_to_patterns}; // From standards metadata
+                
+                // Use micromatch to check if file matches applies_to patterns
+                const micromatch = require('micromatch');
+                if (!micromatch.isMatch(filename, appliesToPatterns)) {{
+                    return {{}}; // Skip this file - rule doesn't apply
+                }}
+                
                 return {{
                     'CallExpression[callee.property.name=/^(get|post|put|delete|patch)$/]': function(node) {{
                         const handler = node.arguments[node.arguments.length - 1];
@@ -601,6 +644,7 @@ for rule_data in eslint_rules:
 
 # 4. VALIDATE ESLint rules work correctly (CRITICAL STEP)
 print("🔍 Validating generated ESLint rules...")
+print("💡 Remember: All ESLint rules should include file pattern filtering based on applies_to metadata")
 validation_result = mcp.lint_project(
     use_standards=True,  # Use standards-generated ESLint config
     target_files=["src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "src/**/*.jsx"]
