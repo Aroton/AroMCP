@@ -19,6 +19,7 @@ class TestCheckTypeScript:
 
             # Mock subprocess to return no errors
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
@@ -39,6 +40,7 @@ class TestCheckTypeScript:
 
             # Mock subprocess to return errors from multiple files
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = """src/file1.ts(5,10): error TS2304: Cannot find name 'foo'.
 src/file1.ts(8,15): error TS2304: Cannot find name 'bar'.
 src/file2.ts(3,5): error TS2304: Cannot find name 'baz'.
@@ -53,7 +55,7 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 # Should cap errors to first file only
                 assert len(result["errors"]) == 2  # Only errors from file1.ts
                 assert result["total"] == 4  # Total across all files
-                assert result["check_again"] == True  # Should suggest checking again
+                assert result["check_again"]  # Should suggest checking again
                 assert all(err["file"] == "src/file1.ts" for err in result["errors"])
                 assert result["errors"][0]["message"] == "Cannot find name 'foo'."
                 assert result["errors"][1]["message"] == "Cannot find name 'bar'."
@@ -68,9 +70,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             # Create a directory structure
             src_dir = Path(temp_dir) / "src" / "components"
             src_dir.mkdir(parents=True)
-            
+
             # Mock subprocess
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
@@ -78,7 +81,7 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                  patch("subprocess.run", return_value=mock_result) as mock_subprocess:
 
                 # Test with directory path
-                result = check_typescript_impl(files="src/components")
+                check_typescript_impl(files="src/components")
 
                 # Verify subprocess was called with globbed path
                 mock_subprocess.assert_called_once()
@@ -99,9 +102,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             test_file = Path(temp_dir) / "src" / "test.ts"
             test_file.parent.mkdir(parents=True)
             test_file.write_text("const x: string = 'test';")
-            
+
             # Mock subprocess
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
@@ -109,7 +113,7 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                  patch("subprocess.run", return_value=mock_result) as mock_subprocess:
 
                 # Test with file path
-                result = check_typescript_impl(files="src/test.ts")
+                check_typescript_impl(files="src/test.ts")
 
                 # Verify subprocess was called with original file path
                 mock_subprocess.assert_called_once()
@@ -127,9 +131,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             # Create a test file
             test_file = Path(temp_dir) / "test.ts"
             test_file.write_text("const x: string = 'test';")
-            
+
             # Mock subprocess
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
@@ -154,9 +159,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             test_file2 = Path(temp_dir) / "test2.ts"
             test_file1.write_text("const x: string = 'test1';")
             test_file2.write_text("const y: string = 'test2';")
-            
+
             # Mock subprocess
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
@@ -184,9 +190,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             test_file2 = Path(temp_dir) / "test2.ts"
             test_file1.write_text("const x: string = 'test1';")
             test_file2.write_text("const y: string = 'test2';")
-            
+
             # Mock subprocess
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
@@ -214,9 +221,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             test_dir = Path(temp_dir) / "src"
             test_file.write_text("const x: string = 'test';")
             test_dir.mkdir()
-            
+
             # Mock subprocess
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
@@ -243,7 +251,7 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
 
                 try:
                     check_typescript_impl(files="nonexistent.ts")
-                    assert False, "Should have raised ValueError"
+                    raise AssertionError("Should have raised ValueError")
                 except ValueError as e:
                     assert "File or directory not found: nonexistent.ts" in str(e)
 
@@ -254,7 +262,7 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
 
                 try:
                     check_typescript_impl()
-                    assert False, "Should have raised ValueError"
+                    raise AssertionError("Should have raised ValueError")
                 except ValueError as e:
                     assert "No tsconfig.json found in project root" in str(e)
 
@@ -267,6 +275,7 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
 
             # Mock subprocess to return error
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = "src/test.ts(10,5): error TS2304: Cannot find name 'undefinedVar'."
             mock_result.returncode = 1
 
@@ -277,7 +286,7 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
 
                 assert len(result["errors"]) == 1
                 assert result["total"] == 1
-                assert result["check_again"] == True
+                assert result["check_again"]
                 error = result["errors"][0]
                 assert error["file"] == "src/test.ts"
                 assert error["line"] == 10
@@ -292,9 +301,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             # Create tsconfig.json
             tsconfig = Path(temp_dir) / "tsconfig.json"
             tsconfig.write_text('{"compilerOptions": {"strict": true}}')
-            
+
             # Mock subprocess
             mock_result = Mock()
+            mock_result.stdout = ""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
@@ -310,3 +320,59 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 assert "src/**/*.ts" in call_args  # Glob pattern passed through unchanged
                 assert "npx" == call_args[0]
                 assert "tsc" == call_args[1]
+
+    def test_errors_from_stdout_parsed(self):
+        """Test that errors from stdout are properly parsed."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create tsconfig.json
+            tsconfig = Path(temp_dir) / "tsconfig.json"
+            tsconfig.write_text('{"compilerOptions": {"strict": true}}')
+
+            # Mock subprocess to return errors in stdout (common with exit code 2)
+            mock_result = Mock()
+            mock_result.stdout = "src/test.ts(10,5): error TS2304: Cannot find name 'undefinedVar'."
+            mock_result.stderr = ""
+            mock_result.returncode = 2
+
+            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
+                 patch("subprocess.run", return_value=mock_result):
+
+                result = check_typescript_impl()
+
+                assert len(result["errors"]) == 1
+                assert result["total"] == 1
+                assert result["check_again"]
+
+                error = result["errors"][0]
+                assert error["file"] == "src/test.ts"
+                assert error["line"] == 10
+                assert error["message"] == "Cannot find name 'undefinedVar'."
+
+    def test_no_files_parameter_checks_entire_project(self):
+        """Test that calling check_typescript() with no files parameter checks the entire project."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create tsconfig.json
+            tsconfig = Path(temp_dir) / "tsconfig.json"
+            tsconfig.write_text('{"compilerOptions": {"strict": true}}')
+
+            # Mock subprocess
+            mock_result = Mock()
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+            mock_result.returncode = 0
+
+            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
+                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
+
+                # Test with no files parameter (None)
+                result = check_typescript_impl(files=None)
+
+                assert result == {"errors": [], "check_again": False}
+                mock_subprocess.assert_called_once()
+                call_args = mock_subprocess.call_args[0][0]
+                # Should contain more comprehensive TypeScript check
+                assert "npx" == call_args[0]
+                assert "tsc" == call_args[1]
+                assert "--noEmit" in call_args
+                # Should include either --skipLibCheck or --project depending on config
+                assert "--skipLibCheck" in call_args or "--project" in call_args

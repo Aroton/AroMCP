@@ -18,10 +18,11 @@ def register_build_tools(mcp):
         """Run TypeScript compiler to find type errors.
 
         Use this tool when:
-        - Checking for type safety issues before deployment
-        - Debugging TypeScript compilation errors
-        - Validating type definitions after refactoring
-        - Ensuring code meets TypeScript strict mode requirements
+        - REQUIRED: After every TypeScript/JavaScript file edit before proceeding
+        - REQUIRED: Before committing code changes to ensure they will build
+        - REQUIRED: After completing any coding task to validate TypeScript compilation
+        - After refactoring code to catch type definition issues
+        - When you need to verify the project builds without compilation errors
 
         Replaces bash commands: npx tsc, tsc --noEmit
 
@@ -29,10 +30,14 @@ def register_build_tools(mcp):
             files: Files, directories, or glob patterns (directories auto-glob with /*, glob patterns passed through)
 
         Example:
+            # WORKFLOW: After editing code, always run this
             check_typescript()  # Check entire project
             → {"errors": [{"file": "src/app.ts", "line": 42, "message": "Type error"}], "total": 3, "check_again": true}
+            # Fix the errors, then run again
+            check_typescript()  # Re-check after fixes
+            → {"errors": [], "check_again": false}  # Now safe to proceed
 
-            check_typescript(["src/app.ts"])
+            check_typescript(["src/app.ts"])  # Check specific files
             → {"errors": [{"file": "src/app.ts", "line": 42, "message": "Type error"}], "total": 3, "check_again": true}
 
             check_typescript("src/components")  # Auto-globs to src/components/*
@@ -41,8 +46,9 @@ def register_build_tools(mcp):
             check_typescript("src/**/*.ts")  # Glob patterns passed directly to tsc
             → {"errors": [], "check_again": false}
 
-        Note: Requires tsconfig.json in project root. Shows only first file's errors with total count.
-        Set check_again=true when errors exist, suggesting re-check after fixes.
+        Note: ESSENTIAL quality gate - run this after EVERY code edit. Requires tsconfig.json in project root.
+        Shows only first file's errors with total count. When check_again=true, fix errors and run again.
+        Code should NOT be considered complete until this returns check_again=false.
         """
         return check_typescript_impl(files)
 
@@ -52,23 +58,31 @@ def register_build_tools(mcp):
         """Run ESLint to find code style issues and potential bugs.
 
         Use this tool when:
-        - Ensuring code follows project style guidelines
-        - Finding potential bugs and code smells
-        - Preparing code for review or commit
-        - Enforcing consistent code formatting
+        - REQUIRED: After every code edit to catch style issues and bugs early
+        - REQUIRED: Before committing code changes to ensure clean, consistent code
+        - REQUIRED: After completing any coding task to validate code quality
+        - After adding new features to ensure they follow project standards
+        - When you need to verify code meets style guidelines before building
 
         Replaces bash commands: npx eslint, eslint .
 
         Args:
             use_standards: Whether to use standards server generated ESLint config (recommended)
-            target_files: Files, directories, or glob patterns (directories auto-glob with /*, glob patterns passed through)
+            target_files: Files, directories, or glob patterns (directories auto-glob with /*,
+                glob patterns passed through)
 
         Example:
+            # WORKFLOW: After editing code, always run this
             lint_project()  # Check entire project with standards
-            → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}], "total": 8, "fixable": 5, "check_again": true}
+            → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}],
+               "total": 8, "fixable": 5, "check_again": true}
+            # Fix the issues, then run again
+            lint_project()  # Re-check after fixes
+            → {"issues": [], "check_again": false}  # Now safe to proceed
 
-            lint_project(use_standards=True)
-            → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}], "total": 8, "fixable": 5, "check_again": true}
+            lint_project(use_standards=True)  # Explicit standards usage
+            → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}],
+               "total": 8, "fixable": 5, "check_again": true}
 
             lint_project(target_files="src/components")  # Auto-globs to src/components/*
             → {"issues": [], "check_again": false}
@@ -76,8 +90,9 @@ def register_build_tools(mcp):
             lint_project(target_files="src/**/*.ts")  # Glob patterns passed directly to eslint
             → {"issues": [], "check_again": false}
 
-        Note: Always use use_standards=True for best results. Shows only first file's issues with total count.
-        Set check_again=true when fixable issues exist, suggesting re-check after fixes.
+        Note: ESSENTIAL quality gate - run this after EVERY code edit. Always use use_standards=True for best results.
+        Shows only first file's issues with total count. When check_again=true, fix issues and run again.
+        Code should NOT be considered complete until this returns check_again=false.
         """
         return lint_project_impl(use_standards, target_files)
 

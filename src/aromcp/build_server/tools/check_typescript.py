@@ -12,7 +12,7 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
     """Run TypeScript compiler to find type errors.
 
     Args:
-        files: Specific files to check (optional, defaults to all files in project)
+        files: Specific files to check (optional, defaults to comprehensive project check)
 
     Returns:
         Dictionary with errors and success status
@@ -26,8 +26,31 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
         if not (project_path / "tsconfig.json").exists():
             raise ValueError("No tsconfig.json found in project root")
 
-        # Build TypeScript command
-        cmd = ["npx", "tsc", "--noEmit"]
+        # Build TypeScript command - use more comprehensive checking by default
+        if not files:
+            # When no files specified, use the most comprehensive TypeScript check
+            # This mirrors what build processes typically do
+            cmd = ["npx", "tsc", "--noEmit", "--skipLibCheck"]
+
+            # Try to detect if there are multiple tsconfig files or project references
+            if (project_path / "tsconfig.build.json").exists():
+                cmd = ["npx", "tsc", "--noEmit", "--project", "tsconfig.build.json"]
+            elif (project_path / "tsconfig.json").exists():
+                # Check if tsconfig.json has project references
+                try:
+                    import json
+                    with open(project_path / "tsconfig.json") as f:
+                        tsconfig = json.load(f)
+                        if tsconfig.get("references"):
+                            cmd = ["npx", "tsc", "--build", "--dry", "--force"]
+                        else:
+                            cmd = ["npx", "tsc", "--noEmit", "--project", "."]
+                except (json.JSONDecodeError, FileNotFoundError):
+                    # Fall back to basic command
+                    cmd = ["npx", "tsc", "--noEmit"]
+        else:
+            cmd = ["npx", "tsc", "--noEmit"]
+
         if files:
             # Handle JSON string conversion
             if isinstance(files, str):
@@ -54,7 +77,7 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
                         expanded_files.append(file_path)
                     else:
                         raise ValueError(f"File or directory not found: {file_path}")
-            
+
             # Add expanded files to command
             cmd.extend(expanded_files)
 
@@ -72,8 +95,12 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
         except FileNotFoundError as e:
             raise ValueError("TypeScript compiler not found (npx tsc)") from e
 
-        # Parse errors from output
-        errors = _parse_tsc_output(result.stderr)
+        # Parse errors from output - TypeScript can write to both stdout and stderr
+        errors = []
+        if result.stderr:
+            errors.extend(_parse_tsc_output(result.stderr))
+        if result.stdout:
+            errors.extend(_parse_tsc_output(result.stdout))
 
         # Build result - only show errors if there are any
         if len(errors) == 0:
@@ -87,7 +114,7 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
             if errors:
                 first_file = errors[0]["file"]
                 first_file_errors = [err for err in errors if err["file"] == first_file]
-            
+
             return {
                 "errors": first_file_errors,
                 "total": len(errors),

@@ -160,11 +160,11 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
                 "total": total_issues,
                 "check_again": fixable_count > 0  # Suggest checking again if issues are fixable
             }
-            
+
             # Only include fixable count if > 0
             if fixable_count > 0:
                 result["fixable"] = fixable_count
-                
+
             return result
 
     except Exception as e:
