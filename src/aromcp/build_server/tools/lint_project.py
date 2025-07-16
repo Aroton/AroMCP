@@ -8,12 +8,13 @@ from typing import Any
 from ...filesystem_server._security import get_project_root
 
 
-def lint_project_impl(use_standards: bool = True, target_files: str | list[str] | None = None) -> dict[str, Any]:
+def lint_project_impl(use_standards: bool = True, target_files: str | list[str] | None = None, debug: bool = False) -> dict[str, Any]:
     """Run ESLint to find code style issues and bugs.
 
     Args:
         use_standards: Whether to use standards server generated ESLint config
         target_files: Specific files to lint (optional)
+        debug: Enable detailed debug output for troubleshooting
 
     Returns:
         Dictionary with issues and fixable count
@@ -22,6 +23,33 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
         # Use MCP_FILE_ROOT
         project_root = get_project_root(None)
         project_path = Path(project_root)
+        
+        debug_info = []
+        if debug:
+            debug_info.append(f"🔍 DEBUG: Project root: {project_root}")
+            debug_info.append(f"🔍 DEBUG: Target files: {target_files}")
+            debug_info.append(f"🔍 DEBUG: Use standards: {use_standards}")
+            
+            # Check what npm run build actually does
+            package_json = project_path / "package.json"
+            if package_json.exists():
+                try:
+                    config = json.loads(package_json.read_text())
+                    scripts = config.get("scripts", {})
+                    build_script = scripts.get("build", "Not found")
+                    lint_script = scripts.get("lint", "Not found")
+                    debug_info.append(f"🔍 DEBUG: npm run build script: {build_script}")
+                    debug_info.append(f"🔍 DEBUG: npm run lint script: {lint_script}")
+                    
+                    # Special note about build vs lint
+                    if "test" in build_script.lower():
+                        debug_info.append("🔍 DEBUG: ⚠️  npm run build includes tests - errors might be from tests, not linting!")
+                    if build_script != lint_script:
+                        debug_info.append(f"🔍 DEBUG: ⚠️  npm run build ({build_script}) differs from npm run lint ({lint_script})")
+                except (json.JSONDecodeError, KeyError) as e:
+                    debug_info.append(f"🔍 DEBUG: package.json read error: {str(e)}")
+            else:
+                debug_info.append("🔍 DEBUG: No package.json found")
 
         # Handle string input for target_files
         if isinstance(target_files, str):
@@ -42,13 +70,20 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
         is_nextjs = _is_nextjs_project(project_root)
         all_issues = []
         commands_run = []
+        
+        if debug:
+            debug_info.append(f"🔍 DEBUG: Is Next.js project: {is_nextjs}")
 
         # Try Next.js lint command first if it's a Next.js project
-        if is_nextjs and not use_standards:
+        # Always try Next.js lint for Next.js projects since it handles config better
+        if is_nextjs:
             try:
                 nextjs_cmd = ["npm", "run", "lint", "--", "--format", "json"]
                 if target_files:
                     nextjs_cmd.extend(target_files)
+
+                if debug:
+                    debug_info.append(f"🔍 DEBUG: Running Next.js command: {' '.join(nextjs_cmd)}")
 
                 result = subprocess.run(  # noqa: S603 # Intentional subprocess call for Next.js lint
                     nextjs_cmd,
@@ -58,17 +93,32 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
                     timeout=120
                 )
 
-                issues = _parse_eslint_output_enhanced(result, project_root, "nextjs")
+                if debug:
+                    debug_info.append(f"🔍 DEBUG: Next.js exit code: {result.returncode}")
+                    debug_info.append(f"🔍 DEBUG: Next.js stdout length: {len(result.stdout)} chars")
+                    debug_info.append(f"🔍 DEBUG: Next.js stderr: {result.stderr[:500]}...")
+                    if result.stdout:
+                        debug_info.append(f"🔍 DEBUG: Next.js stdout preview: {result.stdout[:500]}...")
+
+                issues = _parse_eslint_output_enhanced(result, project_root, "nextjs", debug)
                 all_issues.extend(issues)
                 commands_run.append("nextjs")
 
-            except Exception:  # noqa: S110 # Intentional fallback on Next.js failure
+                if debug:
+                    debug_info.append(f"🔍 DEBUG: Next.js found {len(issues)} issues")
+
+            except Exception as e:  # noqa: S110 # Intentional fallback on Next.js failure
+                if debug:
+                    debug_info.append(f"🔍 DEBUG: Next.js lint failed: {str(e)}")
                 # Fall through to regular ESLint if Next.js lint fails
                 pass
 
-        # Try standards config if requested
-        if use_standards:
+        # Try standards config if requested and Next.js didn't work
+        if use_standards and not all_issues:
             standards_config = _get_standards_eslint_config(project_root)
+            if debug:
+                debug_info.append(f"🔍 DEBUG: Standards config path: {standards_config}")
+                
             if standards_config:
                 try:
                     eslint_cmd = [
@@ -80,6 +130,9 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
                     else:
                         eslint_cmd.append("src")
 
+                    if debug:
+                        debug_info.append(f"🔍 DEBUG: Running standards command: {' '.join(eslint_cmd)}")
+
                     result = subprocess.run(  # noqa: S603 # Intentional subprocess call for standards ESLint
                         eslint_cmd,
                         cwd=project_root,
@@ -88,29 +141,58 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
                         timeout=120
                     )
 
-                    issues = _parse_eslint_output_enhanced(result, project_root, "standards")
+                    if debug:
+                        debug_info.append(f"🔍 DEBUG: Standards exit code: {result.returncode}")
+                        debug_info.append(f"🔍 DEBUG: Standards stdout length: {len(result.stdout)} chars")
+                        debug_info.append(f"🔍 DEBUG: Standards stderr: {result.stderr[:500]}...")
+
+                    issues = _parse_eslint_output_enhanced(result, project_root, "standards", debug)
                     all_issues.extend(issues)
                     commands_run.append("standards")
 
-                except Exception:  # noqa: S110 # Intentional fallback on standards failure
+                    if debug:
+                        debug_info.append(f"🔍 DEBUG: Standards found {len(issues)} issues")
+
+                except Exception as e:  # noqa: S110 # Intentional fallback on standards failure
+                    if debug:
+                        debug_info.append(f"🔍 DEBUG: Standards lint failed: {str(e)}")
+                    # If the standards config has syntax errors, we should skip it entirely
+                    if "Syntax error in selector" in str(result.stderr):
+                        if debug:
+                            debug_info.append("🔍 DEBUG: Standards config has selector syntax errors, skipping standards")
                     # Fall through to regular ESLint if standards fails
                     pass
 
         # Fall back to regular ESLint if no other method worked or if not Next.js
         if not all_issues:
+            if debug:
+                debug_info.append("🔍 DEBUG: Falling back to regular ESLint")
+                
             # Check if regular ESLint config is available
             config_files = [".eslintrc.js", ".eslintrc.json", "eslint.config.js"]
-            if not any((project_path / config_file).exists() for config_file in config_files):
+            available_configs = [config for config in config_files if (project_path / config).exists()]
+            
+            if debug:
+                debug_info.append(f"🔍 DEBUG: Available config files: {available_configs}")
+                
+            if not available_configs:
                 # Try to find package.json with eslint config
                 package_json = project_path / "package.json"
                 if package_json.exists():
                     try:
                         config = json.loads(package_json.read_text())
-                        if "eslintConfig" not in config:
+                        has_eslint_config = "eslintConfig" in config
+                        if debug:
+                            debug_info.append(f"🔍 DEBUG: package.json has eslintConfig: {has_eslint_config}")
+                        if not has_eslint_config:
                             raise ValueError("No ESLint configuration found")
                     except (json.JSONDecodeError, KeyError) as e:
+                        if debug:
+                            debug_info.append(f"🔍 DEBUG: package.json error: {str(e)}")
                         raise ValueError("No ESLint configuration found") from e
                 else:
+                    if debug:
+                        debug_info.append("🔍 DEBUG: No package.json found")
                     raise ValueError("No ESLint configuration found")
 
             # Run regular ESLint
@@ -121,6 +203,9 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
                 else:
                     eslint_cmd.extend(["src", "--ext", ".js,.jsx,.ts,.tsx"])
 
+                if debug:
+                    debug_info.append(f"🔍 DEBUG: Running regular ESLint command: {' '.join(eslint_cmd)}")
+
                 result = subprocess.run(  # noqa: S603 # Intentional subprocess call for regular ESLint
                     eslint_cmd,
                     cwd=project_root,
@@ -129,28 +214,49 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
                     timeout=120
                 )
 
-                issues = _parse_eslint_output_enhanced(result, project_root, "eslint")
+                if debug:
+                    debug_info.append(f"🔍 DEBUG: Regular ESLint exit code: {result.returncode}")
+                    debug_info.append(f"🔍 DEBUG: Regular ESLint stdout length: {len(result.stdout)} chars")
+                    debug_info.append(f"🔍 DEBUG: Regular ESLint stderr: {result.stderr[:500]}...")
+
+                issues = _parse_eslint_output_enhanced(result, project_root, "eslint", debug)
                 all_issues.extend(issues)
                 commands_run.append("eslint")
 
+                if debug:
+                    debug_info.append(f"🔍 DEBUG: Regular ESLint found {len(issues)} issues")
+
             except subprocess.TimeoutExpired as e:
+                if debug:
+                    debug_info.append(f"🔍 DEBUG: ESLint timed out: {str(e)}")
                 raise ValueError("ESLint timed out") from e
             except FileNotFoundError as e:
+                if debug:
+                    debug_info.append(f"🔍 DEBUG: ESLint not found: {str(e)}")
                 raise ValueError("ESLint not found (npx eslint)") from e
 
         # Calculate summary
         total_issues = len(all_issues)
         fixable_count = len([i for i in all_issues if i.get("fixable", False)])
 
+        if debug:
+            debug_info.append(f"🔍 DEBUG: Total issues found: {total_issues}")
+            debug_info.append(f"🔍 DEBUG: Fixable issues: {fixable_count}")
+            debug_info.append(f"🔍 DEBUG: Commands run: {commands_run}")
+
         # Cap issues to first file only (like check_typescript)
         first_file_issues = []
         if all_issues:
             first_file = all_issues[0]["file"]
             first_file_issues = [issue for issue in all_issues if issue["file"] == first_file]
+            
+            if debug:
+                debug_info.append(f"🔍 DEBUG: First file: {first_file}")
+                debug_info.append(f"🔍 DEBUG: First file issues: {len(first_file_issues)}")
 
         # Build result - always show issues array, add total if there are issues
         if total_issues == 0:
-            return {
+            result = {
                 "issues": [],
                 "check_again": False
             }
@@ -165,9 +271,22 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
             if fixable_count > 0:
                 result["fixable"] = fixable_count
 
-            return result
+        # Add debug info if requested
+        if debug:
+            result["debug_info"] = debug_info
+
+        return result
 
     except Exception as e:
+        if debug:
+            # Return debug info even on error
+            return {
+                "error": {
+                    "code": "LINT_FAILED",
+                    "message": str(e)
+                },
+                "debug_info": debug_info
+            }
         raise ValueError(f"Lint failed: {str(e)}") from e
 
 
@@ -205,14 +324,24 @@ def _get_standards_eslint_config(project_root: str) -> str | None:
 def _parse_eslint_output_enhanced(
     result: subprocess.CompletedProcess,
     project_root: str,
-    source: str
+    source: str,
+    debug: bool = False
 ) -> list[dict[str, Any]]:
     """Parse ESLint output and return list of issues."""
     issues = []
 
+    if debug:
+        print(f"🔍 DEBUG: Parsing {source} output...")
+        print(f"🔍 DEBUG: Has stdout: {bool(result.stdout)}")
+        if result.stdout:
+            print(f"🔍 DEBUG: Stdout first 200 chars: {result.stdout[:200]}...")
+
     if result.stdout:
         try:
             eslint_results = json.loads(result.stdout)
+            
+            if debug:
+                print(f"🔍 DEBUG: JSON parsed successfully, {len(eslint_results)} file results")
 
             for file_result in eslint_results:
                 file_path = file_result.get("filePath", "")
@@ -220,7 +349,11 @@ def _parse_eslint_output_enhanced(
                 if file_path.startswith(project_root):
                     file_path = file_path[len(project_root):].lstrip("/")
 
-                for message in file_result.get("messages", []):
+                messages = file_result.get("messages", [])
+                if debug and messages:
+                    print(f"🔍 DEBUG: File {file_path} has {len(messages)} messages")
+
+                for message in messages:
                     severity = "error" if message.get("severity") == 2 else "warning"
 
                     issues.append({
@@ -233,9 +366,15 @@ def _parse_eslint_output_enhanced(
                         "fixable": message.get("fix") is not None,
                         "source": source
                     })
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            if debug:
+                print(f"🔍 DEBUG: JSON parsing failed: {str(e)}")
+                print(f"🔍 DEBUG: Raw stdout: {result.stdout}")
             # Otherwise, silently ignore JSON parsing errors and return empty list
             pass
+
+    if debug:
+        print(f"🔍 DEBUG: Parsed {len(issues)} total issues from {source}")
 
     return issues
 

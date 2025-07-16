@@ -6,10 +6,13 @@ from .._security import get_project_root, validate_file_path_legacy
 
 
 def write_files_impl(files: dict[str, str] | str) -> None:
-    """Write multiple files atomically with automatic directory creation.
+    """Write multiple NEW files atomically with automatic directory creation.
+    
+    IMPORTANT: This function is designed for creating new files only.
+    For modifying existing files, use apply_file_diffs instead.
 
     Args:
-        files: Dictionary mapping file paths to content
+        files: Dictionary mapping file paths to content for new files
 
     Returns:
         None

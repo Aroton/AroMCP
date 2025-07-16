@@ -54,7 +54,7 @@ def register_build_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def lint_project(use_standards: bool = True, target_files: str | list[str] | None = None) -> dict[str, Any]:  # noqa: F841
+    def lint_project(use_standards: bool = True, target_files: str | list[str] | None = None, debug: bool = False) -> dict[str, Any]:  # noqa: F841
         """Run ESLint to find code style issues and potential bugs.
 
         Use this tool when:
@@ -70,6 +70,7 @@ def register_build_tools(mcp):
             use_standards: Whether to use standards server generated ESLint config (recommended)
             target_files: Files, directories, or glob patterns (directories auto-glob with /*,
                 glob patterns passed through)
+            debug: Enable detailed debug output for troubleshooting linting issues
 
         Example:
             # WORKFLOW: After editing code, always run this
@@ -94,7 +95,7 @@ def register_build_tools(mcp):
         Shows only first file's issues with total count. When check_again=true, fix issues and run again.
         Code should NOT be considered complete until this returns check_again=false.
         """
-        return lint_project_impl(use_standards, target_files)
+        return lint_project_impl(use_standards, target_files, debug)
 
     @mcp.tool
     def run_test_suite(  # noqa: F841

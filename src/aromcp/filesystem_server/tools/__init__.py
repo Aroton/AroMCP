@@ -72,13 +72,14 @@ def register_filesystem_tools(mcp):
     @mcp.tool
     @json_convert
     def write_files(files: dict[str, str] | str) -> None:
-        """Write multiple files with automatic directory creation.
+        """Write content to multiple NEW files with automatic directory creation.
 
         Use this tool when:
-        - Creating or updating multiple files at once
-        - Writing generated code or configuration files
-        - Applying changes to multiple files
-        - Creating new project structure
+        - Creating new files with content (NOT modifying existing files)
+        - Writing generated code or configuration files for new modules
+        - Setting up new project structure
+
+        IMPORTANT: Only use for NEW files. For modifying existing files, use apply_file_diffs instead.
 
         Replaces bash commands: echo >, tee, cp
 
@@ -86,9 +87,9 @@ def register_filesystem_tools(mcp):
             files: Dictionary mapping file paths to content
 
         Example:
-            write_files({"src/main.py": "print('hello')", "config.json": "{\\"debug\\": true}"})
+            write_files({"src/new_module.py": "print('hello')", "new_config.json": "{\\"debug\\": true}"})
 
-        Note: Creates directories automatically. For reading files, use read_files.
+        Note: Creates directories automatically. For editing existing files, use apply_file_diffs.
         """
         return write_files_impl(files)
 

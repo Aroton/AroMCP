@@ -4,6 +4,8 @@
 
 **Description**: Processes markdown standards files through AI parsing to generate enhanced AI hints with context awareness and smart compression support. Features context-aware compression, 70-80% token reduction through intelligent rule deduplication, progressive detail levels, and automated ESLint rule validation.
 
+**🔍 DEBUG MODE**: This command automatically uses `debug=true` during ESLint validation to catch and diagnose syntax errors, configuration issues, and rule conflicts. Debug output helps identify problematic ESLint selectors, missing dependencies, and configuration mismatches.
+
 ## ⚠️ CRITICAL FILTERING REQUIREMENT
 
 **MANDATORY**: All generated ESLint rules MUST filter files based on the `applies_to` patterns defined in the standards metadata. This ensures rules only apply to relevant files and prevents rule conflicts.
@@ -511,6 +513,14 @@ ESLint Rule Requirements:
 - Limit recursion depth to prevent infinite loops
 - Use micromatch or similar library for glob pattern matching
 
+**🚨 COMMON SYNTAX ERRORS TO AVOID**:
+- ❌ `ImportDeclaration[source.value~=/pattern/]` - Invalid `~=` operator
+- ✅ `ImportDeclaration[source.value*="pattern"]` - Use `*=` for substring match
+- ✅ `ImportDeclaration[source.value=/pattern/]` - Use `=` for exact match
+- ❌ `[attribute~=value]` - Avoid `~=` selector operator entirely
+- ✅ `[attribute*="substring"]` - Use `*=` for contains
+- ✅ `[attribute="exact"]` - Use `=` for exact match
+
 **OUTPUT using MCP calls (NEW ITERATIVE FLOW):**
 
 ```python
@@ -647,14 +657,28 @@ print("🔍 Validating generated ESLint rules...")
 print("💡 Remember: All ESLint rules should include file pattern filtering based on applies_to metadata")
 validation_result = mcp.lint_project(
     use_standards=True,  # Use standards-generated ESLint config
-    target_files=["src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "src/**/*.jsx"]
+    target_files=["src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "src/**/*.jsx"],
+    debug=True  # CRITICAL: Enable debug to catch syntax errors and config issues
 )
 
 if validation_result.get('error'):
     print(f"❌ ESLint validation failed: {validation_result['error']['message']}")
+    
+    # Show debug info if available to understand the failure
+    if validation_result.get('debug_info'):
+        print("🔍 DEBUG OUTPUT:")
+        for debug_line in validation_result['debug_info']:
+            print(f"    {debug_line}")
+    
     # Handle missing config or other errors
 elif validation_result['issues']:
     print(f"⚠️ Found {validation_result['total_issues']} linting issues with generated rules")
+    
+    # Show debug info to understand what commands were run
+    if validation_result.get('debug_info'):
+        print("🔍 DEBUG OUTPUT:")
+        for debug_line in validation_result['debug_info']:
+            print(f"    {debug_line}")
 
     # Check for aromcp rule failures (generated rules that don't work)
     aromcp_errors = [issue for issue in validation_result['issues']
@@ -663,6 +687,13 @@ elif validation_result['issues']:
     if aromcp_errors:
         print(f"🔧 Fixing {len(aromcp_errors)} problematic generated rules...")
 
+        # Show specific syntax errors from debug output
+        for debug_line in validation_result.get('debug_info', []):
+            if 'Syntax error in selector' in debug_line:
+                print(f"🚨 SYNTAX ERROR DETECTED: {debug_line}")
+            elif 'stderr:' in debug_line and 'error' in debug_line.lower():
+                print(f"🚨 ESLint ERROR: {debug_line}")
+
         # Option 1: Disable broken rules temporarily
         for error in aromcp_errors:
             rule_name = error['rule'].replace('aromcp/', '')
@@ -670,13 +701,20 @@ elif validation_result['issues']:
             # Could implement disable_rule() or update_rule() here
 
         # Option 2: Re-run validation after fixes
-        retry_result = mcp.lint_project(use_standards=True, target_files=["src/**/*.ts"])
+        retry_result = mcp.lint_project(use_standards=True, target_files=["src/**/*.ts"], debug=True)
         if retry_result['total_issues'] < validation_result['total_issues']:
             print("✅ ESLint rules fixed and validated successfully")
     else:
         print("✅ Generated ESLint rules work correctly")
 else:
     print("✅ Generated ESLint rules validated successfully - no issues found")
+    
+    # Even on success, show debug info to confirm what was validated
+    if validation_result.get('debug_info'):
+        print("🔍 VALIDATION DEBUG OUTPUT:")
+        for debug_line in validation_result['debug_info']:
+            if 'Commands run:' in debug_line or 'Total issues found:' in debug_line:
+                print(f"    {debug_line}")
 
 # 5. Optional: List all rules for verification
 rules_list = mcp.list_rules(standard_id="{standard_id}")
@@ -730,12 +768,24 @@ print(f"✅ Launched {len(batch_tasks)} parsing tasks")
 print("🔍 Running final ESLint validation across project...")
 project_validation = mcp.lint_project(
     use_standards=True,  # Use all generated standards rules
-    target_files=None    # Validate entire project
+    target_files=None,   # Validate entire project
+    debug=True           # CRITICAL: Enable debug to catch any remaining issues
 )
 
 if project_validation.get('error'):
     print(f"❌ Project validation failed: {project_validation['error']['message']}")
     print("Check that standards-config.js was generated properly")
+    
+    # Show debug output to understand the failure
+    if project_validation.get('debug_info'):
+        print("🔍 FINAL VALIDATION DEBUG OUTPUT:")
+        for debug_line in project_validation['debug_info']:
+            print(f"    {debug_line}")
+            # Highlight critical errors
+            if 'Syntax error in selector' in debug_line:
+                print(f"    🚨 CRITICAL: ESLint rule has syntax error!")
+            elif 'Standards config path: None' in debug_line:
+                print(f"    🚨 CRITICAL: No standards config generated!")
 else:
     aromcp_issues = [issue for issue in project_validation['issues']
                      if issue.get('rule', '').startswith('aromcp/')]
@@ -744,8 +794,22 @@ else:
         print(f"⚠️ {len(aromcp_issues)} issues from generated rules need attention")
         for issue in aromcp_issues[:5]:  # Show first 5
             print(f"  - {issue['file']}:{issue['line']} {issue['rule']}: {issue['message']}")
+        
+        # Show debug info to understand what went wrong
+        if project_validation.get('debug_info'):
+            print("🔍 AROMCP ISSUES DEBUG OUTPUT:")
+            for debug_line in project_validation['debug_info']:
+                if 'stderr:' in debug_line and ('error' in debug_line.lower() or 'syntax' in debug_line.lower()):
+                    print(f"    🚨 {debug_line}")
     else:
         print("✅ All generated ESLint rules validated successfully!")
+        
+        # Show summary debug info on success
+        if project_validation.get('debug_info'):
+            print("🔍 SUCCESS VALIDATION SUMMARY:")
+            for debug_line in project_validation['debug_info']:
+                if any(keyword in debug_line for keyword in ['Commands run:', 'Total issues found:', 'found 0 issues']):
+                    print(f"    ✅ {debug_line}")
 
 # Verify processing results
 final_check = mcp.check_updates(
