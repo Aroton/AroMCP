@@ -189,31 +189,42 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 
 ### Essential CLAUDE.md Integration
 ```markdown
-## AroMCP Development Tools
+## Development Workflow with AroMCP
 
 ### The Core Principle
 **The ONE mandatory requirement**: Always call `hints_for_file()` before editing any file to get project standards.
 
 ### Essential Tools
 1. **`hints_for_file(filepath, session_id?)`** - Get project standards and coding rules (MANDATORY before edits)
-2. **`parse_typescript_errors()` or `check_typescript()`** - Validate TypeScript compilation
-3. **`parse_lint_results()` or `lint_project()`** - Check code style and quality
+2. **`lint_project(use_standards=True)`** - Check code style using generated rules (ALWAYS use generated rules)
+3. **`check_typescript()`** - Validate TypeScript compilation
 
-### Usage Pattern
-
+### Required Workflow Order
 ```python
-# Simple file edit
+# 1. Get standards before editing
 hints = hints_for_file("src/api/user.ts", session_id="fix-user-api-123")
-# Make changes following the standards...
-errors = check_typescript()  # Quick validation
 
+# 2. Make your edits following the standards...
+
+# 3. Run linter with generated rules (REQUIRED)
+lint_results = lint_project(use_standards=True)
+
+# 4. Check TypeScript errors (REQUIRED)
+ts_errors = check_typescript()
+```
+
+### Multiple File Operations
+```python
 # Multiple files - reuse session for efficiency
 session = "refactor-auth-1234"
 hints_for_file("src/auth/login.ts", session_id=session)
 hints_for_file("src/auth/logout.ts", session_id=session)  # 70-80% token savings
+
 # Make changes...
-parse_typescript_errors()  # Full validation
-parse_lint_results(target_files=["src/auth/*.ts"])
+
+# ALWAYS validate in this order after edits:
+lint_project(use_standards=True, target_files=["src/auth/*.ts"])  # Generated rules
+check_typescript(files=["src/auth/*.ts"])  # TypeScript validation
 ```
 
 ### Scale to Your Task
@@ -225,18 +236,20 @@ parse_lint_results(target_files=["src/auth/*.ts"])
 Discover available tools via MCP, but these are commonly helpful:
 - **`read_files()`/`write_files()`** - Batch file operations
 - **`find_who_imports()`** - Check dependencies before changes
-- **`execute_command()`** - Run builds and tests safely
-- **`quality_check()`** - Combined lint + TypeScript + tests
+- **`run_test_suite()`** - Execute tests with detailed results
+- **`quality_check()`** - Combined lint + TypeScript + tests (NOT IMPLEMENTED YET)
 
 ### Best Practices
 ✅ Always check standards before editing (the one hard rule)
+✅ ALWAYS use `use_standards=True` when linting (generated rules are superior)
+✅ Follow the required order: Standards → Edit → Lint → TypeScript
 ✅ Use consistent `session_id` within operations for token efficiency
 ✅ Focus validation on changed files
-✅ Let task complexity guide your approach
 
 ❌ Don't skip `hints_for_file()` - ever
+❌ Don't skip linting after edits - always validate
+❌ Don't use `use_standards=False` unless debugging ESLint issues
 ❌ Don't run dev servers (`npm run dev`, etc.)
-❌ Don't over-process simple tasks
 ❌ Don't validate unchanged files unless debugging
 
 ### The Bottom Line

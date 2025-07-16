@@ -37,12 +37,26 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
                 except json.JSONDecodeError:
                     files = [files]  # Treat as single file
 
-            # Validate files exist and add them to command
-            for file_path in files:
-                full_path = project_path / file_path
-                if not full_path.exists():
-                    raise ValueError(f"File not found: {file_path}")
-                cmd.append(file_path)
+            # Handle files/directories/glob patterns
+            expanded_files = []
+            for file_path in files if files else []:
+                # Check if it's a glob pattern (contains * or **)
+                if "*" in file_path:
+                    # Pass glob patterns directly to TypeScript compiler
+                    expanded_files.append(file_path)
+                else:
+                    # Handle regular files and directories
+                    full_path = project_path / file_path
+                    if full_path.is_dir():
+                        # If it's a directory, append /* to glob all files in it
+                        expanded_files.append(f"{file_path}/*")
+                    elif full_path.exists():
+                        expanded_files.append(file_path)
+                    else:
+                        raise ValueError(f"File or directory not found: {file_path}")
+            
+            # Add expanded files to command
+            cmd.extend(expanded_files)
 
         # Run TypeScript compiler
         try:
@@ -61,11 +75,24 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
         # Parse errors from output
         errors = _parse_tsc_output(result.stderr)
 
-        return {
-            "errors": errors,
-            "success": len(errors) == 0,
-            "total_errors": len(errors)
-        }
+        # Build result - only show errors if there are any
+        if len(errors) == 0:
+            return {
+                "errors": [],
+                "check_again": False
+            }
+        else:
+            # Cap errors at first file's errors
+            first_file_errors = []
+            if errors:
+                first_file = errors[0]["file"]
+                first_file_errors = [err for err in errors if err["file"] == first_file]
+            
+            return {
+                "errors": first_file_errors,
+                "total": len(errors),
+                "check_again": True  # Always suggest checking again after fixing TypeScript errors
+            }
 
     except Exception as e:
         raise ValueError(f"TypeScript check failed: {str(e)}") from e

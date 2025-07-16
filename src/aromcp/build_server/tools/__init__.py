@@ -26,13 +26,20 @@ def register_build_tools(mcp):
         Replaces bash commands: npx tsc, tsc --noEmit
 
         Args:
-            files: Specific files to check (optional, defaults to all files in project)
+            files: Files, directories, or glob patterns (directories auto-glob with /*, glob patterns passed through)
 
         Example:
             check_typescript(["src/app.ts"])
-            → {"errors": [{"file": "src/app.ts", "line": 42, "message": "Type error"}], "success": false}
+            → {"errors": [{"file": "src/app.ts", "line": 42, "message": "Type error"}], "total": 3, "check_again": true}
 
-        Note: Requires tsconfig.json in project root. Runs npx tsc --noEmit internally.
+            check_typescript("src/components")  # Auto-globs to src/components/*
+            → {"errors": [], "check_again": false}
+
+            check_typescript("src/**/*.ts")  # Glob patterns passed directly to tsc
+            → {"errors": [], "check_again": false}
+
+        Note: Requires tsconfig.json in project root. Shows only first file's errors with total count.
+        Set check_again=true when errors exist, suggesting re-check after fixes.
         """
         return check_typescript_impl(files)
 
@@ -50,17 +57,21 @@ def register_build_tools(mcp):
         Replaces bash commands: npx eslint, eslint .
 
         Args:
-            use_standards: Whether to use standards server generated ESLint config
-            target_files: Specific files to lint (optional, defaults to all files in src/)
+            use_standards: Whether to use standards server generated ESLint config (recommended)
+            target_files: Files, directories, or glob patterns (directories auto-glob with /*, glob patterns passed through)
 
         Example:
-            lint_project()
-            → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}], "fixable": 5}
+            lint_project(use_standards=True)
+            → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}], "total": 8, "fixable": 5, "check_again": true}
 
-            lint_project(target_files=["src/components/Button.jsx"])
-            → {"issues": [], "fixable": 0}
+            lint_project(target_files="src/components")  # Auto-globs to src/components/*
+            → {"issues": [], "check_again": false}
 
-        Note: Requires ESLint configuration in project. For auto-fixing, run ESLint with --fix flag manually.
+            lint_project(target_files="src/**/*.ts")  # Glob patterns passed directly to eslint
+            → {"issues": [], "check_again": false}
+
+        Note: Always use use_standards=True for best results. Shows only first file's issues with total count.
+        Set check_again=true when fixable issues exist, suggesting re-check after fixes.
         """
         return lint_project_impl(use_standards, target_files)
 

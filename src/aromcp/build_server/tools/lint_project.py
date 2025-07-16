@@ -27,6 +27,18 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
         if isinstance(target_files, str):
             target_files = [target_files]
 
+        # Auto-glob directories: if a path is a directory, append /* to glob all files in it
+        if target_files:
+            expanded_files = []
+            for file_path in target_files:
+                full_path = project_path / file_path
+                if full_path.is_dir():
+                    # If it's a directory, append /* to glob all files in it
+                    expanded_files.append(f"{file_path}/*")
+                else:
+                    expanded_files.append(file_path)
+            target_files = expanded_files
+
         is_nextjs = _is_nextjs_project(project_root)
         all_issues = []
         commands_run = []
@@ -129,22 +141,31 @@ def lint_project_impl(use_standards: bool = True, target_files: str | list[str] 
         # Calculate summary
         total_issues = len(all_issues)
         fixable_count = len([i for i in all_issues if i.get("fixable", False)])
-        error_count = len([i for i in all_issues if i.get("severity") == "error"])
-        warning_count = len([i for i in all_issues if i.get("severity") == "warning"])
 
-        # Limit to first 100 results
-        limited_issues = all_issues[:100]
+        # Cap issues to first file only (like check_typescript)
+        first_file_issues = []
+        if all_issues:
+            first_file = all_issues[0]["file"]
+            first_file_issues = [issue for issue in all_issues if issue["file"] == first_file]
 
-        return {
-            "issues": limited_issues,
-            "fixable": fixable_count,
-            "total_issues": total_issues,
-            "shown_issues": len(limited_issues),
-            "error_count": error_count,
-            "warning_count": warning_count,
-            "config_used": (" + ".join(commands_run) if len(commands_run) > 1
-                          else (commands_run[0] if commands_run else "none"))
-        }
+        # Build result - always show issues array, add total if there are issues
+        if total_issues == 0:
+            return {
+                "issues": [],
+                "check_again": False
+            }
+        else:
+            result = {
+                "issues": first_file_issues,
+                "total": total_issues,
+                "check_again": fixable_count > 0  # Suggest checking again if issues are fixable
+            }
+            
+            # Only include fixable count if > 0
+            if fixable_count > 0:
+                result["fixable"] = fixable_count
+                
+            return result
 
     except Exception as e:
         raise ValueError(f"Lint failed: {str(e)}") from e

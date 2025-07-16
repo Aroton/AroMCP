@@ -89,8 +89,10 @@ class TestLintProject:
                 result = lint_project_impl(use_standards=False, target_files=["test1.js", "test2.js"])
 
                 assert "issues" in result
-                assert len(result["issues"]) == 2
-                assert all(issue["rule"] == "no-console" for issue in result["issues"])
+                assert len(result["issues"]) == 1  # Only shows first file's issues
+                assert result["total"] == 2  # Total across all files
+                assert result["check_again"] == False  # No fixable issues
+                assert result["issues"][0]["rule"] == "no-console"
 
     def test_target_files_passed_to_subprocess(self):
         """Test that target_files are properly passed to subprocess command."""
@@ -113,10 +115,11 @@ class TestLintProject:
                     target_files=["src/app.js", "src/utils.js"]
                 )
 
-                # Verify result structure
+                # Verify result structure (no issues case)
                 assert "issues" in result
-                assert "fixable" in result
-                assert "total_issues" in result
+                assert "check_again" in result
+                assert result["issues"] == []
+                assert result["check_again"] == False
 
                 # Verify subprocess was called
                 mock_subprocess.assert_called_once()
@@ -146,9 +149,11 @@ class TestLintProject:
                 # Test with single string file
                 result = lint_project_impl(use_standards=False, target_files="single-file.js")
 
-                # Verify result structure
+                # Verify result structure (no issues case)
                 assert "issues" in result
-                assert "fixable" in result
+                assert "check_again" in result
+                assert result["issues"] == []
+                assert result["check_again"] == False
 
                 # Verify subprocess was called with the file
                 mock_subprocess.assert_called_once()
@@ -173,12 +178,113 @@ class TestLintProject:
                 # Test with None target_files
                 result = lint_project_impl(use_standards=False, target_files=None)
 
-                # Verify result structure
+                # Verify result structure (no issues case)
                 assert "issues" in result
-                assert "fixable" in result
+                assert "check_again" in result
+                assert result["issues"] == []
+                assert result["check_again"] == False
 
                 # Verify subprocess was called with src and extensions
                 mock_subprocess.assert_called_once()
                 call_args = mock_subprocess.call_args[0][0]
                 assert "src" in call_args
                 assert "--ext" in call_args
+
+    def test_fixable_issues_suggest_check_again(self):
+        """Test that fixable issues suggest checking again."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create test file
+            test_file = Path(temp_dir) / "test.js"
+            test_file.write_text("console.log('test');")
+
+            # Mock the subprocess call with fixable issue
+            mock_result = Mock()
+            mock_result.stdout = json.dumps([{
+                "filePath": str(test_file),
+                "messages": [{
+                    "line": 1,
+                    "column": 1,
+                    "severity": 1,
+                    "ruleId": "no-console",
+                    "message": "Unexpected console statement.",
+                    "fix": {"range": [0, 20], "text": ""}  # Fixable issue
+                }]
+            }])
+            mock_result.returncode = 0
+
+            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
+                 patch("subprocess.run", return_value=mock_result), \
+                 patch("pathlib.Path.exists", return_value=True):
+
+                # Test with fixable issue
+                result = lint_project_impl(use_standards=False, target_files="test.js")
+
+                assert "issues" in result
+                assert len(result["issues"]) == 1
+                assert result["total"] == 1
+                assert result["check_again"] == True  # Should suggest checking again
+                assert result["fixable"] == 1  # Should include fixable count
+                assert result["issues"][0]["rule"] == "no-console"
+                assert result["issues"][0]["fixable"] == True
+
+    def test_directory_auto_globbing(self):
+        """Test that directory paths are automatically globbed with /*."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create ESLint config
+            eslint_config = Path(temp_dir) / ".eslintrc.js"
+            eslint_config.write_text("module.exports = {};")
+
+            # Create a directory structure
+            src_dir = Path(temp_dir) / "src" / "components"
+            src_dir.mkdir(parents=True)
+            
+            # Mock subprocess
+            mock_result = Mock()
+            mock_result.stdout = json.dumps([])
+            mock_result.returncode = 0
+
+            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
+                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
+
+                # Test with directory path
+                result = lint_project_impl(use_standards=False, target_files="src/components")
+
+                # Verify result
+                assert result["issues"] == []
+                assert result["check_again"] == False
+
+                # Verify subprocess was called with globbed path
+                mock_subprocess.assert_called_once()
+                call_args = mock_subprocess.call_args[0][0]
+                assert "src/components/*" in call_args
+                assert "npx" == call_args[0]
+                assert "eslint" == call_args[1]
+
+    def test_glob_patterns_passed_through(self):
+        """Test that glob patterns are passed directly to ESLint."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create ESLint config
+            eslint_config = Path(temp_dir) / ".eslintrc.js"
+            eslint_config.write_text("module.exports = {};")
+            
+            # Mock subprocess
+            mock_result = Mock()
+            mock_result.stdout = json.dumps([])
+            mock_result.returncode = 0
+
+            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
+                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
+
+                # Test with glob pattern
+                result = lint_project_impl(use_standards=False, target_files="src/**/*.ts")
+
+                # Verify result
+                assert result["issues"] == []
+                assert result["check_again"] == False
+
+                # Verify subprocess was called with glob pattern
+                mock_subprocess.assert_called_once()
+                call_args = mock_subprocess.call_args[0][0]
+                assert "src/**/*.ts" in call_args  # Glob pattern passed through unchanged
+                assert "npx" == call_args[0]
+                assert "eslint" == call_args[1]
