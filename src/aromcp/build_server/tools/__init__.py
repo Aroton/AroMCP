@@ -29,6 +29,9 @@ def register_build_tools(mcp):
             files: Files, directories, or glob patterns (directories auto-glob with /*, glob patterns passed through)
 
         Example:
+            check_typescript()  # Check entire project
+            → {"errors": [{"file": "src/app.ts", "line": 42, "message": "Type error"}], "total": 3, "check_again": true}
+
             check_typescript(["src/app.ts"])
             → {"errors": [{"file": "src/app.ts", "line": 42, "message": "Type error"}], "total": 3, "check_again": true}
 
@@ -61,6 +64,9 @@ def register_build_tools(mcp):
             target_files: Files, directories, or glob patterns (directories auto-glob with /*, glob patterns passed through)
 
         Example:
+            lint_project()  # Check entire project with standards
+            → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}], "total": 8, "fixable": 5, "check_again": true}
+
             lint_project(use_standards=True)
             → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}], "total": 8, "fixable": 5, "check_again": true}
 
