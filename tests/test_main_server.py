@@ -34,7 +34,13 @@ class TestMainServer:
             "find_who_imports"
         ]
 
-        # state_tools = []  # Not yet implemented
+        workflow_tools = [
+            "workflow_state_read",
+            "workflow_state_update",
+            "workflow_state_dependencies",
+            "workflow_state_init",
+            "workflow_state_validate_path"
+        ]
 
         build_tools = [
             "check_typescript",
@@ -61,7 +67,7 @@ class TestMainServer:
             "list_rules"
         ]
 
-        all_expected_tools = filesystem_tools + build_tools + analysis_tools + standards_tools
+        all_expected_tools = filesystem_tools + workflow_tools + build_tools + analysis_tools + standards_tools
 
         # Check that we have the expected number of tools
         assert len(tools) == len(all_expected_tools), f"Expected {len(all_expected_tools)} tools, got {len(tools)}"
@@ -81,7 +87,7 @@ class TestMainServer:
             "files" in name or "imports" in name or "documents" in name
             for name in tool_names
         )
-        # state_present = any("process" in name for name in tool_names)  # Not implemented yet
+        workflow_present = any("workflow" in name for name in tool_names)
         build_present = any("typescript" in name or "lint" in name or "test" in name for name in tool_names)
         analysis_present = any(
             "dead_code" in name or "import_cycles" in name or "api_endpoints" in name
@@ -95,7 +101,7 @@ class TestMainServer:
         )
 
         assert filesystem_present, "No filesystem tools found"
-        # assert state_present, "No state management tools found"  # Not implemented yet
+        assert workflow_present, "No workflow state management tools found"
         assert build_present, "No build tools found"
         assert analysis_present, "No analysis tools found"
         assert standards_present, "No standards tools found"
@@ -105,11 +111,12 @@ class TestMainServer:
         """Test that individual tools can be retrieved and have proper structure."""
         # Test a tool from each implemented category
         test_tools = [
-            "list_files",          # filesystem
-            "check_typescript",    # build
-            "find_dead_code",      # analysis
-            "check_updates",       # standards
-            "get_session_stats"    # standards v2
+            "list_files",              # filesystem
+            "workflow_state_read",     # workflow
+            "check_typescript",        # build
+            "find_dead_code",          # analysis
+            "check_updates",           # standards
+            "get_session_stats"        # standards v2
         ]
 
         for tool_name in test_tools:

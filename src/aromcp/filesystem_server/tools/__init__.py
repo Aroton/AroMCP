@@ -3,7 +3,8 @@
 from typing import Any
 
 from ...utils.json_parameter_middleware import json_convert
-from .._security import get_project_root
+
+# from .._security import get_project_root  # Not used in registration
 from .extract_method_signatures import extract_method_signatures_impl
 from .find_who_imports import find_who_imports_impl
 from .list_files import list_files_impl
