@@ -41,7 +41,7 @@ class TestMainServer:
             "workflow_state_init",
             "workflow_state_validate_path"
         ]
-        
+
         workflow_execution_tools = [
             "workflow_get_info",
             "workflow_start",
@@ -78,7 +78,10 @@ class TestMainServer:
             "list_rules"
         ]
 
-        all_expected_tools = filesystem_tools + workflow_state_tools + workflow_execution_tools + build_tools + analysis_tools + standards_tools
+        all_expected_tools = (
+            filesystem_tools + workflow_state_tools + workflow_execution_tools +
+            build_tools + analysis_tools + standards_tools
+        )
 
         # Check that we have the expected number of tools
         assert len(tools) == len(all_expected_tools), f"Expected {len(all_expected_tools)} tools, got {len(tools)}"

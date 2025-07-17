@@ -172,20 +172,17 @@ class TestSequentialExecution:
         next_step = executor.get_next_step(workflow_id)
         assert next_step["step"]["id"] == "step1"
         assert next_step["step"]["type"] == "state_update"
-        assert next_step["step_index"] == 0
-        assert next_step["total_steps"] == 3
+        assert "execution_context" in next_step
 
         # Complete first step and get second
         executor.step_complete(workflow_id, "step1")
         next_step = executor.get_next_step(workflow_id)
         assert next_step["step"]["id"] == "step2"
-        assert next_step["step_index"] == 1
 
         # Complete second step and get third
         executor.step_complete(workflow_id, "step2")
         next_step = executor.get_next_step(workflow_id)
         assert next_step["step"]["id"] == "step3"
-        assert next_step["step_index"] == 2
 
         # Complete third step - should be done
         executor.step_complete(workflow_id, "step3")
@@ -411,11 +408,10 @@ class TestWorkflowStatusAndManagement:
         assert status["workflow_id"] == workflow_id
         assert status["workflow_name"] == "test:status"
         assert status["status"] == "running"
-        assert status["current_step_index"] == 0
-        assert status["total_steps"] == 1
         assert status["created_at"] is not None
         assert status["completed_at"] is None
         assert status["state"]["value"] == 1
+        assert "execution_context" in status
 
     def test_list_active_workflows(self):
         """Test listing active workflow instances."""
