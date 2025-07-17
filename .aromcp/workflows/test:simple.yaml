@@ -1,0 +1,34 @@
+name: "test:simple"
+description: "Test basic sequential execution"
+version: "1.0.0"
+
+default_state:
+  raw:
+    counter: 0
+    message: ""
+
+state_schema:
+  computed:
+    doubled:
+      from: "raw.counter"
+      transform: "input * 2"
+
+inputs:
+  name:
+    type: "string"
+    description: "User name"
+    required: true
+
+steps:
+  - type: "state_update"
+    path: "raw.counter"
+    value: 5
+    
+  - type: "user_message"
+    message: "Counter is {{ counter }}, doubled is {{ doubled }}"
+    
+  - type: "shell_command"
+    command: "echo 'Hello from workflow'"
+    state_update:
+      path: "raw.message"
+      value: "stdout"

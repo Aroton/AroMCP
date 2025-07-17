@@ -34,12 +34,23 @@ class TestMainServer:
             "find_who_imports"
         ]
 
-        workflow_tools = [
+        workflow_state_tools = [
             "workflow_state_read",
             "workflow_state_update",
             "workflow_state_dependencies",
             "workflow_state_init",
             "workflow_state_validate_path"
+        ]
+        
+        workflow_execution_tools = [
+            "workflow_get_info",
+            "workflow_start",
+            "workflow_list",
+            "workflow_get_next_step",
+            "workflow_step_complete",
+            "workflow_get_status",
+            "workflow_update_state",
+            "workflow_list_active"
         ]
 
         build_tools = [
@@ -67,7 +78,7 @@ class TestMainServer:
             "list_rules"
         ]
 
-        all_expected_tools = filesystem_tools + workflow_tools + build_tools + analysis_tools + standards_tools
+        all_expected_tools = filesystem_tools + workflow_state_tools + workflow_execution_tools + build_tools + analysis_tools + standards_tools
 
         # Check that we have the expected number of tools
         assert len(tools) == len(all_expected_tools), f"Expected {len(all_expected_tools)} tools, got {len(tools)}"
@@ -112,7 +123,8 @@ class TestMainServer:
         # Test a tool from each implemented category
         test_tools = [
             "list_files",              # filesystem
-            "workflow_state_read",     # workflow
+            "workflow_state_read",     # workflow state
+            "workflow_start",          # workflow execution
             "check_typescript",        # build
             "find_dead_code",          # analysis
             "check_updates",           # standards
