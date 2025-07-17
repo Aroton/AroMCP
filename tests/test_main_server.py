@@ -31,8 +31,7 @@ class TestMainServer:
             "read_files",
             "write_files",
             "extract_method_signatures",
-            "find_who_imports",
-            "apply_file_diffs"
+            "find_who_imports"
         ]
 
         # state_tools = []  # Not yet implemented
@@ -79,7 +78,7 @@ class TestMainServer:
 
         # Check each category has tools
         filesystem_present = any(
-            "files" in name or "imports" in name or "documents" in name or "diffs" in name
+            "files" in name or "imports" in name or "documents" in name
             for name in tool_names
         )
         # state_present = any("process" in name for name in tool_names)  # Not implemented yet

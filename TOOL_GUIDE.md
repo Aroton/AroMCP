@@ -21,7 +21,6 @@ This guide helps AI agents and developers choose the right tools for specific ta
 #### **...modify code**
 - `read_files` - Always read first!
 - `write_files` - Create/update files
-- `apply_file_diffs` - Apply patches
 - `lint_project` - Verify after changes
 
 #### **...analyze dependencies**
@@ -59,9 +58,7 @@ What do you want to do?
 │
 ├─ Make changes?
 │  ├─ New files → write_files
-│  ├─ Update files → read_files → write_files
-│  ├─ Apply patches → apply_file_diffs
-│  └─ Preview first → preview_file_changes
+│  └─ Update files → read_files → write_files
 │
 ├─ Analyze project health?
 │  ├─ Unused code → find_dead_code
@@ -189,8 +186,8 @@ Checking and improving code quality
 
 ### 3. **Code Modification**
 Making changes to files
-- Primary: `write_files`, `apply_file_diffs`
-- Advanced: `preview_file_changes`, `validate_diffs`
+- Primary: `write_files`
+- Advanced: (deprecated diff tools removed)
 
 ### 4. **Dependency Analysis**
 Understanding project dependencies

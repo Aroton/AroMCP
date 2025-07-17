@@ -53,7 +53,6 @@ Six main tool categories:
   - `write_files.py` - Multi-file writing with automatic directory creation
   - `extract_method_signatures.py` - AST-based code signature extraction
   - `find_who_imports.py` - Import dependency analysis
-  - `apply_file_diffs.py` - Apply unified diffs with validation and rollback
 - `src/aromcp/build_server/tools/` - Build tools with registration and implementations:
   - `__init__.py` - FastMCP tool registration for build operations
   - `lint_project.py` - ESLint integration for code style checking

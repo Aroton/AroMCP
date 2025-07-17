@@ -1,462 +1,236 @@
-# Standards Fix Command
+# /standards:fix
 
-**Purpose**: Automatically fix coding standards violations and lint issues in changed files by applying hints_for_file guidance and running lint fixes on the current changeset.
+**Purpose**: Apply project-specific coding standards to changed files using hints and automated fixes.
+
+**Execution Pattern**: Main agent orchestrates, delegates batches to up to 10 parallel sub-agents for maximum efficiency.
 
 ## Usage
-- `/standards:fix` - Fix current changeset (staged + unstaged changes)
-- `/standards:fix branch` - Fix all changes against tracking branch
-- `/standards:fix [file-path]` - Fix specific file
-- `/standards:fix [commit-id]` - Fix files in specific commit
+- `/standards:fix` - Fix current changeset
+- `/standards:fix branch <branch-name>` - Fix changes against branch
+- `/standards:fix [file-path]` - Fix specific file/directory
+- `/standards:fix [commit-id]` - Fix files in commit
+- `/standards:fix --resume` - Continue from previous interrupted run
 
-## Quick Reference
-- **Detection**: Automatically finds files in current changeset or vs tracking branch
-- **Fixing**: Uses `hints_for_file` + `lint_project` + direct file modifications
-- **Batch Processing**: Processes and fixes files efficiently in groups
-- **Output**: Clear summary of fixes applied with before/after status
+## Main Agent Workflow
 
-## What Standards Fix Does
-This command performs comprehensive standards fixing:
-- **Identifies changed files** automatically from current changeset or branch comparison
-- **Applies coding standards** using hints_for_file guidance to modify files directly
-- **Fixes lint issues** using automated lint fixes and manual corrections
-- **Modifies files in place** with proper standards-compliant code
-- **Supports multiple scopes** - all changes, specific files, or commit ranges
+### Critical Constraints
+- NEVER use bash pipes or grep - filter in memory with JavaScript
+- NEVER process more than 3 files per batch
+- ALWAYS create `.aromcp/state/` directory before writing state
+- Use appropriate tools for file operations (let agent choose best tool)
+- Maximum 20 batches per run (create continuation prompt if more)
+- Run up to 10 sub-agent batches in PARALLEL for faster processing
 
-## Critical Rules
+### Step 1: Initialize and Detect Files
+1. Check for existing state in `.aromcp/state/standards-fix-state.json` using appropriate file reading method
+2. If no state or new command, detect files:
+   - No argument → `git diff --name-only HEAD`
+   - Branch name → `git diff --name-only <branch>`
+   - Commit hash → `git diff-tree --no-commit-id --name-only -r <hash>`
+   - File path → use list_files tool with code patterns
+3. Filter results IN MEMORY (never use bash pipes):
+   - Keep only: ts, tsx, js, jsx, py, java, cpp, c, h, hpp
+   - Exclude: node_modules, .min., /dist/, /.next/, .d.ts, .generated., .aromcp/
+4. Create batches of 3 files maximum
+5. Initialize state structure:
+   ```
+   {
+     version: "1.0",
+     total_files: number,
+     batches: [[file1, file2, file3], ...],
+     batch_status: {
+       "0": "pending",  // batch index -> status
+       "1": "pending",
+       // ... for each batch
+     },
+     file_results: {
+       "path/to/file1.ts": {
+         status: "pending",  // pending|completed|failed
+         modified: false,
+         failure_reason: null,
+         fixes: {standards_hints: 0, lint_fixes: 0}
+       },
+       // ... for each file
+     },
+     summary: {
+       completed_batches: 0,
+       completed_files: 0,
+       modified_files: 0,
+       failed_files: 0,
+       total_fixes: {standards_hints: 0, lint_fixes: 0}
+     },
+     start_time: ISO timestamp
+   }
+   ```
+6. Save state to `.aromcp/state/standards-fix-state.json` using appropriate file operation
 
-### 1. File Detection Strategy
-**Automatically detect tracking branch:**
-```javascript
-// Get the tracking branch for current branch
-const trackingResult = await Bash("git for-each-ref --format='%(upstream:short)' $(git symbolic-ref -q HEAD)");
-const trackingBranch = trackingResult.stdout.trim();
+### Step 2: Delegate Batches to Sub-Agents
+Process batches in parallel for maximum efficiency:
+1. Launch up to 10 sub-agents in parallel:
+   - Calculate: `parallelBatches = min(10, remainingBatches)`
+   - Launch multiple Task tool instances simultaneously
+   - Each sub-agent gets unique batch assignment
 
-// Fallback to main/master if no tracking branch
-let baseBranch = trackingBranch;
-if (!baseBranch) {
-  const mainExists = await Bash("git rev-parse --verify main 2>/dev/null");
-  baseBranch = mainExists.exit_code === 0 ? "main" : "master";
-}
+2. For each parallel group:
+   - Track running batches: maintain list of active sub-agent tasks
+   - Launch sub-agents with Task tool prompts:
+     ```
+     Process standards fixes for batch N of M:
+     Files: [file1, file2, file3]
+     State file: .aromcp/state/standards-fix-state.json
+     Batch index: N
+
+     1. Mark batch as "in_progress" in state
+     2. For each file:
+        - Check with hints_for_file, lint_project(use_standards=true), check_typescript
+        - Apply fixes if needed (up to 3 attempts)
+        - Update file result in state
+     3. Mark batch as "completed" in state
+     4. Update summary counts
+
+     Apply all state updates using atomic diff operations.
+     Report completion status when done.
+     ```
+   - Monitor all sub-agents for completion
+   - As each completes, launch next batch if available
+   - Check state file for results from completed batches
+
+3. Continue until all batches processed or 20 total batches completed
+4. If more batches remain:
+   - Report progress
+   - Provide continuation command: `/standards:fix --resume`
+
+### Step 3: Final Validation
+After all batches show "completed" status:
+1. Run `check_typescript()` on entire project
+2. Run `lint_project(use_standards=false)` on entire project
+3. Calculate exit code:
+   - 0 = All fixed, builds clean
+   - 1 = Builds but lint issues remain
+   - 2 = Build errors exist
+4. Generate summary from state file:
+   - Total batches: `Object.keys(state.batch_status).length`
+   - Completed batches: `state.summary.completed_batches`
+   - Files processed: `state.summary.completed_files`
+   - Files modified: `state.summary.modified_files`
+   - Files failed: `state.summary.failed_files`
+   - Total fixes: `state.summary.total_fixes`
+   - Failed files list: Files where `file_results[f].status === "failed"`
+5. If exit code is 0, clean up state file
+6. Report exit code for CI/CD integration
+
+---
+
+## Sub-Agent Instructions (for each batch)
+
+**You are processing a specific batch of files for standards compliance.**
+
+### Your Task
+1. Get your batch assignment (batch index N and file list)
+2. Apply state diff: Mark your batch as "in_progress"
+   ```
+   {
+     "batch_status": {
+       "N": "in_progress"  // Update just this line
+     }
+   }
+   ```
+3. Process each file in your batch:
+   - Use `hints_for_file` to get standards
+   - Use `lint_project(use_standards=true, target_files=[file])`
+   - Use `check_typescript([file])`
+   - Apply fixes based on hints (up to 3 attempts)
+   - After each file, apply state diff for that file's result
+4. Apply final state diff:
+   - Mark batch as "completed"
+   - Update summary counts
+5. Report completion
+
+### File Processing
+For each file in your batch:
+1. Check current issues:
+   - `hints = await hints_for_file(file)`
+   - `lintResult = await lint_project(use_standards=true, target_files=[file], fix=false)`
+   - `tsResult = await check_typescript([file])`
+
+2. If issues found, attempt fixes (up to 3 attempts):
+   - Track fixes locally for this file:
+     * `file_fixes = {standards_hints: 0, lint_fixes: 0}`
+   - If lint has fixable issues:
+     * Run `lint_project(use_standards=true, target_files=[file], fix=true)`
+     * Track: `file_fixes.lint_fixes += result.fixed`
+   - Apply hint transformations:
+     * Read the file content using the most appropriate tool
+     * Apply fixes based on hint.rule_id (use Edit for small changes, rewrite for major changes)
+     * Add imports from hint.imports if not present
+     * Save the modified content using the best tool for the changes made
+     * Track: `file_fixes.standards_hints += hints.length`
+
+3. Verify with `check_typescript([file])` after each attempt
+
+4. Apply state diff for this file:
+   ```
+   {
+     "file_results": {
+       "path/to/file.ts": {
+         "status": "completed",  // or "failed"
+         "modified": true,       // or false
+         "failure_reason": null, // or error message
+         "fixes": {"standards_hints": 2, "lint_fixes": 3}
+       }
+     }
+   }
+   ```
+
+### State Diff Application Process
+**CRITICAL**: All state updates MUST be applied as atomic diffs:
+
+1. **Read current state** - Load `.aromcp/state/standards-fix-state.json`
+2. **Apply your diff** - Update only the specific fields you're changing:
+   - For batch status: Update only `batch_status[N]`
+   - For file results: Update only `file_results[filepath]`
+   - For summary: Increment counts based on your results
+3. **Write merged state** - Save the updated state back atomically
+
+Example diff sequence for a batch:
 ```
+// Step 1: Mark batch in progress
+{"batch_status": {"2": "in_progress"}}
 
-### 2. Skip These Files
-- `*.min.js`, `*.bundle.js` (minified/bundled)
-- `**/node_modules/**`, `**/.next/**`, `**/dist/**`
-- `*.generated.*`, `*.d.ts`
-- Files with `// @no-verify` or `/* eslint-disable */`
-- Non-code files (images, docs, config unless specifically requested)
+// Step 2: After processing file1
+{"file_results": {"src/file1.ts": {"status": "completed", "modified": true, "failure_reason": null, "fixes": {"standards_hints": 1, "lint_fixes": 2}}}}
 
-### 3. Tools Integration
-**Use existing MCP tools efficiently:**
-```javascript
-// Use hints_for_file for standards checking
-const hintsResult = await hints_for_file({
-  file_paths: filesToCheck,
-  project_root: projectRoot
-});
+// Step 3: After processing file2
+{"file_results": {"src/file2.ts": {"status": "failed", "modified": false, "failure_reason": "TypeScript error", "fixes": {"standards_hints": 0, "lint_fixes": 0}}}}
 
-// Use lint_project for code quality
-const lintResult = await lint_project({
-  target_files: filesToCheck,
-  project_root: projectRoot
-});
-```
-
-## Execution Process
-
-### 1. Initialize and Detect Files
-
-**Determine scope based on arguments:**
-```javascript
-let filesToCheck = [];
-
-if (!args || args.length === 0) {
-  // Default: current changeset (staged + unstaged changes)
-  const stagedResult = await Bash("git diff --cached --name-only");
-  const unstagedResult = await Bash("git diff --name-only");
-  
-  const stagedFiles = stagedResult.exit_code === 0 ? stagedResult.stdout.trim().split('\n').filter(Boolean) : [];
-  const unstagedFiles = unstagedResult.exit_code === 0 ? unstagedResult.stdout.trim().split('\n').filter(Boolean) : [];
-  
-  // Combine and deduplicate
-  filesToCheck = [...new Set([...stagedFiles, ...unstagedFiles])];
-  
-  if (filesToCheck.length === 0) {
-    console.log("No changes found in current changeset");
-    return;
-  }
-} else if (args.length === 1) {
-  const arg = args[0];
-  
-  if (arg === "branch") {
-    // Compare against tracking branch
-    const trackingResult = await Bash("git for-each-ref --format='%(upstream:short)' $(git symbolic-ref -q HEAD)");
-    const trackingBranch = trackingResult.stdout.trim() || "main";
-    
-    const diffResult = await Bash(`git diff --name-only ${trackingBranch}...HEAD`);
-    if (diffResult.exit_code === 0 && diffResult.stdout.trim()) {
-      filesToCheck = diffResult.stdout.trim().split('\n').filter(Boolean);
-    }
-  } else if (arg.match(/^[a-f0-9]{7,40}$/)) {
-    // Commit hash
-    const diffResult = await Bash(`git diff --name-only ${arg}^..${arg}`);
-    if (diffResult.exit_code === 0) {
-      filesToCheck = diffResult.stdout.trim().split('\n').filter(Boolean);
-    }
-  } else {
-    // File path or directory
-    const stat = await Bash(`test -e "${arg}" && echo "exists"`);
-    if (stat.stdout.includes("exists")) {
-      filesToCheck = [arg];
-    } else {
-      console.error(`File or directory not found: ${arg}`);
-      return;
-    }
-  }
-}
-
-// Filter to code files only
-const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.cpp', '.c', '.h'];
-filesToCheck = filesToCheck.filter(file => 
-  codeExtensions.some(ext => file.endsWith(ext)) &&
-  !file.includes('node_modules') &&
-  !file.includes('.next') &&
-  !file.includes('dist/') &&
-  !file.endsWith('.min.js') &&
-  !file.endsWith('.d.ts')
-);
-
-if (filesToCheck.length === 0) {
-  console.log("No code files found to fix");
-  return;
-}
-
-console.log(`🔧 Found ${filesToCheck.length} files to fix standards compliance`);
-```
-
-### 2. Process Files in Batches for Parallel Fixing
-
-**Execute fixes using batched processing for efficiency:**
-```javascript
-console.log("🔧 Running standards fixes...");
-
-// Split files into batches for parallel processing
-const batchSize = 3; // Process 3 files per batch for manageable task size
-const numBatches = Math.ceil(filesToCheck.length / batchSize);
-
-console.log(`Processing ${filesToCheck.length} files in ${numBatches} batches`);
-
-// Create tasks for all batches
-const batchTasks = [];
-for (let batchNum = 0; batchNum < numBatches; batchNum++) {
-  const startIdx = batchNum * batchSize;
-  const endIdx = Math.min(startIdx + batchSize, filesToCheck.length);
-  const batchFiles = filesToCheck.slice(startIdx, endIdx);
-
-  // Create comprehensive task prompt for this batch
-  const batchTaskPrompt = `Fix coding standards violations and lint issues for batch ${batchNum + 1}/${numBatches}.
-
-**BATCH CONTENTS (${batchFiles.length} files):**
-${batchFiles.map(file => `- ${file}`).join('\n')}
-
-**FIXING INSTRUCTIONS**:
-
-1. **Read all files in this batch using read_files tool**
-
-2. **Get coding standards hints for guidance using hints_for_file tool**:
-   - Use file_paths: ${JSON.stringify(batchFiles)}
-   - Focus on high-priority violations and standards issues
-
-3. **Apply standards fixes based on hints**:
-   - For each hint with priority 'high' or type 'violation'
-   - Modify file content to comply with the standards guidance
-   - Track which files are modified and what fixes are applied
-
-4. **Apply automated lint fixes using lint_project tool**:
-   - Use target_files: ${JSON.stringify(batchFiles)}
-   - Enable fix: true for auto-fix mode
-   - Count the fixes applied
-
-5. **Write all modified files back using write_files tool**:
-   - Only write files that were actually modified
-   - Ensure proper file structure and formatting
-
-6. **Verify build still works using check_typescript tool**:
-   - Run check_typescript() on the modified files to ensure no type errors
-   - If build errors occur within the batch files, attempt to fix them
-   - Only report build errors that affect files outside this batch for manual attention
-
-**OUTPUT STRUCTURE**:
-Return a summary object with:
-\`\`\`javascript
+// Step 4: Mark batch completed and update summary
 {
-  batch_number: ${batchNum + 1},
-  files_processed: ${batchFiles.length},
-  files_modified: ["file1.ts", "file2.tsx"], // List of modified files
-  standards_fixes: 5, // Count of standards violations fixed
-  lint_fixes: 12, // Count of lint issues auto-fixed
-  total_fixes: 17, // Sum of standards + lint fixes
-  build_success: true, // Whether TypeScript build passes after fixes
-  build_errors: 0, // Count of TypeScript errors remaining within batch files
-  external_build_errors: 0, // Count of build errors in files outside this batch
-  success: true,
-  errors: [] // Any errors encountered
-}
-\`\`\`
-
-**IMPORTANT REQUIREMENTS**:
-- ALWAYS read files first before attempting any modifications
-- Only modify files that actually have standards violations or lint issues
-- Use the exact file paths provided in the batch
-- Apply fixes incrementally and track changes carefully
-- Ensure all modified files are written back properly
-- ALWAYS verify the build still works after applying fixes
-- If build errors occur in batch files, attempt to fix them automatically
-- Only report build errors in files outside the batch for manual attention
-- Report detailed statistics for this batch only including build status
-
-Process this batch independently and report the results.`;
-
-  // Launch AI agent to process this batch
-  const batchTask = Task({
-    description: `Fix batch ${batchNum + 1}`,
-    prompt: batchTaskPrompt
-  });
-  batchTasks.push(batchTask);
-}
-
-console.log(`✅ Launched ${batchTasks.length} fixing tasks in parallel`);
-
-// Collect results from all batches
-const batchResults = await Promise.all(batchTasks);
-const fixesSummary = {
-  standards_fixes: 0,
-  lint_fixes: 0,
-  files_modified: [],
-  total_batches: numBatches,
-  successful_batches: 0,
-  build_errors: 0,
-  external_build_errors: 0,
-  failed_builds: 0,
-  errors: []
-};
-
-// Aggregate results from all batches
-for (const result of batchResults) {
-  if (result.success) {
-    fixesSummary.successful_batches++;
-    fixesSummary.standards_fixes += result.standards_fixes || 0;
-    fixesSummary.lint_fixes += result.lint_fixes || 0;
-    fixesSummary.build_errors += result.build_errors || 0;
-    fixesSummary.external_build_errors += result.external_build_errors || 0;
-    
-    // Track build failures
-    if (!result.build_success) {
-      fixesSummary.failed_builds++;
+  "batch_status": {"2": "completed"},
+  "summary": {
+    "completed_batches": "+1",  // Increment notation
+    "completed_files": "+2",
+    "modified_files": "+1",
+    "failed_files": "+1",
+    "total_fixes": {
+      "standards_hints": "+1",
+      "lint_fixes": "+2"
     }
-    
-    // Add modified files (avoid duplicates)
-    if (result.files_modified) {
-      for (const file of result.files_modified) {
-        if (!fixesSummary.files_modified.includes(file)) {
-          fixesSummary.files_modified.push(file);
-        }
-      }
-    }
-  } else {
-    fixesSummary.errors.push(`Batch ${result.batch_number}: ${result.error}`);
   }
 }
-
-console.log(`📊 Batch processing complete: ${fixesSummary.successful_batches}/${fixesSummary.total_batches} successful`);
-if (fixesSummary.failed_builds > 0) {
-  console.log(`⚠️  ${fixesSummary.failed_builds} batches have build errors that need attention`);
-}
-if (fixesSummary.external_build_errors > 0) {
-  console.log(`🔍 ${fixesSummary.external_build_errors} build errors in files outside batches (manual review needed)`);
-}
 ```
 
-### 3. Final Validation and Project Build
+**Never overwrite the entire state file** - Always apply minimal diffs to avoid race conditions.
 
-**Files are already written by each batch task, now run final validation and build:**
-```javascript
-// Note: Files are already written by individual batch tasks during processing
+### Understanding Hints
+Each hint from hints_for_file contains:
+- `rule_id`: Stable identifier (e.g., 'use-cache-function', 'export-schema-types')
+- `rule`: What needs fixing
+- `example`: Code showing correct implementation
+- `imports`: Array of {module, imported_items, statement}
+- `context`: When/why to apply
 
-// Run final validation to check remaining issues across all processed files
-console.log("🔍 Running final validation...");
-const finalLintResult = await lint_project({
-  target_files: filesToCheck
-});
-
-// CRITICAL: Run full project build to ensure everything still compiles
-console.log("🏗️ Running full project build verification...");
-const fullBuildResult = await check_typescript();
-
-const remainingIssues = finalLintResult.data?.issues?.length || 0;
-const totalFixes = fixesSummary.standards_fixes + fixesSummary.lint_fixes;
-const filesModified = fixesSummary.files_modified.length;
-const projectBuildErrors = fullBuildResult.errors ? fullBuildResult.errors.length : 0;
-const projectBuilds = fullBuildResult.check_again === false;
-
-console.log("\n" + "=".repeat(60));
-console.log("🔧 STANDARDS FIX REPORT");
-console.log("=".repeat(60));
-
-if (totalFixes === 0) {
-  console.log("✅ No issues found - all files already comply with standards!");
-  console.log(`📁 Files checked: ${filesToCheck.length}`);
-  console.log("🎉 No fixes needed");
-  return;
-}
-
-// Report fixes applied across all batches
-console.log(`🔧 Applied ${totalFixes} fixes to ${filesModified} files:`);
-console.log(`   📋 Standards fixes: ${fixesSummary.standards_fixes}`);
-console.log(`   🔧 Lint fixes: ${fixesSummary.lint_fixes}`);
-console.log(`   📁 Files modified: ${filesModified}`);
-console.log(`   📦 Batches processed: ${fixesSummary.successful_batches}/${fixesSummary.total_batches}`);
-
-// Report build status
-console.log(`\n🏗️ BUILD STATUS:`);
-if (projectBuilds) {
-  console.log(`   ✅ Project builds successfully (0 TypeScript errors)`);
-} else {
-  console.log(`   ❌ Project has ${projectBuildErrors} TypeScript errors`);
-  console.log(`   🔧 Run check_typescript() for details and fix remaining errors`);
-}
-
-// Report batch-level build issues
-if (fixesSummary.failed_builds > 0) {
-  console.log(`   ⚠️  ${fixesSummary.failed_builds} batches introduced build errors`);
-  console.log(`   🔍 Review batch-level TypeScript issues above`);
-}
-
-// Report any batch errors
-if (fixesSummary.errors.length > 0) {
-  console.log(`\n⚠️  Batch processing errors:`);
-  fixesSummary.errors.forEach(error => console.log(`   - ${error}`));
-}
-
-// Final status summary
-if (remainingIssues > 0) {
-  console.log(`\n⚠️  ${remainingIssues} lint issues still require manual attention`);
-}
-
-if (projectBuilds && remainingIssues === 0) {
-  console.log("\n🎉 SUCCESS: All fixes applied and project builds successfully!");
-} else if (projectBuilds) {
-  console.log("\n✅ Project builds successfully, but lint issues remain");
-} else {
-  console.log("\n⚠️ Fixes applied but project has build errors - manual intervention needed");
-}
-console.log("");
-
-Object.entries(issuesByFile).forEach(([file, issues]) => {
-  console.log(`📄 ${file}:`);
-  issues.forEach(issue => {
-    const icon = issue.type === 'standards' ? '📋' : '🔧';
-    const location = issue.line ? `:${issue.line}` : '';
-    console.log(`   ${icon} ${issue.issue}${location}`);
-  });
-  console.log("");
-});
-
-// Provide next steps
-console.log("🔧 RECOMMENDED ACTIONS:");
-let actionNum = 1;
-
-if (!projectBuilds) {
-  console.log(`${actionNum}. CRITICAL: Fix TypeScript errors - run check_typescript() for details`);
-  console.log(`${actionNum + 1}. Address build failures before proceeding further`);
-  actionNum += 2;
-}
-
-if (remainingIssues > 0) {
-  console.log(`${actionNum}. Fix remaining lint issues manually or run lint_project(fix=true)`);
-  actionNum++;
-}
-
-if (fixesSummary.failed_builds > 0) {
-  console.log(`${actionNum}. Review batch-level build errors and fix incrementally`);
-  actionNum++;
-}
-
-console.log(`${actionNum}. Re-run \`/standards:fix\` to apply additional fixes if needed`);
-console.log(`${actionNum + 1}. Verify final state with check_typescript() and lint_project()`);
-
-console.log("\n" + "=".repeat(60));
-```
-
-### 4. Exit Codes and Integration
-
-**Support CI/CD integration:**
-```javascript
-// Set appropriate exit code for CI systems based on build and lint status
-const hasIssues = remainingIssues > 0 || !projectBuilds;
-
-if (hasIssues) {
-  if (!projectBuilds) {
-    console.log(`\n🚨 CRITICAL: Project has ${projectBuildErrors} TypeScript errors that prevent building.`);
-    console.log("Fix build errors before deploying or committing.");
-    // In CI: process.exit(2); // Critical build failure
-  } else if (remainingIssues > 0) {
-    console.log(`\n⚠️ WARNING: ${remainingIssues} lint issues remain but project builds successfully.`);
-    console.log("Consider fixing lint issues for code quality.");
-    // In CI: process.exit(1); // Non-critical issues
-  }
-} else {
-  console.log("\n🎉 SUCCESS: All standards fixes applied and project builds clean!");
-  // In CI: process.exit(0); // All good
-}
-```
-
-## Integration with Existing Tools
-
-This command leverages the existing MCP infrastructure:
-
-- **hints_for_file**: Provides context-aware coding standards guidance
-- **lint_project**: Runs project-specific linting rules
-- **check_typescript**: Verifies TypeScript compilation after fixes
-- **read_files** and **write_files**: Safe file modification workflow
-- **File detection**: Uses git commands to identify changed files
-- **Batch processing**: Efficiently handles multiple files with build verification
-
-## Usage Examples
-
-```bash
-# Fix current changeset (default)
-/standards:fix
-
-# Fix against tracking branch
-/standards:fix branch
-
-# Fix specific file
-/standards:fix src/components/UserProfile.tsx
-
-# Fix files in a specific commit
-/standards:fix a1b2c3d
-
-# Fix all files in a directory
-/standards:fix src/services/
-```
-
-## Performance Considerations
-
-- **Efficient file detection**: Only processes actually changed files
-- **Parallel batch processing**: Processes files in batches of 3 for optimal performance
-- **Task-based architecture**: Uses Task tool for parallel execution across batches
-- **Smart filtering**: Excludes non-code files and build artifacts
-- **Incremental fixing**: Each batch handles its own read-fix-write cycle independently
-- **Clear output**: Focuses on actionable feedback with batch-level progress tracking
-
-## Notes
-
-- This command is designed to be **fast and focused** compared to the comprehensive `/project:simplify` command
-- It **automatically modifies files** to fix detected standards violations and lint issues
-- **Attempts to fix build errors** within each batch, only reports external build issues
-- **Verifies TypeScript compilation** after each batch and for the entire project
-- Works with **any git repository** and **any project structure**
-- Can be easily integrated into **pre-commit hooks** or **CI pipelines**
-- Uses the **same standards system** as other standards commands for consistency
-- **Prioritizes build safety** - ensures changes don't break TypeScript compilation
+### Error Handling
+- Git command fails: Exit with clear error
+- File not found: Skip and continue
+- State corruption: Start fresh
+- Build errors after fix: Count as attempt, retry

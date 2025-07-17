@@ -7,9 +7,9 @@ from .._security import get_project_root, validate_file_path_legacy
 
 def write_files_impl(files: dict[str, str] | str) -> None:
     """Write multiple NEW files atomically with automatic directory creation.
-    
+
     IMPORTANT: This function is designed for creating new files only.
-    For modifying existing files, use apply_file_diffs instead.
+    For modifying existing files, use Claude Code's Edit or MultiEdit tools instead.
 
     Args:
         files: Dictionary mapping file paths to content for new files

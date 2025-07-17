@@ -4,7 +4,6 @@ from typing import Any
 
 from ...utils.json_parameter_middleware import json_convert
 from .._security import get_project_root
-from .apply_file_diffs import apply_file_diffs_impl
 from .extract_method_signatures import extract_method_signatures_impl
 from .find_who_imports import find_who_imports_impl
 from .list_files import list_files_impl
@@ -79,7 +78,7 @@ def register_filesystem_tools(mcp):
         - Writing generated code or configuration files for new modules
         - Setting up new project structure
 
-        IMPORTANT: Only use for NEW files. For modifying existing files, use apply_file_diffs instead.
+        IMPORTANT: Only use for NEW files. For modifying existing files, use Edit or MultiEdit.
 
         Replaces bash commands: echo >, tee, cp
 
@@ -89,7 +88,7 @@ def register_filesystem_tools(mcp):
         Example:
             write_files({"src/new_module.py": "print('hello')", "new_config.json": "{\\"debug\\": true}"})
 
-        Note: Creates directories automatically. For editing existing files, use apply_file_diffs.
+        Note: Creates directories automatically. For editing existing files, use Edit or MultiEdit.
         """
         return write_files_impl(files)
 
@@ -157,46 +156,6 @@ def register_filesystem_tools(mcp):
         return find_who_imports_impl(file_path)
 
 
-    @mcp.tool
-    @json_convert
-    def apply_file_diffs(
-        diffs: list[dict[str, Any]] | str,
-        project_root: str | None = None,
-        create_backup: bool = True,
-        validate_before_apply: bool = True
-    ) -> dict[str, Any]:
-        """Apply multiple diffs to files with validation and rollback support.
-
-        Use this tool when:
-        - Applying code review suggestions in diff format
-        - Implementing automated code transformations
-        - Applying patches from external sources
-        - Performing bulk file modifications with safety
-        - Rolling out refactoring changes across multiple files
-
-        Replaces bash commands: patch, git apply, diff -u
-
-        Args:
-            diffs: List of diff objects with 'file_path' and 'diff_content' keys
-                  (file_path must be static path, no pattern support)
-            project_root: Root directory of the project (defaults to MCP_FILE_ROOT)
-            create_backup: Whether to create backups before applying diffs (default: True)
-            validate_before_apply: Whether to validate all diffs before applying any (default: True)
-
-        Example:
-            apply_file_diffs([{
-                "file_path": "src/utils.py",
-                "diff_content": "@@ -10,3 +10,4 @@\\n def helper():\\n-    return 42\\n+    # Fixed\\n+    return 43"
-            }])
-            → {"success": true, "files_modified": 1, "backups_created": ["src/utils.py.backup"]}
-
-        Note: Supports unified diff format. For direct file writing use write_files.
-        All diffs are validated before any are applied to ensure atomicity.
-        """
-        project_root = get_project_root(project_root)
-        return apply_file_diffs_impl(
-            diffs, project_root, create_backup, validate_before_apply
-        )
 
 
 
@@ -206,6 +165,5 @@ __all__ = [
     "write_files_impl",
     "extract_method_signatures_impl",
     "find_who_imports_impl",
-    "apply_file_diffs_impl",
     "register_filesystem_tools"
 ]

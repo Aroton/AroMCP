@@ -102,9 +102,6 @@ When properly configured, you can use these tools in Claude Code:
 - **extract_method_signatures** - Extract function/method signatures from code
 - **find_imports_for_files** - Analyze import dependencies
 - **load_documents_by_pattern** - Load and classify documents by pattern
-- **apply_file_diffs** - Apply unified diffs with validation
-- **preview_file_changes** - Preview changes before applying
-- **validate_diffs** - Validate diffs for conflicts and syntax
 
 ## Usage in Claude Code
 

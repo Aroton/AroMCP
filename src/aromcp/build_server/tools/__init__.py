@@ -54,7 +54,11 @@ def register_build_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def lint_project(use_standards: bool = True, target_files: str | list[str] | None = None, debug: bool = False) -> dict[str, Any]:  # noqa: F841
+    def lint_project(
+        use_standards: bool = True,
+        target_files: str | list[str] | None = None,
+        debug: bool = False
+    ) -> dict[str, Any]:  # noqa: F841
         """Run ESLint to find code style issues and potential bugs.
 
         Use this tool when:

@@ -49,7 +49,9 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
                     # Fall back to basic command
                     cmd = ["npx", "tsc", "--noEmit"]
         else:
-            cmd = ["npx", "tsc", "--noEmit"]
+            # When checking specific files, still use project configuration
+            # This ensures path mappings and other project settings are available
+            cmd = ["npx", "tsc", "--noEmit", "--project", "."]
 
         if files:
             # Handle JSON string conversion
