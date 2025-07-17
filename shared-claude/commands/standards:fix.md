@@ -181,6 +181,11 @@ ${batchFiles.map(file => `- ${file}`).join('\n')}
    - Only write files that were actually modified
    - Ensure proper file structure and formatting
 
+6. **Verify build still works using check_typescript tool**:
+   - Run check_typescript() on the modified files to ensure no type errors
+   - If build errors occur within the batch files, attempt to fix them
+   - Only report build errors that affect files outside this batch for manual attention
+
 **OUTPUT STRUCTURE**:
 Return a summary object with:
 \`\`\`javascript
@@ -191,6 +196,9 @@ Return a summary object with:
   standards_fixes: 5, // Count of standards violations fixed
   lint_fixes: 12, // Count of lint issues auto-fixed
   total_fixes: 17, // Sum of standards + lint fixes
+  build_success: true, // Whether TypeScript build passes after fixes
+  build_errors: 0, // Count of TypeScript errors remaining within batch files
+  external_build_errors: 0, // Count of build errors in files outside this batch
   success: true,
   errors: [] // Any errors encountered
 }
@@ -202,7 +210,10 @@ Return a summary object with:
 - Use the exact file paths provided in the batch
 - Apply fixes incrementally and track changes carefully
 - Ensure all modified files are written back properly
-- Report detailed statistics for this batch only
+- ALWAYS verify the build still works after applying fixes
+- If build errors occur in batch files, attempt to fix them automatically
+- Only report build errors in files outside the batch for manual attention
+- Report detailed statistics for this batch only including build status
 
 Process this batch independently and report the results.`;
 
@@ -224,6 +235,9 @@ const fixesSummary = {
   files_modified: [],
   total_batches: numBatches,
   successful_batches: 0,
+  build_errors: 0,
+  external_build_errors: 0,
+  failed_builds: 0,
   errors: []
 };
 
@@ -233,6 +247,13 @@ for (const result of batchResults) {
     fixesSummary.successful_batches++;
     fixesSummary.standards_fixes += result.standards_fixes || 0;
     fixesSummary.lint_fixes += result.lint_fixes || 0;
+    fixesSummary.build_errors += result.build_errors || 0;
+    fixesSummary.external_build_errors += result.external_build_errors || 0;
+    
+    // Track build failures
+    if (!result.build_success) {
+      fixesSummary.failed_builds++;
+    }
     
     // Add modified files (avoid duplicates)
     if (result.files_modified) {
@@ -248,11 +269,17 @@ for (const result of batchResults) {
 }
 
 console.log(`📊 Batch processing complete: ${fixesSummary.successful_batches}/${fixesSummary.total_batches} successful`);
+if (fixesSummary.failed_builds > 0) {
+  console.log(`⚠️  ${fixesSummary.failed_builds} batches have build errors that need attention`);
+}
+if (fixesSummary.external_build_errors > 0) {
+  console.log(`🔍 ${fixesSummary.external_build_errors} build errors in files outside batches (manual review needed)`);
+}
 ```
 
-### 3. Final Validation and Summary
+### 3. Final Validation and Project Build
 
-**Files are already written by each batch task, now run final validation:**
+**Files are already written by each batch task, now run final validation and build:**
 ```javascript
 // Note: Files are already written by individual batch tasks during processing
 
@@ -262,9 +289,15 @@ const finalLintResult = await lint_project({
   target_files: filesToCheck
 });
 
+// CRITICAL: Run full project build to ensure everything still compiles
+console.log("🏗️ Running full project build verification...");
+const fullBuildResult = await check_typescript();
+
 const remainingIssues = finalLintResult.data?.issues?.length || 0;
 const totalFixes = fixesSummary.standards_fixes + fixesSummary.lint_fixes;
 const filesModified = fixesSummary.files_modified.length;
+const projectBuildErrors = fullBuildResult.errors ? fullBuildResult.errors.length : 0;
+const projectBuilds = fullBuildResult.check_again === false;
 
 console.log("\n" + "=".repeat(60));
 console.log("🔧 STANDARDS FIX REPORT");
@@ -284,16 +317,38 @@ console.log(`   🔧 Lint fixes: ${fixesSummary.lint_fixes}`);
 console.log(`   📁 Files modified: ${filesModified}`);
 console.log(`   📦 Batches processed: ${fixesSummary.successful_batches}/${fixesSummary.total_batches}`);
 
+// Report build status
+console.log(`\n🏗️ BUILD STATUS:`);
+if (projectBuilds) {
+  console.log(`   ✅ Project builds successfully (0 TypeScript errors)`);
+} else {
+  console.log(`   ❌ Project has ${projectBuildErrors} TypeScript errors`);
+  console.log(`   🔧 Run check_typescript() for details and fix remaining errors`);
+}
+
+// Report batch-level build issues
+if (fixesSummary.failed_builds > 0) {
+  console.log(`   ⚠️  ${fixesSummary.failed_builds} batches introduced build errors`);
+  console.log(`   🔍 Review batch-level TypeScript issues above`);
+}
+
 // Report any batch errors
 if (fixesSummary.errors.length > 0) {
   console.log(`\n⚠️  Batch processing errors:`);
   fixesSummary.errors.forEach(error => console.log(`   - ${error}`));
 }
 
+// Final status summary
 if (remainingIssues > 0) {
-  console.log(`\n⚠️  ${remainingIssues} issues still require manual attention`);
+  console.log(`\n⚠️  ${remainingIssues} lint issues still require manual attention`);
+}
+
+if (projectBuilds && remainingIssues === 0) {
+  console.log("\n🎉 SUCCESS: All fixes applied and project builds successfully!");
+} else if (projectBuilds) {
+  console.log("\n✅ Project builds successfully, but lint issues remain");
 } else {
-  console.log("\n✅ All automated fixes applied successfully!");
+  console.log("\n⚠️ Fixes applied but project has build errors - manual intervention needed");
 }
 console.log("");
 
@@ -309,15 +364,26 @@ Object.entries(issuesByFile).forEach(([file, issues]) => {
 
 // Provide next steps
 console.log("🔧 RECOMMENDED ACTIONS:");
-if (standardsViolations > 0) {
-  console.log("1. Review coding standards hints and apply recommended changes");
-  console.log("2. Use `/standards:update` to refresh standards if needed");
+let actionNum = 1;
+
+if (!projectBuilds) {
+  console.log(`${actionNum}. CRITICAL: Fix TypeScript errors - run check_typescript() for details`);
+  console.log(`${actionNum + 1}. Address build failures before proceeding further`);
+  actionNum += 2;
 }
-if (lintErrors > 0) {
-  console.log("3. Run linter with --fix flag to auto-resolve style issues");
-  console.log("4. Address remaining lint errors manually");
+
+if (remainingIssues > 0) {
+  console.log(`${actionNum}. Fix remaining lint issues manually or run lint_project(fix=true)`);
+  actionNum++;
 }
-console.log("5. Re-run `/standards:fix` to apply additional fixes if needed");
+
+if (fixesSummary.failed_builds > 0) {
+  console.log(`${actionNum}. Review batch-level build errors and fix incrementally`);
+  actionNum++;
+}
+
+console.log(`${actionNum}. Re-run \`/standards:fix\` to apply additional fixes if needed`);
+console.log(`${actionNum + 1}. Verify final state with check_typescript() and lint_project()`);
 
 console.log("\n" + "=".repeat(60));
 ```
@@ -326,16 +392,22 @@ console.log("\n" + "=".repeat(60));
 
 **Support CI/CD integration:**
 ```javascript
-// Set appropriate exit code for CI systems
-if (totalIssues > 0) {
-  console.log(`\n💡 TIP: This command found ${totalIssues} remaining issues.`);
-  console.log("Review the remaining issues and run the command again if needed.");
-  
-  // In a CI environment, you might want to fail the build
-  // process.exit(1);
+// Set appropriate exit code for CI systems based on build and lint status
+const hasIssues = remainingIssues > 0 || !projectBuilds;
+
+if (hasIssues) {
+  if (!projectBuilds) {
+    console.log(`\n🚨 CRITICAL: Project has ${projectBuildErrors} TypeScript errors that prevent building.`);
+    console.log("Fix build errors before deploying or committing.");
+    // In CI: process.exit(2); // Critical build failure
+  } else if (remainingIssues > 0) {
+    console.log(`\n⚠️ WARNING: ${remainingIssues} lint issues remain but project builds successfully.`);
+    console.log("Consider fixing lint issues for code quality.");
+    // In CI: process.exit(1); // Non-critical issues
+  }
 } else {
-  console.log("\n✅ Standards fixes applied successfully!");
-  // process.exit(0);
+  console.log("\n🎉 SUCCESS: All standards fixes applied and project builds clean!");
+  // In CI: process.exit(0); // All good
 }
 ```
 
@@ -345,8 +417,10 @@ This command leverages the existing MCP infrastructure:
 
 - **hints_for_file**: Provides context-aware coding standards guidance
 - **lint_project**: Runs project-specific linting rules
+- **check_typescript**: Verifies TypeScript compilation after fixes
+- **read_files** and **write_files**: Safe file modification workflow
 - **File detection**: Uses git commands to identify changed files
-- **Batch processing**: Efficiently handles multiple files
+- **Batch processing**: Efficiently handles multiple files with build verification
 
 ## Usage Examples
 
@@ -380,6 +454,9 @@ This command leverages the existing MCP infrastructure:
 
 - This command is designed to be **fast and focused** compared to the comprehensive `/project:simplify` command
 - It **automatically modifies files** to fix detected standards violations and lint issues
+- **Attempts to fix build errors** within each batch, only reports external build issues
+- **Verifies TypeScript compilation** after each batch and for the entire project
 - Works with **any git repository** and **any project structure**
 - Can be easily integrated into **pre-commit hooks** or **CI pipelines**
 - Uses the **same standards system** as other standards commands for consistency
+- **Prioritizes build safety** - ensures changes don't break TypeScript compilation

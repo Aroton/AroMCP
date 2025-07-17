@@ -333,45 +333,77 @@ def _parse_eslint_output_enhanced(
     if debug:
         print(f"🔍 DEBUG: Parsing {source} output...")
         print(f"🔍 DEBUG: Has stdout: {bool(result.stdout)}")
+        print(f"🔍 DEBUG: Has stderr: {bool(result.stderr)}")
         if result.stdout:
             print(f"🔍 DEBUG: Stdout first 200 chars: {result.stdout[:200]}...")
+        if result.stderr:
+            print(f"🔍 DEBUG: Stderr first 200 chars: {result.stderr[:200]}...")
 
+    # Try to parse JSON from stdout first, then stderr (Next.js sometimes puts JSON in stderr)
+    json_output = None
+    json_source = None
+    
     if result.stdout:
         try:
-            eslint_results = json.loads(result.stdout)
+            json_output = json.loads(result.stdout)
+            json_source = "stdout"
+            if debug:
+                print(f"🔍 DEBUG: JSON parsed successfully from stdout, {len(json_output)} file results")
+        except json.JSONDecodeError:
+            if debug:
+                print(f"🔍 DEBUG: Stdout is not valid JSON, trying stderr...")
+    
+    # If stdout parsing failed, try stderr (common with Next.js lint errors)
+    if json_output is None and result.stderr:
+        try:
+            # Extract JSON from stderr - sometimes it's mixed with other output
+            stderr_lines = result.stderr.strip().split('\n')
+            for line in stderr_lines:
+                line = line.strip()
+                if line.startswith('[') and line.endswith(']'):
+                    json_output = json.loads(line)
+                    json_source = "stderr"
+                    if debug:
+                        print(f"🔍 DEBUG: JSON parsed successfully from stderr line, {len(json_output)} file results")
+                    break
+        except json.JSONDecodeError:
+            if debug:
+                print(f"🔍 DEBUG: Stderr also not valid JSON")
+
+    if json_output:
+        if debug:
+            print(f"🔍 DEBUG: Processing JSON from {json_source}")
             
-            if debug:
-                print(f"🔍 DEBUG: JSON parsed successfully, {len(eslint_results)} file results")
+        for file_result in json_output:
+            file_path = file_result.get("filePath", "")
+            # Make path relative to project root
+            if file_path.startswith(project_root):
+                file_path = file_path[len(project_root):].lstrip("/")
 
-            for file_result in eslint_results:
-                file_path = file_result.get("filePath", "")
-                # Make path relative to project root
-                if file_path.startswith(project_root):
-                    file_path = file_path[len(project_root):].lstrip("/")
+            messages = file_result.get("messages", [])
+            if debug and messages:
+                print(f"🔍 DEBUG: File {file_path} has {len(messages)} messages")
 
-                messages = file_result.get("messages", [])
-                if debug and messages:
-                    print(f"🔍 DEBUG: File {file_path} has {len(messages)} messages")
+            for message in messages:
+                severity = "error" if message.get("severity") == 2 else "warning"
 
-                for message in messages:
-                    severity = "error" if message.get("severity") == 2 else "warning"
-
-                    issues.append({
-                        "file": file_path,
-                        "line": message.get("line", 0),
-                        "column": message.get("column", 0),
-                        "severity": severity,
-                        "rule": message.get("ruleId", ""),
-                        "message": message.get("message", ""),
-                        "fixable": message.get("fix") is not None,
-                        "source": source
-                    })
-        except json.JSONDecodeError as e:
-            if debug:
-                print(f"🔍 DEBUG: JSON parsing failed: {str(e)}")
-                print(f"🔍 DEBUG: Raw stdout: {result.stdout}")
-            # Otherwise, silently ignore JSON parsing errors and return empty list
-            pass
+                issues.append({
+                    "file": file_path,
+                    "line": message.get("line", 0),
+                    "column": message.get("column", 0),
+                    "severity": severity,
+                    "rule": message.get("ruleId", ""),
+                    "message": message.get("message", ""),
+                    "fixable": message.get("fix") is not None,
+                    "source": source
+                })
+    else:
+        if debug:
+            print(f"🔍 DEBUG: No valid JSON found in stdout or stderr")
+            if result.stdout:
+                print(f"🔍 DEBUG: Raw stdout: {result.stdout[:500]}...")
+            if result.stderr:
+                print(f"🔍 DEBUG: Raw stderr: {result.stderr[:500]}...")
 
     if debug:
         print(f"🔍 DEBUG: Parsed {len(issues)} total issues from {source}")
