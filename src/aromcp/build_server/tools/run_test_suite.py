@@ -14,7 +14,7 @@ def run_test_suite_impl(
     test_framework: str = "auto",
     pattern: str | None = None,
     coverage: bool = False,
-    timeout: int = 300
+    timeout: int = 300,
 ) -> dict[str, Any]:
     """Execute tests with parsed results.
 
@@ -52,7 +52,7 @@ def run_test_suite_impl(
                     "code": "NOT_FOUND",
                     "message": (
                         "No test command found. Please specify test_command or ensure test framework is configured."
-                    )
+                    ),
                 }
             }
 
@@ -71,11 +71,7 @@ def run_test_suite_impl(
 
         try:
             result = subprocess.run(  # noqa: S603 # Safe: cmd built from internal functions with predetermined commands
-                cmd,
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                timeout=timeout
+                cmd, cwd=project_root, capture_output=True, text=True, timeout=timeout
             )
 
             # Parse test results based on framework
@@ -92,13 +88,15 @@ def run_test_suite_impl(
                 parsed_results = _parse_generic_output(result.stdout, result.stderr)
 
             # Add metadata
-            parsed_results.update({
-                "framework": test_framework,
-                "command": " ".join(cmd),
-                "exit_code": result.returncode,
-                "success": result.returncode == 0,
-                "project_root": project_root
-            })
+            parsed_results.update(
+                {
+                    "framework": test_framework,
+                    "command": " ".join(cmd),
+                    "exit_code": result.returncode,
+                    "success": result.returncode == 0,
+                    "project_root": project_root,
+                }
+            )
 
             return parsed_results
 
@@ -119,17 +117,14 @@ def _detect_test_setup(project_root: str) -> tuple[str, str | None]:
     package_json_path = project_path / "package.json"
     if package_json_path.exists():
         try:
-            package_json = json.loads(package_json_path.read_text(encoding='utf-8'))
+            package_json = json.loads(package_json_path.read_text(encoding="utf-8"))
 
             # Check scripts
             scripts = package_json.get("scripts", {})
             test_script = scripts.get("test")
 
             # Check dependencies for frameworks
-            all_deps = {
-                **package_json.get("dependencies", {}),
-                **package_json.get("devDependencies", {})
-            }
+            all_deps = {**package_json.get("dependencies", {}), **package_json.get("devDependencies", {})}
 
             if "jest" in all_deps:
                 return "jest", test_script or "npm test"
@@ -237,13 +232,15 @@ def _parse_jest_output(stdout: str, stderr: str) -> dict[str, Any]:
 
                 total_tests += len(test_results)
 
-                test_files.append({
-                    "file": file_path,
-                    "passed": file_passed,
-                    "failed": file_failed,
-                    "skipped": file_skipped,
-                    "duration": test_file.get("endTime", 0) - test_file.get("startTime", 0)
-                })
+                test_files.append(
+                    {
+                        "file": file_path,
+                        "passed": file_passed,
+                        "failed": file_failed,
+                        "skipped": file_skipped,
+                        "duration": test_file.get("endTime", 0) - test_file.get("startTime", 0),
+                    }
+                )
 
             return {
                 "summary": {
@@ -251,10 +248,10 @@ def _parse_jest_output(stdout: str, stderr: str) -> dict[str, Any]:
                     "passed": passed_tests,
                     "failed": failed_tests,
                     "skipped": skipped_tests,
-                    "duration": jest_result.get("testResults", [{}])[0].get("perfStats", {}).get("runtime", 0)
+                    "duration": jest_result.get("testResults", [{}])[0].get("perfStats", {}).get("runtime", 0),
                 },
                 "test_files": test_files,
-                "coverage": jest_result.get("coverageMap", {})
+                "coverage": jest_result.get("coverageMap", {}),
             }
 
     except (json.JSONDecodeError, KeyError, IndexError):
@@ -280,14 +277,10 @@ def _parse_vitest_output(stdout: str, stderr: str) -> dict[str, Any]:
                 "passed": vitest_result.get("numPassedTests", 0),
                 "failed": vitest_result.get("numFailedTests", 0),
                 "skipped": vitest_result.get("numSkippedTests", 0),
-                "duration": vitest_result.get("testExecTime", 0)
+                "duration": vitest_result.get("testExecTime", 0),
             }
 
-            return {
-                "summary": summary,
-                "test_files": test_results,
-                "coverage": vitest_result.get("coverageMap", {})
-            }
+            return {"summary": summary, "test_files": test_results, "coverage": vitest_result.get("coverageMap", {})}
 
     except (json.JSONDecodeError, KeyError):
         pass
@@ -309,10 +302,10 @@ def _parse_mocha_output(stdout: str, stderr: str) -> dict[str, Any]:
                     "passed": stats.get("passes", 0),
                     "failed": stats.get("failures", 0),
                     "skipped": stats.get("pending", 0),
-                    "duration": stats.get("duration", 0)
+                    "duration": stats.get("duration", 0),
                 },
                 "test_files": mocha_result.get("tests", []),
-                "failures": mocha_result.get("failures", [])
+                "failures": mocha_result.get("failures", []),
             }
 
     except (json.JSONDecodeError, KeyError):
@@ -327,7 +320,7 @@ def _parse_pytest_output(stdout: str, stderr: str) -> dict[str, Any]:
     output = stdout + "\n" + stderr
 
     # Look for pytest summary line
-    summary_pattern = re.compile(r'=+ (.+) in ([\d.]+)s =+')
+    summary_pattern = re.compile(r"=+ (.+) in ([\d.]+)s =+")
     match = summary_pattern.search(output)
 
     passed = failed = skipped = 0
@@ -339,17 +332,17 @@ def _parse_pytest_output(stdout: str, stderr: str) -> dict[str, Any]:
 
         # Parse summary components
         if "passed" in summary_text:
-            passed_match = re.search(r'(\d+) passed', summary_text)
+            passed_match = re.search(r"(\d+) passed", summary_text)
             if passed_match:
                 passed = int(passed_match.group(1))
 
         if "failed" in summary_text:
-            failed_match = re.search(r'(\d+) failed', summary_text)
+            failed_match = re.search(r"(\d+) failed", summary_text)
             if failed_match:
                 failed = int(failed_match.group(1))
 
         if "skipped" in summary_text:
-            skipped_match = re.search(r'(\d+) skipped', summary_text)
+            skipped_match = re.search(r"(\d+) skipped", summary_text)
             if skipped_match:
                 skipped = int(skipped_match.group(1))
 
@@ -359,10 +352,10 @@ def _parse_pytest_output(stdout: str, stderr: str) -> dict[str, Any]:
             "passed": passed,
             "failed": failed,
             "skipped": skipped,
-            "duration": duration
+            "duration": duration,
         },
         "test_files": [],  # pytest text output doesn't easily give per-file breakdown
-        "raw_output": output[:1000]  # Include first 1000 chars for debugging
+        "raw_output": output[:1000],  # Include first 1000 chars for debugging
     }
 
 
@@ -371,17 +364,11 @@ def _parse_generic_output(stdout: str, stderr: str) -> dict[str, Any]:
     output = stdout + "\n" + stderr
 
     # Try to extract basic pass/fail information
-    passed = len(re.findall(r'\bpass(ed)?\b', output, re.IGNORECASE))
-    failed = len(re.findall(r'\bfail(ed)?\b', output, re.IGNORECASE))
+    passed = len(re.findall(r"\bpass(ed)?\b", output, re.IGNORECASE))
+    failed = len(re.findall(r"\bfail(ed)?\b", output, re.IGNORECASE))
 
     return {
-        "summary": {
-            "total": passed + failed,
-            "passed": passed,
-            "failed": failed,
-            "skipped": 0,
-            "duration": 0
-        },
+        "summary": {"total": passed + failed, "passed": passed, "failed": failed, "skipped": 0, "duration": 0},
         "test_files": [],
-        "raw_output": output[:1000]
+        "raw_output": output[:1000],
     }

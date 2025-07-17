@@ -4,7 +4,6 @@ Test file for Phase 1: Core State Engine - Transformation Engine
 Tests the JavaScript transformation engine, dependency resolution, and error handling.
 """
 
-
 import pytest
 
 # Import implemented transformer components
@@ -128,11 +127,7 @@ class TestDependencyResolver:
     def test_simple_dependency_resolution(self):
         """Test resolving simple dependency chain"""
         # Given
-        schema = {
-            "computed": {
-                "double": {"from": "raw.value", "transform": "input * 2"}
-            }
-        }
+        schema = {"computed": {"double": {"from": "raw.value", "transform": "input * 2"}}}
         resolver = DependencyResolver(schema)
 
         # When
@@ -145,11 +140,7 @@ class TestDependencyResolver:
     def test_multiple_dependency_resolution(self):
         """Test resolving multiple dependencies"""
         # Given
-        schema = {
-            "computed": {
-                "sum": {"from": ["raw.a", "raw.b"], "transform": "input[0] + input[1]"}
-            }
-        }
+        schema = {"computed": {"sum": {"from": ["raw.a", "raw.b"], "transform": "input[0] + input[1]"}}}
         resolver = DependencyResolver(schema)
 
         # When
@@ -164,7 +155,7 @@ class TestDependencyResolver:
         schema = {
             "computed": {
                 "double": {"from": "raw.value", "transform": "input * 2"},
-                "quadruple": {"from": "computed.double", "transform": "input * 2"}
+                "quadruple": {"from": "computed.double", "transform": "input * 2"},
             }
         }
         resolver = DependencyResolver(schema)
@@ -183,7 +174,7 @@ class TestDependencyResolver:
         schema = {
             "computed": {
                 "a": {"from": "computed.b", "transform": "input"},
-                "b": {"from": "computed.a", "transform": "input"}
+                "b": {"from": "computed.a", "transform": "input"},
             }
         }
 
@@ -194,11 +185,7 @@ class TestDependencyResolver:
     def test_self_circular_dependency_detection(self):
         """Test that self-referential dependencies are detected"""
         # Given
-        schema = {
-            "computed": {
-                "self_ref": {"from": "computed.self_ref", "transform": "input + 1"}
-            }
-        }
+        schema = {"computed": {"self_ref": {"from": "computed.self_ref", "transform": "input + 1"}}}
 
         # When/Then
         with pytest.raises(CircularDependencyError):
@@ -212,7 +199,7 @@ class TestDependencyResolver:
                 "a": {"from": "raw.value", "transform": "input * 2"},
                 "b": {"from": "raw.value", "transform": "input + 1"},
                 "c": {"from": ["computed.a", "computed.b"], "transform": "input[0] + input[1]"},
-                "d": {"from": "computed.c", "transform": "input * 3"}
+                "d": {"from": "computed.c", "transform": "input * 3"},
             }
         }
         resolver = DependencyResolver(schema)
@@ -250,7 +237,7 @@ class TestTransformationIntegration:
         schema = {
             "computed": {
                 "double": {"from": "raw.value", "transform": "input * 2"},
-                "quadruple": {"from": "computed.double", "transform": "input * 2"}
+                "quadruple": {"from": "computed.double", "transform": "input * 2"},
             }
         }
         state = {"raw": {"value": 5}, "computed": {}}

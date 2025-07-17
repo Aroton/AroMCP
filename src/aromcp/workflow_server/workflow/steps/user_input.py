@@ -15,10 +15,7 @@ class UserInputProcessor:
     """Processes user input workflow steps."""
 
     def process_user_input(
-        self,
-        step: WorkflowStep,
-        context: ExecutionContext,
-        state: dict[str, Any]
+        self, step: WorkflowStep, context: ExecutionContext, state: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Process a user input step.
@@ -61,16 +58,11 @@ class UserInputProcessor:
             "validation_message": validation_message,
             "current_attempt": current_attempts + 1,
             "max_attempts": max_attempts,
-            "instructions": self._generate_input_instructions(
-                prompt, input_type, validation_pattern, required
-            )
+            "instructions": self._generate_input_instructions(prompt, input_type, validation_pattern, required),
         }
 
     def validate_and_store_input(
-        self,
-        step: WorkflowStep,
-        user_input: str,
-        context: ExecutionContext
+        self, step: WorkflowStep, user_input: str, context: ExecutionContext
     ) -> dict[str, Any]:
         """
         Validate user input and store it in the workflow state.
@@ -93,20 +85,12 @@ class UserInputProcessor:
         try:
             # Check if input is required and empty
             if required and not user_input.strip():
-                return {
-                    "valid": False,
-                    "error": "Input is required but was empty",
-                    "retry": True
-                }
+                return {"valid": False, "error": "Input is required but was empty", "retry": True}
 
             # Validate pattern if provided
             if validation_pattern and user_input.strip():
                 if not re.match(validation_pattern, user_input):
-                    return {
-                        "valid": False,
-                        "error": validation_message,
-                        "retry": True
-                    }
+                    return {"valid": False, "error": validation_message, "retry": True}
 
             # Convert to appropriate type
             converted_value = self._convert_input_type(user_input, input_type)
@@ -118,25 +102,12 @@ class UserInputProcessor:
             attempt_key = f"{step.id}_attempts"
             context.set_variable(attempt_key, 0)
 
-            return {
-                "valid": True,
-                "value": converted_value,
-                "variable_name": variable_name,
-                "stored": True
-            }
+            return {"valid": True, "value": converted_value, "variable_name": variable_name, "stored": True}
 
         except ValueError as e:
-            return {
-                "valid": False,
-                "error": f"Type conversion error: {str(e)}",
-                "retry": True
-            }
+            return {"valid": False, "error": f"Type conversion error: {str(e)}", "retry": True}
         except Exception as e:
-            return {
-                "valid": False,
-                "error": f"Validation error: {str(e)}",
-                "retry": True
-            }
+            return {"valid": False, "error": f"Validation error: {str(e)}", "retry": True}
 
     def _convert_input_type(self, user_input: str, input_type: str) -> Any:
         """
@@ -155,7 +126,7 @@ class UserInputProcessor:
         elif input_type == "number":
             # Try integer first, then float
             try:
-                if '.' in user_input:
+                if "." in user_input:
                     return float(user_input)
                 else:
                     return int(user_input)
@@ -174,6 +145,7 @@ class UserInputProcessor:
 
         elif input_type == "json":
             import json
+
             try:
                 return json.loads(user_input)
             except json.JSONDecodeError:
@@ -184,11 +156,7 @@ class UserInputProcessor:
             return user_input
 
     def _generate_input_instructions(
-        self,
-        prompt: str,
-        input_type: str,
-        validation_pattern: str | None,
-        required: bool
+        self, prompt: str, input_type: str, validation_pattern: str | None, required: bool
     ) -> str:
         """
         Generate detailed instructions for the agent to present to the user.
@@ -249,11 +217,7 @@ class UserInputProcessor:
             examples.extend(["Example: true", "Example: false", "Example: yes", "Example: no"])
 
         elif input_type == "json":
-            examples.extend([
-                'Example: {"key": "value"}',
-                'Example: [1, 2, 3]',
-                'Example: "simple string"'
-            ])
+            examples.extend(['Example: {"key": "value"}', "Example: [1, 2, 3]", 'Example: "simple string"'])
 
         return examples
 
@@ -282,7 +246,7 @@ class UserInputProcessor:
             help_lines.append("  - False: false, no, n, 0, off")
         elif input_type == "json":
             help_lines.append("Enter valid JSON data")
-            help_lines.append("Examples: {\"key\": \"value\"}, [1,2,3], \"text\"")
+            help_lines.append('Examples: {"key": "value"}, [1,2,3], "text"')
         else:
             help_lines.append("Enter text")
 

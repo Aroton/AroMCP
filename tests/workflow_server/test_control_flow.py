@@ -1,6 +1,5 @@
 """Tests for control flow components."""
 
-
 import pytest
 
 from aromcp.workflow_server.workflow.context import ExecutionContext, StackFrame
@@ -28,11 +27,7 @@ class TestControlFlowModels:
         then_step = WorkflowStep(id="then1", type="user_message", definition={"message": "Then branch"})
         else_step = WorkflowStep(id="else1", type="user_message", definition={"message": "Else branch"})
 
-        conditional = ConditionalStep(
-            condition="value > 5",
-            then_steps=[then_step],
-            else_steps=[else_step]
-        )
+        conditional = ConditionalStep(condition="value > 5", then_steps=[then_step], else_steps=[else_step])
 
         workflow_step = conditional.to_workflow_step("cond1")
 
@@ -46,11 +41,7 @@ class TestControlFlowModels:
         """Test WhileLoopStep creation and conversion."""
         body_step = WorkflowStep(id="body1", type="state_update", definition={"path": "raw.counter"})
 
-        while_loop = WhileLoopStep(
-            condition="counter < 10",
-            max_iterations=50,
-            body=[body_step]
-        )
+        while_loop = WhileLoopStep(condition="counter < 10", max_iterations=50, body=[body_step])
 
         workflow_step = while_loop.to_workflow_step("loop1")
 
@@ -64,12 +55,7 @@ class TestControlFlowModels:
         """Test ForEachStep creation and conversion."""
         body_step = WorkflowStep(id="body1", type="user_message", definition={"message": "Processing {{ item }}"})
 
-        foreach = ForEachStep(
-            items="files",
-            variable_name="file",
-            index_name="i",
-            body=[body_step]
-        )
+        foreach = ForEachStep(items="files", variable_name="file", index_name="i", body=[body_step])
 
         workflow_step = foreach.to_workflow_step("foreach1")
 
@@ -87,7 +73,7 @@ class TestControlFlowModels:
             validation_pattern=r"^[A-Za-z\s]+$",
             validation_message="Name must contain only letters and spaces",
             required=True,
-            max_attempts=3
+            max_attempts=3,
         )
 
         workflow_step = user_input.to_workflow_step("input1")
@@ -106,11 +92,7 @@ class TestLoopState:
 
     def test_while_loop_state(self):
         """Test while loop state management."""
-        loop_state = LoopState(
-            loop_type="while",
-            loop_id="loop1",
-            max_iterations=5
-        )
+        loop_state = LoopState(loop_type="while", loop_id="loop1", max_iterations=5)
 
         assert not loop_state.is_complete()
         assert loop_state.current_iteration == 0
@@ -129,12 +111,7 @@ class TestLoopState:
     def test_foreach_loop_state(self):
         """Test foreach loop state management."""
         items = ["a", "b", "c"]
-        loop_state = LoopState(
-            loop_type="foreach",
-            loop_id="foreach1",
-            items=items,
-            max_iterations=len(items)
-        )
+        loop_state = LoopState(loop_type="foreach", loop_id="foreach1", items=items, max_iterations=len(items))
 
         assert not loop_state.is_complete()
         assert loop_state.get_current_item() == "a"
@@ -153,11 +130,7 @@ class TestLoopState:
 
     def test_loop_control_signals(self):
         """Test break and continue signals."""
-        loop_state = LoopState(
-            loop_type="while",
-            loop_id="loop1",
-            max_iterations=10
-        )
+        loop_state = LoopState(loop_type="while", loop_id="loop1", max_iterations=10)
 
         # Test break signal
         loop_state.control_signal = "break"
@@ -187,7 +160,7 @@ class TestExecutionContext:
         # Create and push frames
         steps = [
             WorkflowStep(id="step1", type="user_message", definition={}),
-            WorkflowStep(id="step2", type="state_update", definition={})
+            WorkflowStep(id="step2", type="state_update", definition={}),
         ]
 
         frame = context.create_workflow_frame(steps)
@@ -212,11 +185,7 @@ class TestExecutionContext:
         """Test loop context management."""
         context = ExecutionContext("wf_123")
 
-        loop_state = LoopState(
-            loop_type="while",
-            loop_id="loop1",
-            max_iterations=5
-        )
+        loop_state = LoopState(loop_type="while", loop_id="loop1", max_iterations=5)
 
         # Enter loop
         context.enter_loop(loop_state)
@@ -240,11 +209,7 @@ class TestExecutionContext:
         context.set_variable("global_var", "global_value", "global")
 
         # Create frame with local variables
-        frame = StackFrame(
-            frame_id="frame1",
-            frame_type="conditional",
-            steps=[]
-        )
+        frame = StackFrame(frame_id="frame1", frame_type="conditional", steps=[])
         context.push_frame(frame)
 
         # Set local variables
@@ -279,8 +244,8 @@ class TestConditionalProcessor:
             definition={
                 "condition": "value > 5",
                 "then_steps": [{"type": "user_message", "message": "Greater than 5"}],
-                "else_steps": [{"type": "user_message", "message": "Less than or equal to 5"}]
-            }
+                "else_steps": [{"type": "user_message", "message": "Less than or equal to 5"}],
+            },
         )
 
         state = {"value": 10}
@@ -307,8 +272,8 @@ class TestConditionalProcessor:
             definition={
                 "condition": "value > 5",
                 "then_steps": [{"type": "user_message", "message": "Greater than 5"}],
-                "else_steps": [{"type": "user_message", "message": "Less than or equal to 5"}]
-            }
+                "else_steps": [{"type": "user_message", "message": "Less than or equal to 5"}],
+            },
         )
 
         state = {"value": 3}
@@ -328,8 +293,8 @@ class TestConditionalProcessor:
             type="conditional",
             definition={
                 "condition": "value > 5",
-                "then_steps": [{"type": "user_message", "message": "Greater than 5"}]
-            }
+                "then_steps": [{"type": "user_message", "message": "Greater than 5"}],
+            },
         )
 
         state = {"value": 3}
@@ -355,8 +320,8 @@ class TestWhileLoopProcessor:
             definition={
                 "condition": "counter < 5",
                 "max_iterations": 10,
-                "body": [{"type": "state_update", "path": "raw.counter", "operation": "increment"}]
-            }
+                "body": [{"type": "state_update", "path": "raw.counter", "operation": "increment"}],
+            },
         )
 
         state = {"counter": 0}
@@ -382,8 +347,8 @@ class TestWhileLoopProcessor:
             definition={
                 "condition": "counter < 5",
                 "max_iterations": 10,
-                "body": [{"type": "state_update", "path": "raw.counter"}]
-            }
+                "body": [{"type": "state_update", "path": "raw.counter"}],
+            },
         )
 
         state = {"counter": 10}
@@ -409,8 +374,8 @@ class TestForEachProcessor:
             definition={
                 "items": "files",
                 "variable_name": "file",
-                "body": [{"type": "user_message", "message": "Processing {{ file }}"}]
-            }
+                "body": [{"type": "user_message", "message": "Processing {{ file }}"}],
+            },
         )
 
         state = {"files": ["file1.txt", "file2.txt", "file3.txt"]}
@@ -436,12 +401,7 @@ class TestForEachProcessor:
         context = ExecutionContext("wf_123")
 
         step = WorkflowStep(
-            id="foreach1",
-            type="foreach",
-            definition={
-                "items": "files",
-                "body": [{"type": "user_message"}]
-            }
+            id="foreach1", type="foreach", definition={"items": "files", "body": [{"type": "user_message"}]}
         )
 
         state = {"files": []}
@@ -463,8 +423,8 @@ class TestForEachProcessor:
             definition={
                 "items": "files",
                 "variable_name": "file",
-                "body": [{"type": "user_message", "message": "Processing {{ file }}"}]
-            }
+                "body": [{"type": "user_message", "message": "Processing {{ file }}"}],
+            },
         )
 
         state = {"files": ["file1.txt", "file2.txt"]}
@@ -492,8 +452,8 @@ class TestUserInputProcessor:
                 "variable_name": "age",
                 "input_type": "number",
                 "validation_pattern": r"^\d+$",
-                "max_attempts": 3
-            }
+                "max_attempts": 3,
+            },
         )
 
         state = {}
@@ -515,11 +475,7 @@ class TestUserInputProcessor:
         step = WorkflowStep(
             id="input1",
             type="user_input",
-            definition={
-                "variable_name": "age",
-                "input_type": "number",
-                "required": True
-            }
+            definition={"variable_name": "age", "input_type": "number", "required": True},
         )
 
         result = processor.validate_and_store_input(step, "25", context)
@@ -541,8 +497,8 @@ class TestUserInputProcessor:
                 "variable_name": "age",
                 "input_type": "number",
                 "validation_pattern": r"^\d+$",
-                "validation_message": "Please enter a valid number"
-            }
+                "validation_message": "Please enter a valid number",
+            },
         )
 
         result = processor.validate_and_store_input(step, "abc", context)

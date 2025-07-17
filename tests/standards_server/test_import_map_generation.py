@@ -3,7 +3,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.aromcp.standards_server._storage import (
     _add_import_map_to_hint,
@@ -157,7 +157,7 @@ def read_file(file_path):
     with open(file_path, 'r') as f:
         return f.read()
 """,
-            "hasEslintRule": False
+            "hasEslintRule": False,
         }
 
         result = _add_import_map_to_hint(hint)
@@ -211,7 +211,7 @@ export async function GET() {
     return Response.json('Error!');
 }
 """,
-            "hasEslintRule": True
+            "hasEslintRule": True,
         }
 
         result = _add_import_map_to_hint(hint)
@@ -246,7 +246,7 @@ export async function GET() {
             "context": "Clear names improve code readability",
             "correctExample": "user_count = len(users)",
             "incorrectExample": "x = len(y)",
-            "hasEslintRule": False
+            "hasEslintRule": False,
         }
 
         result = _add_import_map_to_hint(hint)
@@ -369,68 +369,70 @@ export async function GET() {
         from src.aromcp.standards_server.tools.hints_for_file import hints_for_file_impl
 
         # Create hint with imports
-        hints = [{
-            'rule': 'Use modern imports',
-            'correctExample': '''import os
+        hints = [
+            {
+                "rule": "Use modern imports",
+                "correctExample": """import os
 from pathlib import Path
 
 def test_func():
     return Path('/test')
-''',
-            'incorrectExample': '''import os
+""",
+                "incorrectExample": """import os
 
 def test_func():
     return '/test'
-''',
-            'hasEslintRule': False
-        }]
+""",
+                "hasEslintRule": False,
+            }
+        ]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            os.environ['MCP_FILE_ROOT'] = tmp_dir
+            os.environ["MCP_FILE_ROOT"] = tmp_dir
 
             # Save metadata and hints
             metadata = {
-                'title': 'Test Standard',
-                'category': 'python',
-                'appliesTo': ['*.py'],
-                'priority': 'recommended'
+                "title": "Test Standard",
+                "category": "python",
+                "appliesTo": ["*.py"],
+                "priority": "recommended",
             }
-            save_standard_metadata('test-std', metadata, tmp_dir)
-            save_ai_hints('test-std', hints, tmp_dir)
+            save_standard_metadata("test-std", metadata, tmp_dir)
+            save_ai_hints("test-std", hints, tmp_dir)
 
             # Create test file
-            test_file = os.path.join(tmp_dir, 'test.py')
-            with open(test_file, 'w') as f:
-                f.write('# test')
+            test_file = os.path.join(tmp_dir, "test.py")
+            with open(test_file, "w") as f:
+                f.write("# test")
 
             # Get hints through hints_for_file
-            result = hints_for_file_impl('test.py', max_tokens=5000, project_root=tmp_dir)
+            result = hints_for_file_impl("test.py", max_tokens=5000, project_root=tmp_dir)
 
-            assert 'data' in result
-            assert len(result['data']['hints']) > 0
+            assert "data" in result
+            assert len(result["data"]["hints"]) > 0
 
-            hint = result['data']['hints'][0]
+            hint = result["data"]["hints"][0]
 
             # Imports should be stripped from examples at runtime
             # Note: Current format uses 'example' instead of 'correctExample'
-            example_field = hint.get('example', hint.get('correctExample', ''))
-            assert 'import os' not in example_field
-            assert 'from pathlib import Path' not in example_field
+            example_field = hint.get("example", hint.get("correctExample", ""))
+            assert "import os" not in example_field
+            assert "from pathlib import Path" not in example_field
             # Note: incorrectExample not present in current compressed format
 
             # But code logic should remain
             # Use the example field instead of correctExample
-            example_field = hint.get('example', hint.get('correctExample', ''))
-            assert 'def test_func():' in example_field
-            assert 'return Path(' in example_field
+            example_field = hint.get("example", hint.get("correctExample", ""))
+            assert "def test_func():" in example_field
+            assert "return Path(" in example_field
             # Note: incorrectExample not present in current compressed format
 
             # Import map should be available separately, organized by module
-            result['data'].get('importMaps', {})
+            result["data"].get("importMaps", {})
 
             # Note: modules array not populated in current implementation
             # This would require import map generation from code examples
-            hint.get('modules', [])
+            hint.get("modules", [])
             # TODO: Enable when import extraction is implemented
             # assert 'os' in modules
             # assert 'pathlib' in modules

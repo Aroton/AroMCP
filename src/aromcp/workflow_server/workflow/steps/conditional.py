@@ -18,10 +18,7 @@ class ConditionalProcessor:
         self.expression_evaluator = ExpressionEvaluator()
 
     def process_conditional(
-        self,
-        step: WorkflowStep,
-        context: ExecutionContext,
-        state: dict[str, Any]
+        self, step: WorkflowStep, context: ExecutionContext, state: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Process a conditional step and determine which branch to execute.
@@ -55,18 +52,13 @@ class ConditionalProcessor:
             if selected_steps:
                 for i, step_def in enumerate(selected_steps):
                     step_id = f"{step.id}.{branch_taken}.{i}"
-                    workflow_steps.append(WorkflowStep(
-                        id=step_id,
-                        type=step_def.get("type", "unknown"),
-                        definition=step_def
-                    ))
+                    workflow_steps.append(
+                        WorkflowStep(id=step_id, type=step_def.get("type", "unknown"), definition=step_def)
+                    )
 
             # Create conditional frame if there are steps to execute
             if workflow_steps:
-                conditional_frame = context.create_conditional_frame(
-                    steps=workflow_steps,
-                    condition_id=step.id
-                )
+                conditional_frame = context.create_conditional_frame(steps=workflow_steps, condition_id=step.id)
                 context.push_frame(conditional_frame)
 
             # Record the condition evaluation in context
@@ -77,7 +69,7 @@ class ConditionalProcessor:
                 "step_id": step.id,
                 "condition_result": condition_result.to_step_definition(),
                 "steps_to_execute": len(workflow_steps),
-                "branch_taken": branch_taken
+                "branch_taken": branch_taken,
             }
 
         except ExpressionError as e:
@@ -111,9 +103,7 @@ class ConditionalProcessor:
         evaluated_values = self._extract_variable_values(cleaned_condition, state)
 
         return ConditionalResult(
-            condition_result=condition_result,
-            original_condition=condition,
-            evaluated_values=evaluated_values
+            condition_result=condition_result, original_condition=condition, evaluated_values=evaluated_values
         )
 
     def _extract_variable_values(self, expression: str, state: dict[str, Any]) -> dict[str, Any]:
@@ -133,12 +123,12 @@ class ConditionalProcessor:
         import re
 
         # Find simple variable references (alphanumeric + dot notation)
-        variable_pattern = r'\b[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*\b'
+        variable_pattern = r"\b[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*\b"
         variables = re.findall(variable_pattern, expression)
 
         for var in variables:
             # Skip keywords and operators
-            if var in ['true', 'false', 'null', 'undefined', 'and', 'or', 'not', 'if', 'else', 'then']:
+            if var in ["true", "false", "null", "undefined", "and", "or", "not", "if", "else", "then"]:
                 continue
 
             # Get the variable value from state
@@ -162,7 +152,7 @@ class ConditionalProcessor:
             The value at the specified path
         """
         current = data
-        parts = path.split('.')
+        parts = path.split(".")
 
         for part in parts:
             if isinstance(current, dict):

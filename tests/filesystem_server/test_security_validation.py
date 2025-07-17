@@ -33,7 +33,8 @@ class TestSecurityValidation:
 
                 # Test extract_method_signatures
                 import os
-                os.environ['MCP_FILE_ROOT'] = temp_dir
+
+                os.environ["MCP_FILE_ROOT"] = temp_dir
                 try:
                     result = extract_method_signatures_impl(path)
                     # Should return empty result or error for invalid paths
@@ -41,15 +42,15 @@ class TestSecurityValidation:
                 except ValueError as e:
                     assert "Failed to extract" in str(e) or "Invalid" in str(e)
                 finally:
-                    if 'MCP_FILE_ROOT' in os.environ:
-                        del os.environ['MCP_FILE_ROOT']
+                    if "MCP_FILE_ROOT" in os.environ:
+                        del os.environ["MCP_FILE_ROOT"]
 
     def test_write_files_path_validation(self):
         """Test path validation in write operations."""
         with tempfile.TemporaryDirectory():
             malicious_files = {
                 "../../../tmp/malicious.txt": "bad content",
-                "/tmp/absolute_bad.txt": "also bad"  # noqa: S108 # Test file path for security validation
+                "/tmp/absolute_bad.txt": "also bad",  # noqa: S108 # Test file path for security validation
             }
 
             # Test write_files (should raise exception for security violations)

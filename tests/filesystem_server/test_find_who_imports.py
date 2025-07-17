@@ -22,6 +22,7 @@ class TestFindWhoImports:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = find_who_imports_impl("utils.py")
@@ -46,6 +47,7 @@ class TestFindWhoImports:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = find_who_imports_impl("utils.js")
@@ -68,6 +70,7 @@ class TestFindWhoImports:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = find_who_imports_impl("unused.py")
@@ -91,6 +94,7 @@ class TestFindWhoImports:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = find_who_imports_impl("common.py")
@@ -114,6 +118,7 @@ class TestFindWhoImports:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = find_who_imports_impl("core.py")
@@ -128,6 +133,7 @@ class TestFindWhoImports:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             try:
@@ -149,6 +155,7 @@ class TestFindWhoImports:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = find_who_imports_impl("types.ts")

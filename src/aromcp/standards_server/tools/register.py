@@ -14,10 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def register_impl(
-    source_path: str,
-    metadata: dict[str, Any] | str,
-    project_root: str | None = None,
-    enhanced_format: bool = False
+    source_path: str, metadata: dict[str, Any] | str, project_root: str | None = None, enhanced_format: bool = False
 ) -> dict[str, Any]:
     """
     Register a standard with enhanced metadata and rule processing.
@@ -36,6 +33,7 @@ def register_impl(
 
         # Validate source path
         from pathlib import Path
+
         validate_file_path_legacy(source_path, Path(project_root))
 
         # Parse metadata if it's a string
@@ -43,12 +41,7 @@ def register_impl(
             try:
                 metadata = json.loads(metadata)
             except json.JSONDecodeError as e:
-                return {
-                    "error": {
-                        "code": "INVALID_INPUT",
-                        "message": f"Invalid JSON in metadata: {str(e)}"
-                    }
-                }
+                return {"error": {"code": "INVALID_INPUT", "message": f"Invalid JSON in metadata: {str(e)}"}}
 
         if enhanced_format:
             return _register_enhanced_standard(source_path, metadata, project_root)
@@ -57,12 +50,7 @@ def register_impl(
 
     except Exception as e:
         logger.error(f"Error in register_impl: {e}")
-        return {
-            "error": {
-                "code": "OPERATION_FAILED",
-                "message": f"Failed to register standard: {str(e)}"
-            }
-        }
+        return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to register standard: {str(e)}"}}
 
 
 def _register_enhanced_standard(source_path: str, metadata: dict[str, Any] | str, project_root: str) -> dict[str, Any]:
@@ -80,12 +68,7 @@ def _register_enhanced_standard(source_path: str, metadata: dict[str, Any] | str
     try:
         enhanced_metadata = EnhancedStandardMetadata(**metadata)
     except Exception as e:
-        return {
-            "error": {
-                "code": "INVALID_INPUT",
-                "message": f"Invalid enhanced metadata: {str(e)}"
-            }
-        }
+        return {"error": {"code": "INVALID_INPUT", "message": f"Invalid enhanced metadata: {str(e)}"}}
 
     # Check if this is a new standard
     manifest = load_manifest(project_root)
@@ -106,7 +89,7 @@ def _register_enhanced_standard(source_path: str, metadata: dict[str, Any] | str
         "lastModified": metadata.get("updated", datetime.now().isoformat()),
         "registered": True,
         "enhanced": True,
-        "version": "v2"
+        "version": "v2",
     }
 
     save_manifest(manifest, project_root)
@@ -121,7 +104,7 @@ def _register_enhanced_standard(source_path: str, metadata: dict[str, Any] | str
             "isNew": is_new,
             "enhanced": True,
             "optimization_enabled": enhanced_metadata.optimization.model_dump(),
-            "context_triggers": enhanced_metadata.context_triggers.model_dump()
+            "context_triggers": enhanced_metadata.context_triggers.model_dump(),
         }
     }
 
@@ -134,17 +117,10 @@ def _register_legacy_standard(source_path: str, metadata: dict[str, Any] | str, 
         metadata = json.loads(metadata)
 
     # Validate required metadata fields
-    required_fields = [
-        "id", "name", "category", "tags", "appliesTo", "severity", "priority"
-    ]
+    required_fields = ["id", "name", "category", "tags", "appliesTo", "severity", "priority"]
     for field in required_fields:
         if field not in metadata:
-            return {
-                "error": {
-                    "code": "INVALID_INPUT",
-                    "message": f"Missing required metadata field: {field}"
-                }
-            }
+            return {"error": {"code": "INVALID_INPUT", "message": f"Missing required metadata field: {field}"}}
 
     # Ensure updated field is properly mapped from template
     if "updated" not in metadata:
@@ -155,37 +131,17 @@ def _register_legacy_standard(source_path: str, metadata: dict[str, Any] | str, 
     valid_priorities = ["required", "important", "recommended"]
 
     if metadata["severity"] not in valid_severities:
-        return {
-            "error": {
-                "code": "INVALID_INPUT",
-                "message": f"Invalid severity. Must be one of: {valid_severities}"
-            }
-        }
+        return {"error": {"code": "INVALID_INPUT", "message": f"Invalid severity. Must be one of: {valid_severities}"}}
 
     if metadata["priority"] not in valid_priorities:
-        return {
-            "error": {
-                "code": "INVALID_INPUT",
-                "message": f"Invalid priority. Must be one of: {valid_priorities}"
-            }
-        }
+        return {"error": {"code": "INVALID_INPUT", "message": f"Invalid priority. Must be one of: {valid_priorities}"}}
 
     # Validate arrays
     if not isinstance(metadata["tags"], list):
-        return {
-            "error": {
-                "code": "INVALID_INPUT",
-                "message": "tags must be an array"
-            }
-        }
+        return {"error": {"code": "INVALID_INPUT", "message": "tags must be an array"}}
 
     if not isinstance(metadata["appliesTo"], list):
-        return {
-            "error": {
-                "code": "INVALID_INPUT",
-                "message": "appliesTo must be an array"
-            }
-        }
+        return {"error": {"code": "INVALID_INPUT", "message": "appliesTo must be an array"}}
 
     standard_id = metadata["id"]
 
@@ -208,7 +164,7 @@ def _register_legacy_standard(source_path: str, metadata: dict[str, Any] | str, 
         "lastModified": metadata.get("updated", ""),
         "registered": True,
         "enhanced": False,
-        "version": "v1"
+        "version": "v1",
     }
 
     save_manifest(manifest, project_root)
@@ -217,23 +173,12 @@ def _register_legacy_standard(source_path: str, metadata: dict[str, Any] | str, 
     build_index(project_root)
     invalidate_index_cache()
 
-    return {
-        "data": {
-            "standardId": standard_id,
-            "isNew": is_new,
-            "enhanced": False
-        }
-    }
+    return {"data": {"standardId": standard_id, "isNew": is_new, "enhanced": False}}
 
 
 def _is_enhanced_metadata(metadata: dict[str, Any]) -> bool:
     """Check if metadata is in enhanced format."""
-    enhanced_indicators = [
-        "context_triggers",
-        "optimization",
-        "relationships",
-        "nextjs_config"
-    ]
+    enhanced_indicators = ["context_triggers", "optimization", "relationships", "nextjs_config"]
 
     return any(indicator in metadata for indicator in enhanced_indicators)
 
@@ -253,7 +198,7 @@ def _convert_to_enhanced_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         "state": ["state_management", "data_handling"],
         "testing": ["testing", "quality_assurance"],
         "security": ["security", "authentication"],
-        "performance": ["optimization", "performance"]
+        "performance": ["optimization", "performance"],
     }
 
     category = metadata.get("category", "general")
@@ -276,11 +221,7 @@ def _convert_to_enhanced_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     optimization = OptimizationHints()
 
     # Map priority to optimization priority
-    priority_mapping = {
-        "required": "critical",
-        "important": "high",
-        "recommended": "medium"
-    }
+    priority_mapping = {"required": "critical", "important": "high", "recommended": "medium"}
 
     priority = metadata.get("priority", "recommended")
     optimization.priority = priority_mapping.get(priority, "medium")
@@ -317,6 +258,7 @@ def _clear_existing_hints_and_rules(standard_id: str, project_root: str) -> None
 
         # Clear existing ESLint rules
         from .._storage import get_eslint_dir
+
         eslint_dir = get_eslint_dir(project_root)
         rules_dir = eslint_dir / "rules"
         if rules_dir.exists():
@@ -334,14 +276,7 @@ def _clear_existing_hints_and_rules(standard_id: str, project_root: str) -> None
 
 # Backwards compatibility
 def register_legacy(
-    source_path: str,
-    metadata: dict[str, Any] | str,
-    project_root: str | None = None
+    source_path: str, metadata: dict[str, Any] | str, project_root: str | None = None
 ) -> dict[str, Any]:
     """Legacy register function for backwards compatibility."""
-    return register_impl(
-        source_path=source_path,
-        metadata=metadata,
-        project_root=project_root,
-        enhanced_format=False
-    )
+    return register_impl(source_path=source_path, metadata=metadata, project_root=project_root, enhanced_format=False)

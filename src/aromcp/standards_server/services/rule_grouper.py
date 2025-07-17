@@ -17,7 +17,7 @@ class RuleGrouper:
             "pattern_type": self._group_by_pattern_type,
             "complexity": self._group_by_complexity,
             "context": self._group_by_context,
-            "hybrid": self._group_by_hybrid
+            "hybrid": self._group_by_hybrid,
         }
 
     def group_similar_rules(self, rules: list[EnhancedRule], strategy: str = "hybrid") -> list[dict[str, Any]]:
@@ -46,10 +46,7 @@ class RuleGrouper:
         result = []
         for pattern, group_rules in groups.items():
             if len(group_rules) == 1:
-                result.append({
-                    "type": "individual",
-                    "rule": group_rules[0].dict()
-                })
+                result.append({"type": "individual", "rule": group_rules[0].dict()})
             else:
                 result.append(self._create_pattern_group(pattern, group_rules))
 
@@ -68,10 +65,7 @@ class RuleGrouper:
         result = []
         for complexity, group_rules in groups.items():
             if len(group_rules) == 1:
-                result.append({
-                    "type": "individual",
-                    "rule": group_rules[0].dict()
-                })
+                result.append({"type": "individual", "rule": group_rules[0].dict()})
             else:
                 result.append(self._create_complexity_group(complexity, group_rules))
 
@@ -91,10 +85,7 @@ class RuleGrouper:
         result = []
         for context_key, group_rules in groups.items():
             if len(group_rules) == 1:
-                result.append({
-                    "type": "individual",
-                    "rule": group_rules[0].dict()
-                })
+                result.append({"type": "individual", "rule": group_rules[0].dict()})
             else:
                 result.append(self._create_context_group(context_key, group_rules))
 
@@ -115,10 +106,7 @@ class RuleGrouper:
 
         for pattern, pattern_rules in pattern_groups.items():
             if len(pattern_rules) == 1:
-                result.append({
-                    "type": "individual",
-                    "rule": pattern_rules[0].dict()
-                })
+                result.append({"type": "individual", "rule": pattern_rules[0].dict()})
             elif len(pattern_rules) <= 3:
                 # Small groups - create simple pattern group
                 result.append(self._create_pattern_group(pattern, pattern_rules))
@@ -144,17 +132,13 @@ class RuleGrouper:
         result = []
         for complexity, complexity_rules in complexity_groups.items():
             if len(complexity_rules) <= 3:
-                result.append(self._create_mixed_group(
-                    f"{rules[0].metadata.pattern_type}_{complexity}",
-                    complexity_rules
-                ))
+                result.append(
+                    self._create_mixed_group(f"{rules[0].metadata.pattern_type}_{complexity}", complexity_rules)
+                )
             else:
                 # Still too large, create individual rules
                 for rule in complexity_rules:
-                    result.append({
-                        "type": "individual",
-                        "rule": rule.dict()
-                    })
+                    result.append({"type": "individual", "rule": rule.dict()})
 
         return result
 
@@ -182,10 +166,11 @@ class RuleGrouper:
                     "specific_context": rule.context if rule.context != common_context else None,
                     "complexity": rule.metadata.complexity,
                     "rule_type": rule.metadata.rule_type,
-                    "has_eslint_rule": rule.has_eslint_rule
-                } for rule in rules
+                    "has_eslint_rule": rule.has_eslint_rule,
+                }
+                for rule in rules
             ],
-            "tokens": self._estimate_group_tokens(rules, "pattern")
+            "tokens": self._estimate_group_tokens(rules, "pattern"),
         }
 
     def _create_complexity_group(self, complexity: str, rules: list[EnhancedRule]) -> dict[str, Any]:
@@ -202,10 +187,11 @@ class RuleGrouper:
                     "rule": rule.rule,
                     "pattern_type": rule.metadata.pattern_type,
                     "example": rule.examples.minimal or rule.examples.standard,
-                    "has_eslint_rule": rule.has_eslint_rule
-                } for rule in rules
+                    "has_eslint_rule": rule.has_eslint_rule,
+                }
+                for rule in rules
             ],
-            "tokens": self._estimate_group_tokens(rules, "complexity")
+            "tokens": self._estimate_group_tokens(rules, "complexity"),
         }
 
     def _create_context_group(self, context_key: str, rules: list[EnhancedRule]) -> dict[str, Any]:
@@ -222,10 +208,11 @@ class RuleGrouper:
                     "rule": rule.rule,
                     "pattern_type": rule.metadata.pattern_type,
                     "specific_example": rule.examples.minimal,
-                    "has_eslint_rule": rule.has_eslint_rule
-                } for rule in rules
+                    "has_eslint_rule": rule.has_eslint_rule,
+                }
+                for rule in rules
             ],
-            "tokens": self._estimate_group_tokens(rules, "context")
+            "tokens": self._estimate_group_tokens(rules, "context"),
         }
 
     def _create_mixed_group(self, group_id: str, rules: list[EnhancedRule]) -> dict[str, Any]:
@@ -244,10 +231,11 @@ class RuleGrouper:
                     "pattern_type": rule.metadata.pattern_type,
                     "complexity": rule.metadata.complexity,
                     "example": rule.examples.minimal or rule.examples.standard,
-                    "has_eslint_rule": rule.has_eslint_rule
-                } for rule in rules
+                    "has_eslint_rule": rule.has_eslint_rule,
+                }
+                for rule in rules
             ],
-            "tokens": self._estimate_group_tokens(rules, "mixed")
+            "tokens": self._estimate_group_tokens(rules, "mixed"),
         }
 
     def _find_common_imports(self, rules: list[EnhancedRule]) -> list[dict[str, Any]]:
@@ -258,28 +246,19 @@ class RuleGrouper:
         # Start with first rule's imports
         common = set()
         if rules[0].importMap:
-            common = {
-                (imp.get("import", ""), imp.get("from", ""))
-                for imp in rules[0].importMap
-            }
+            common = {(imp.get("import", ""), imp.get("from", "")) for imp in rules[0].importMap}
 
         # Find intersection with other rules
         for rule in rules[1:]:
             if rule.importMap:
-                rule_imports = {
-                    (imp.get("import", ""), imp.get("from", ""))
-                    for imp in rule.importMap
-                }
+                rule_imports = {(imp.get("import", ""), imp.get("from", "")) for imp in rule.importMap}
                 common &= rule_imports
             else:
                 common = set()  # No common imports if any rule has no imports
                 break
 
         # Convert back to list format
-        return [
-            {"import": imp, "from": from_}
-            for imp, from_ in common
-        ]
+        return [{"import": imp, "from": from_} for imp, from_ in common]
 
     def _find_common_context(self, rules: list[EnhancedRule]) -> str:
         """Find common context prefix among rules."""
@@ -395,10 +374,8 @@ class RuleGrouper:
         return {
             "groups": result_groups,
             "total_tokens": current_tokens,
-            "rules_processed": sum(
-                group.get("rule_count", 1) for group in result_groups
-            ),
-            "compression_ratio": current_tokens / sum(rule.tokens.full for rule in new_rules) if new_rules else 0
+            "rules_processed": sum(group.get("rule_count", 1) for group in result_groups),
+            "compression_ratio": current_tokens / sum(rule.tokens.full for rule in new_rules) if new_rules else 0,
         }
 
     def _create_partial_group(self, group: dict[str, Any], available_tokens: int) -> dict[str, Any] | None:

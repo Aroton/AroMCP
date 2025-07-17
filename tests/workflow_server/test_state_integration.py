@@ -25,8 +25,8 @@ class TestCascadingTransformations:
                 "step2": {"from": "computed.step1", "transform": "input + 10"},
                 "step3": {"from": "computed.step2", "transform": "input / 2"},
                 "step4": {"from": "computed.step3", "transform": "input"},
-                "final": {"from": "computed.step4", "transform": "input * 100"}
-            }
+                "final": {"from": "computed.step4", "transform": "input * 100"},
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_cascade"
@@ -52,8 +52,8 @@ class TestCascadingTransformations:
             "computed": {
                 "branch_a": {"from": "raw.source", "transform": "input * 2"},
                 "branch_b": {"from": "raw.source", "transform": "input + 5"},
-                "merge": {"from": ["computed.branch_a", "computed.branch_b"], "transform": "input[0] * input[1]"}
-            }
+                "merge": {"from": ["computed.branch_a", "computed.branch_b"], "transform": "input[0] * input[1]"},
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_diamond"
@@ -77,18 +77,16 @@ class TestCascadingTransformations:
             "computed": {
                 "sum_ab": {"from": ["raw.a", "raw.b"], "transform": "input[0] + input[1]"},
                 "product_bc": {"from": ["raw.b", "raw.c"], "transform": "input[0] * input[1]"},
-                "final": {"from": ["computed.sum_ab", "computed.product_bc"], "transform": "input[0] + input[1]"}
-            }
+                "final": {"from": ["computed.sum_ab", "computed.product_bc"], "transform": "input[0] + input[1]"},
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_multiple"
 
         # When
-        manager.update(workflow_id, [
-            {"path": "raw.a", "value": 2},
-            {"path": "raw.b", "value": 3},
-            {"path": "raw.c", "value": 4}
-        ])
+        manager.update(
+            workflow_id, [{"path": "raw.a", "value": 2}, {"path": "raw.b", "value": 3}, {"path": "raw.c", "value": 4}]
+        )
         state = manager.read(workflow_id)
 
         # Then
@@ -108,19 +106,13 @@ class TestComplexDependencyGraphs:
 
         # Create 10 first-level dependencies
         for i in range(10):
-            schema["computed"][f"level1_{i}"] = {
-                "from": "raw.base",
-                "transform": f"input + {i}"
-            }
+            schema["computed"][f"level1_{i}"] = {"from": "raw.base", "transform": f"input + {i}"}
 
         # Create 10 second-level dependencies (each depends on 2 first-level)
         for i in range(10):
             dep1 = f"computed.level1_{i % 10}"
             dep2 = f"computed.level1_{(i + 1) % 10}"
-            schema["computed"][f"level2_{i}"] = {
-                "from": [dep1, dep2],
-                "transform": "input[0] + input[1]"
-            }
+            schema["computed"][f"level2_{i}"] = {"from": [dep1, dep2], "transform": "input[0] + input[1]"}
 
         manager = StateManager(schema)
         workflow_id = "wf_large"
@@ -146,18 +138,15 @@ class TestComplexDependencyGraphs:
                 "scaled": {"from": ["computed.doubled", "state.multiplier"], "transform": "input[0] * input[1]"},
                 "combined": {
                     "from": ["raw.counter", "state.multiplier", "computed.scaled"],
-                    "transform": "input[0] + input[1] + input[2]"
-                }
-            }
+                    "transform": "input[0] + input[1] + input[2]",
+                },
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_mixed"
 
         # When
-        manager.update(workflow_id, [
-            {"path": "raw.counter", "value": 5},
-            {"path": "state.multiplier", "value": 3}
-        ])
+        manager.update(workflow_id, [{"path": "raw.counter", "value": 5}, {"path": "state.multiplier", "value": 3}])
         state = manager.read(workflow_id)
 
         # Then
@@ -178,13 +167,10 @@ class TestRealWorldTransformationExamples:
             "computed": {
                 "parsed_files": {
                     "from": "raw.git_output",
-                    "transform": "input.split('\\n').filter(l => l.trim()).map(l => l.trim())"
+                    "transform": "input.split('\\n').filter(l => l.trim()).map(l => l.trim())",
                 },
-                "file_count": {
-                    "from": "computed.parsed_files",
-                    "transform": "input.length"
-                }
-            }
+                "file_count": {"from": "computed.parsed_files", "transform": "input.length"},
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_git"
@@ -202,41 +188,29 @@ class TestRealWorldTransformationExamples:
         """Test user data aggregation and formatting"""
         # Given
         schema = {
-            "raw": {
-                "users": "array",
-                "department": "string"
-            },
+            "raw": {"users": "array", "department": "string"},
             "computed": {
-                "adult_users": {
-                    "from": "raw.users",
-                    "transform": "input.filter(u => u.age >= 18)"
-                },
+                "adult_users": {"from": "raw.users", "transform": "input.filter(u => u.age >= 18)"},
                 "user_summary": {
                     "from": ["computed.adult_users", "raw.department"],
                     "transform": (
-                        "`${input[1]}: ${input[0].length} adult users "
-                        "(${input[0].map(u => u.name).join(', ')})`"
-                    )
+                        "`${input[1]}: ${input[0].length} adult users (${input[0].map(u => u.name).join(', ')})`"
+                    ),
                 },
                 "average_age": {
                     "from": "computed.adult_users",
-                    "transform": "Math.round(input.reduce((sum, u) => sum + u.age, 0) / input.length)"
-                }
-            }
+                    "transform": "Math.round(input.reduce((sum, u) => sum + u.age, 0) / input.length)",
+                },
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_users"
 
         # When
-        users = [
-            {"name": "Alice", "age": 25},
-            {"name": "Bob", "age": 17},
-            {"name": "Charlie", "age": 30}
-        ]
-        manager.update(workflow_id, [
-            {"path": "raw.users", "value": users},
-            {"path": "raw.department", "value": "Engineering"}
-        ])
+        users = [{"name": "Alice", "age": 25}, {"name": "Bob", "age": 17}, {"name": "Charlie", "age": 30}]
+        manager.update(
+            workflow_id, [{"path": "raw.users", "value": users}, {"path": "raw.department", "value": "Engineering"}]
+        )
         state = manager.read(workflow_id)
 
         # Then
@@ -262,13 +236,13 @@ class TestRealWorldTransformationExamples:
                         endpoint: input.endpoint || 'http://localhost:3000'
                     })""",
                     "on_error": "use_fallback",
-                    "fallback": {"timeout": 30000, "retries": 3, "debug": False, "endpoint": "http://localhost:3000"}
+                    "fallback": {"timeout": 30000, "retries": 3, "debug": False, "endpoint": "http://localhost:3000"},
                 },
                 "is_valid": {
                     "from": "computed.validated_config",
-                    "transform": "input.endpoint.startsWith('http') && input.timeout > 0"
-                }
-            }
+                    "transform": "input.endpoint.startsWith('http') && input.timeout > 0",
+                },
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_config"
@@ -322,15 +296,9 @@ class TestPerformanceLargeState:
         schema = {
             "raw": {"large_array": "array"},
             "computed": {
-                "filtered": {
-                    "from": "raw.large_array",
-                    "transform": "input.filter(x => x % 2 === 0)"
-                },
-                "mapped": {
-                    "from": "computed.filtered",
-                    "transform": "input.map(x => x * 2)"
-                }
-            }
+                "filtered": {"from": "raw.large_array", "transform": "input.filter(x => x % 2 === 0)"},
+                "mapped": {"from": "computed.filtered", "transform": "input.map(x => x * 2)"},
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_perf_transform"
@@ -367,9 +335,9 @@ class TestErrorHandlingStrategies:
                     "from": "raw.json_string",
                     "transform": "JSON.parse(input)",
                     "on_error": "use_fallback",
-                    "fallback": {"error": "invalid_json"}
+                    "fallback": {"error": "invalid_json"},
                 }
-            }
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_fallback"
@@ -387,18 +355,15 @@ class TestErrorHandlingStrategies:
         schema = {
             "raw": {"divisor": "number"},
             "computed": {
-                "result": {
-                    "from": "raw.divisor",
-                    "transform": "input.nonexistent.property",
-                    "on_error": "propagate"
-                }
-            }
+                "result": {"from": "raw.divisor", "transform": "input.nonexistent.property", "on_error": "propagate"}
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_propagate"
 
         # When/Then - Should propagate error when transformation fails
         from aromcp.workflow_server.state.models import ComputedFieldError
+
         with pytest.raises(ComputedFieldError):
             manager.update(workflow_id, [{"path": "raw.divisor", "value": 0}])
 
@@ -408,16 +373,9 @@ class TestErrorHandlingStrategies:
         schema = {
             "raw": {"data": "any"},
             "computed": {
-                "processed": {
-                    "from": "raw.data",
-                    "transform": "input.nonexistent.method()",
-                    "on_error": "ignore"
-                },
-                "other": {
-                    "from": "raw.data",
-                    "transform": "input.toString()"
-                }
-            }
+                "processed": {"from": "raw.data", "transform": "input.nonexistent.method()", "on_error": "ignore"},
+                "other": {"from": "raw.data", "transform": "input.toString()"},
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_ignore"

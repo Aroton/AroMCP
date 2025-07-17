@@ -12,7 +12,7 @@ def extract_method_signatures_impl(
     file_paths: str | list[str],
     include_docstrings: bool = True,
     include_decorators: bool = True,
-    expand_patterns: bool = True
+    expand_patterns: bool = True,
 ) -> list[dict[str, Any]]:
     """Parse code files to extract function/method signatures programmatically.
 
@@ -33,12 +33,7 @@ def extract_method_signatures_impl(
         # Validate and normalize project root
         project_path = Path(project_root).resolve()
         if not project_path.exists():
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": f"Project root does not exist: {project_root}"
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": f"Project root does not exist: {project_root}"}}
 
         # Normalize file_paths to a list
         if isinstance(file_paths, str):
@@ -50,13 +45,12 @@ def extract_method_signatures_impl(
         if expand_patterns:
             expanded_paths = []
             for file_path in input_paths:
-                if any(char in file_path for char in ['*', '?', '[', ']']):
+                if any(char in file_path for char in ["*", "?", "[", "]"]):
                     # This looks like a glob pattern
                     matches = list(project_path.glob(file_path))
                     if matches:
                         for match in matches:
-                            if (match.is_file() and
-                                match.suffix.lower() in ['.py', '.js', '.ts', '.jsx', '.tsx']):
+                            if match.is_file() and match.suffix.lower() in [".py", ".js", ".ts", ".jsx", ".tsx"]:
                                 try:
                                     rel_path = match.relative_to(project_path)
                                     expanded_paths.append(str(rel_path))
@@ -91,35 +85,22 @@ def extract_method_signatures_impl(
                 abs_file_path = validate_file_path_legacy(file_path, project_path)
 
                 if not abs_file_path.exists():
-                    errors.append({
-                        "file": file_path,
-                        "error": "File not found"
-                    })
+                    errors.append({"file": file_path, "error": "File not found"})
                     continue
 
                 if not abs_file_path.is_file():
-                    errors.append({
-                        "file": file_path,
-                        "error": "Path is not a file"
-                    })
+                    errors.append({"file": file_path, "error": "Path is not a file"})
                     continue
 
                 # Determine file type and parse accordingly
                 file_extension = abs_file_path.suffix.lower()
 
-                if file_extension == '.py':
-                    signatures = _extract_python_signatures(
-                        abs_file_path, include_docstrings, include_decorators
-                    )
-                elif file_extension in ['.js', '.ts', '.jsx', '.tsx']:
-                    signatures = _extract_javascript_signatures(
-                        abs_file_path, include_docstrings, include_decorators
-                    )
+                if file_extension == ".py":
+                    signatures = _extract_python_signatures(abs_file_path, include_docstrings, include_decorators)
+                elif file_extension in [".js", ".ts", ".jsx", ".tsx"]:
+                    signatures = _extract_javascript_signatures(abs_file_path, include_docstrings, include_decorators)
                 else:
-                    errors.append({
-                        "file": file_path,
-                        "error": f"Unsupported file type: {file_extension}"
-                    })
+                    errors.append({"file": file_path, "error": f"Unsupported file type: {file_extension}"})
                     continue
 
                 # Add file information to each signature and collect in flat list
@@ -131,10 +112,7 @@ def extract_method_signatures_impl(
                 files_processed += 1
 
             except Exception as e:
-                errors.append({
-                    "file": file_path,
-                    "error": str(e)
-                })
+                errors.append({"file": file_path, "error": str(e)})
 
         # Return simple list of signatures
         return all_signatures
@@ -143,17 +121,13 @@ def extract_method_signatures_impl(
         raise ValueError(f"Failed to extract signatures: {str(e)}") from e
 
 
-
-
 def _extract_python_signatures(
-    file_path: Path,
-    include_docstrings: bool,
-    include_decorators: bool
+    file_path: Path, include_docstrings: bool, include_decorators: bool
 ) -> list[dict[str, Any]]:
     """Extract signatures from Python files using AST."""
 
     try:
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         tree = ast.parse(content)
@@ -169,17 +143,14 @@ def _extract_python_signatures(
                     "name": node.name,
                     "type": "class",
                     "line": node.lineno,
-                    "end_line": getattr(node, 'end_lineno', None),
+                    "end_line": getattr(node, "end_lineno", None),
                     "signature": f"class {node.name}",
-                    "docstring": (
-                        ast.get_docstring(node) if include_docstrings else None
-                    ),
+                    "docstring": (ast.get_docstring(node) if include_docstrings else None),
                     "decorators": (
-                        [self._get_decorator_name(d) for d in node.decorator_list]
-                        if include_decorators else []
+                        [self._get_decorator_name(d) for d in node.decorator_list] if include_decorators else []
                     ),
                     "bases": [self._get_base_name(base) for base in node.bases],
-                    "methods": []
+                    "methods": [],
                 }
 
                 # Build full signature with bases
@@ -253,15 +224,14 @@ def _extract_python_signatures(
                     "name": node.name,
                     "type": actual_type,
                     "line": node.lineno,
-                    "end_line": getattr(node, 'end_lineno', None),
+                    "end_line": getattr(node, "end_lineno", None),
                     "signature": signature,
                     "parameters": args,
                     "docstring": ast.get_docstring(node) if include_docstrings else None,
                     "decorators": (
-                        [self._get_decorator_name(d) for d in node.decorator_list]
-                        if include_decorators else []
+                        [self._get_decorator_name(d) for d in node.decorator_list] if include_decorators else []
                     ),
-                    "is_async": func_type == "async_function"
+                    "is_async": func_type == "async_function",
                 }
 
                 if is_method:
@@ -339,29 +309,71 @@ def _extract_python_signatures(
 
 
 def _extract_javascript_signatures(
-    file_path: Path,
-    include_docstrings: bool,
-    include_decorators: bool
+    file_path: Path, include_docstrings: bool, include_decorators: bool
 ) -> list[dict[str, Any]]:
     """Extract signatures from JavaScript/TypeScript files using regex patterns."""
 
     try:
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         signatures = []
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # JavaScript/TypeScript keywords that should not be considered as methods
         control_keywords = {
-            'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default',
-            'try', 'catch', 'finally', 'throw', 'return', 'break', 'continue',
-            'typeof', 'instanceof', 'new', 'delete', 'void', 'this', 'super',
-            'with', 'debugger', 'var', 'let', 'const', 'import', 'export',
-            'from', 'as', 'yield', 'await', 'async', 'function', 'class',
-            'extends', 'implements', 'interface', 'type', 'enum', 'namespace',
-            'module', 'declare', 'abstract', 'public', 'private', 'protected',
-            'static', 'readonly', 'get', 'set'
+            "if",
+            "else",
+            "for",
+            "while",
+            "do",
+            "switch",
+            "case",
+            "default",
+            "try",
+            "catch",
+            "finally",
+            "throw",
+            "return",
+            "break",
+            "continue",
+            "typeof",
+            "instanceof",
+            "new",
+            "delete",
+            "void",
+            "this",
+            "super",
+            "with",
+            "debugger",
+            "var",
+            "let",
+            "const",
+            "import",
+            "export",
+            "from",
+            "as",
+            "yield",
+            "await",
+            "async",
+            "function",
+            "class",
+            "extends",
+            "implements",
+            "interface",
+            "type",
+            "enum",
+            "namespace",
+            "module",
+            "declare",
+            "abstract",
+            "public",
+            "private",
+            "protected",
+            "static",
+            "readonly",
+            "get",
+            "set",
         }
 
         # Track class context to properly identify methods
@@ -372,39 +384,36 @@ def _extract_javascript_signatures(
         patterns = [
             # Regular function declarations (top-level only)
             (
-                r'^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{',
-                'function'
+                r"^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{",
+                "function",
             ),
             # Arrow functions (top-level assignments)
-            (
-                r'^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\((.*?)\)|(\w+))\s*=>\s*',
-                'arrow_function'
-            ),
+            (r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:\((.*?)\)|(\w+))\s*=>\s*", "arrow_function"),
             # Class declarations
             (
-                r'^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?(?:\s+implements\s+([^{]+))?\s*{',
-                'class'
+                r"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?(?:\s+implements\s+([^{]+))?\s*{",
+                "class",
             ),
             # Interface declarations (TypeScript)
-            (r'^\s*(?:export\s+)?interface\s+(\w+)(?:\s+extends\s+([^{]+))?\s*{', 'interface'),
+            (r"^\s*(?:export\s+)?interface\s+(\w+)(?:\s+extends\s+([^{]+))?\s*{", "interface"),
             # Type declarations (TypeScript)
-            (r'^\s*(?:export\s+)?type\s+(\w+)\s*=\s*([^;]+);?', 'type'),
+            (r"^\s*(?:export\s+)?type\s+(\w+)\s*=\s*([^;]+);?", "type"),
             # Method definitions (only when inside a class)
             (
-                r'^\s*(?:(async|static|private|protected|public|readonly)\s+)*(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{',
-                'method'
+                r"^\s*(?:(async|static|private|protected|public|readonly)\s+)*(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?\s*{",
+                "method",
             ),
         ]
 
         for line_num, line in enumerate(lines, 1):
             # Track brace depth to understand class context
-            brace_depth += line.count('{') - line.count('}')
+            brace_depth += line.count("{") - line.count("}")
 
             for pattern, sig_type in patterns:
                 match = re.match(pattern, line)
                 if match:
                     # Special handling for method pattern
-                    if sig_type == 'method':
+                    if sig_type == "method":
                         # Extract method name - it's group 2 in our method pattern
                         method_name = match.group(2)
 
@@ -421,7 +430,7 @@ def _extract_javascript_signatures(
                         signatures.append(signature_info)
 
                         # Update class context tracking
-                        if sig_type in ['class', 'interface']:
+                        if sig_type in ["class", "interface"]:
                             class_depth += 1
 
             # Update class context when we exit a class
@@ -437,7 +446,7 @@ def _extract_javascript_signatures(
 def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
     """Parse JavaScript/TypeScript signature from regex match."""
 
-    if sig_type == 'function':
+    if sig_type == "function":
         name = match.group(1)
         params = match.group(2)
         return_type = match.group(3)
@@ -448,10 +457,10 @@ def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
             "line": line_num,
             "signature": f"function {name}({params})" + (f": {return_type.strip()}" if return_type else ""),
             "parameters": _parse_js_params(params),
-            "return_type": return_type.strip() if return_type else None
+            "return_type": return_type.strip() if return_type else None,
         }
 
-    elif sig_type == 'arrow_function':
+    elif sig_type == "arrow_function":
         name = match.group(1)
         params = match.group(2) or match.group(3)
 
@@ -460,10 +469,10 @@ def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
             "type": "arrow_function",
             "line": line_num,
             "signature": f"const {name} = ({params}) =>",
-            "parameters": _parse_js_params(params) if params else []
+            "parameters": _parse_js_params(params) if params else [],
         }
 
-    elif sig_type == 'method':
+    elif sig_type == "method":
         # New pattern: (async|static|private|protected|public|readonly)\s+)*(\w+)\s*\((.*?)\)(?:\s*:\s*([^{]+?))?
         # Group 1: modifiers (could be None if no modifiers)
         # Group 2: method name
@@ -475,8 +484,8 @@ def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
         params = match.group(3)
         return_type = match.group(4) if len(match.groups()) >= 4 else None
 
-        is_async = 'async' in modifiers
-        is_static = 'static' in modifiers
+        is_async = "async" in modifiers
+        is_static = "static" in modifiers
 
         # Build signature with modifiers
         signature_parts = []
@@ -495,7 +504,7 @@ def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
             "signature": signature,
             "parameters": _parse_js_params(params),
             "return_type": return_type.strip() if return_type else None,
-            "is_async": is_async
+            "is_async": is_async,
         }
 
         if is_static:
@@ -503,7 +512,7 @@ def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
 
         return method_info
 
-    elif sig_type == 'class':
+    elif sig_type == "class":
         name = match.group(1)
         extends = match.group(2)
 
@@ -511,15 +520,9 @@ def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
         if extends:
             signature += f" extends {extends}"
 
-        return {
-            "name": name,
-            "type": "class",
-            "line": line_num,
-            "signature": signature,
-            "extends": extends
-        }
+        return {"name": name, "type": "class", "line": line_num, "signature": signature, "extends": extends}
 
-    elif sig_type == 'interface':
+    elif sig_type == "interface":
         name = match.group(1)
         extends = match.group(2)
 
@@ -532,10 +535,10 @@ def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
             "type": "interface",
             "line": line_num,
             "signature": signature,
-            "extends": extends.strip() if extends else None
+            "extends": extends.strip() if extends else None,
         }
 
-    elif sig_type == 'type':
+    elif sig_type == "type":
         name = match.group(1)
         definition = match.group(2)
 
@@ -544,7 +547,7 @@ def _parse_js_signature(match, sig_type, line, line_num, is_in_class=False):
             "type": "type_alias",
             "line": line_num,
             "signature": f"type {name} = {definition.strip()}",
-            "definition": definition.strip()
+            "definition": definition.strip(),
         }
 
     return None
@@ -557,30 +560,30 @@ def _parse_js_params(params_str):
 
     params = []
     # Simple parsing - could be enhanced for complex types
-    for param in params_str.split(','):
+    for param in params_str.split(","):
         param = param.strip()
         if not param:
             continue
 
         # Handle optional parameters
-        is_optional = '?' in param
+        is_optional = "?" in param
 
         # Handle default values
         default_value = None
-        if '=' in param:
-            param_parts = param.split('=')
+        if "=" in param:
+            param_parts = param.split("=")
             param = param_parts[0].strip()
             default_value = param_parts[1].strip()
 
         # Handle type annotations
         param_type = None
-        if ':' in param:
-            param_parts = param.split(':')
+        if ":" in param:
+            param_parts = param.split(":")
             param = param_parts[0].strip()
             param_type = param_parts[1].strip()
 
         # Remove optional marker
-        if param.endswith('?'):
+        if param.endswith("?"):
             param = param[:-1]
             is_optional = True
 

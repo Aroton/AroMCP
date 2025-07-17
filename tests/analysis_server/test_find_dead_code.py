@@ -1,6 +1,5 @@
 """Tests for find_dead_code tool."""
 
-
 from aromcp.analysis_server.tools.find_dead_code import find_dead_code_impl
 
 
@@ -11,7 +10,7 @@ class TestFindDeadCode:
         """Test basic dead code detection functionality."""
         # Create files with dead code
         main_file = tmp_path / "main.py"
-        main_file.write_text('''
+        main_file.write_text("""
 def used_function():
     return "This function is used"
 
@@ -21,10 +20,10 @@ def unused_function():
 if __name__ == "__main__":
     result = used_function()
     print(result)
-''')
+""")
 
         utils_file = tmp_path / "utils.py"
-        utils_file.write_text('''
+        utils_file.write_text("""
 def helper_function():
     return "helper"
 
@@ -34,13 +33,10 @@ def dead_helper():
 class UnusedClass:
     def method(self):
         pass
-''')
+""")
 
         # Run dead code analysis
-        result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.7
-        )
+        result = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.7)
 
         # Verify result structure
         assert "data" in result
@@ -64,27 +60,27 @@ class UnusedClass:
         """Test automatic entry point detection."""
         # Create main file
         main_file = tmp_path / "main.py"
-        main_file.write_text('''
+        main_file.write_text("""
 def main():
     print("Main function")
 
 if __name__ == "__main__":
     main()
-''')
+""")
 
         # Create another file with __main__ check
         app_file = tmp_path / "app.py"
-        app_file.write_text('''
+        app_file.write_text("""
 def run_app():
     print("Running app")
 
 if __name__ == "__main__":
     run_app()
-''')
+""")
 
         result = find_dead_code_impl(
             project_root=str(tmp_path),
-            entry_points=None  # Auto-detect
+            entry_points=None,  # Auto-detect
         )
 
         assert "data" in result
@@ -99,26 +95,24 @@ if __name__ == "__main__":
         """Test using custom entry points."""
         # Create files
         main_file = tmp_path / "main.py"
-        main_file.write_text('''
+        main_file.write_text("""
 def main_function():
     from utils import used_utility
     return used_utility()
-''')
+""")
 
         utils_file = tmp_path / "utils.py"
-        utils_file.write_text('''
+        utils_file.write_text("""
 def used_utility():
     return "used"
 
 def unused_utility():
     return "not used"
-''')
+""")
 
         # Specify custom entry point
         result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            entry_points=[str(main_file)],
-            confidence_threshold=0.8
+            project_root=str(tmp_path), entry_points=[str(main_file)], confidence_threshold=0.8
         )
 
         assert "data" in result
@@ -132,32 +126,26 @@ def unused_utility():
         """Test including test files as entry points."""
         # Create test file
         test_file = tmp_path / "test_example.py"
-        test_file.write_text('''
+        test_file.write_text("""
 def test_something():
     assert True
 
 def test_another():
     assert False
-''')
+""")
 
         # Create main file
         main_file = tmp_path / "main.py"
-        main_file.write_text('''
+        main_file.write_text("""
 def production_function():
     return "prod"
-''')
+""")
 
         # Without including tests
-        result1 = find_dead_code_impl(
-            project_root=str(tmp_path),
-            include_tests=False
-        )
+        result1 = find_dead_code_impl(project_root=str(tmp_path), include_tests=False)
 
         # With including tests
-        result2 = find_dead_code_impl(
-            project_root=str(tmp_path),
-            include_tests=True
-        )
+        result2 = find_dead_code_impl(project_root=str(tmp_path), include_tests=True)
 
         # Should have different entry points
         entry_points1 = result1["data"]["entry_points"]
@@ -169,7 +157,7 @@ def production_function():
         """Test confidence threshold filtering."""
         # Create file with code of varying usage patterns
         test_file = tmp_path / "test.py"
-        test_file.write_text('''
+        test_file.write_text("""
 def definitely_unused():
     return "never called"
 
@@ -182,19 +170,13 @@ def used_function():
 
 if __name__ == "__main__":
     result = used_function()
-''')
+""")
 
         # Test with high confidence threshold
-        result_high = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.9
-        )
+        result_high = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.9)
 
         # Test with low confidence threshold
-        result_low = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.5
-        )
+        result_low = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.5)
 
         # High threshold should find fewer candidates
         candidates_high = result_high["data"]["dead_code_candidates"]
@@ -206,7 +188,7 @@ if __name__ == "__main__":
         """Test dead code detection in JavaScript files."""
         # Create JavaScript file
         js_file = tmp_path / "app.js"
-        js_file.write_text('''
+        js_file.write_text("""
 function usedFunction() {
     return "used";
 }
@@ -227,12 +209,9 @@ class UnusedClass {
 if (require.main === module) {
     console.log(usedFunction());
 }
-''')
+""")
 
-        result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.7
-        )
+        result = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.7)
 
         assert "data" in result
         candidates = result["data"]["dead_code_candidates"]
@@ -244,17 +223,17 @@ if (require.main === module) {
         """Test dead code detection in mixed language project."""
         # Create Python file
         py_file = tmp_path / "module.py"
-        py_file.write_text('''
+        py_file.write_text("""
 def python_function():
     return "python"
 
 def unused_python():
     return "unused"
-''')
+""")
 
         # Create JavaScript file
         js_file = tmp_path / "script.js"
-        js_file.write_text('''
+        js_file.write_text("""
 function jsFunction() {
     return "javascript";
 }
@@ -262,11 +241,11 @@ function jsFunction() {
 function unusedJs() {
     return "unused";
 }
-''')
+""")
 
         # Create TypeScript file
         ts_file = tmp_path / "app.ts"
-        ts_file.write_text('''
+        ts_file.write_text("""
 function tsFunction(): string {
     return "typescript";
 }
@@ -277,12 +256,9 @@ function unusedTs(): string {
 
 // Use some functions
 console.log(tsFunction());
-''')
+""")
 
-        result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.6
-        )
+        result = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.6)
 
         assert "data" in result
         result["data"]["dead_code_candidates"]
@@ -293,10 +269,7 @@ console.log(tsFunction());
 
     def test_invalid_project_root(self):
         """Test handling of invalid project root."""
-        result = find_dead_code_impl(
-            project_root="/nonexistent/path",
-            confidence_threshold=0.7
-        )
+        result = find_dead_code_impl(project_root="/nonexistent/path", confidence_threshold=0.7)
 
         assert "error" in result
         assert result["error"]["code"] == "NOT_FOUND"
@@ -304,16 +277,10 @@ console.log(tsFunction());
     def test_invalid_confidence_threshold(self, tmp_path):
         """Test handling of invalid confidence threshold."""
         # Test threshold too high
-        result1 = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=1.5
-        )
+        result1 = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=1.5)
 
         # Test threshold too low
-        result2 = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=-0.1
-        )
+        result2 = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=-0.1)
 
         assert "error" in result1
         assert result1["error"]["code"] == "INVALID_INPUT"
@@ -327,10 +294,7 @@ console.log(tsFunction());
         readme_file = tmp_path / "README.md"
         readme_file.write_text("# Empty Project")
 
-        result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.7
-        )
+        result = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.7)
 
         # Should handle gracefully
         assert "data" in result or "error" in result
@@ -342,7 +306,7 @@ console.log(tsFunction());
         # Create multiple files with various patterns
         for i in range(10):
             file_path = tmp_path / f"module_{i}.py"
-            file_path.write_text(f'''
+            file_path.write_text(f"""
 def public_function_{i}():
     return "public_{i}"
 
@@ -358,23 +322,20 @@ class Class{i}:
 
     def unused_method(self):
         return "unused_{i}"
-''')
+""")
 
         # Create main file that uses some functions
         main_file = tmp_path / "main.py"
-        main_file.write_text('''
+        main_file.write_text("""
 from module_0 import public_function_0
 from module_1 import public_function_1
 
 if __name__ == "__main__":
     print(public_function_0())
     print(public_function_1())
-''')
+""")
 
-        result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.8
-        )
+        result = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.8)
 
         assert "data" in result
 
@@ -390,7 +351,7 @@ if __name__ == "__main__":
         """Test the structure of usage analysis results."""
         # Create test file
         test_file = tmp_path / "analysis_test.py"
-        test_file.write_text('''
+        test_file.write_text("""
 def function_a():
     return function_b()
 
@@ -411,12 +372,9 @@ if __name__ == "__main__":
     result = function_a()
     instance = TestClass()
     instance.method_a()
-''')
+""")
 
-        result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.5
-        )
+        result = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.5)
 
         assert "data" in result
         usage_analysis = result["data"]["usage_analysis"]
@@ -439,7 +397,7 @@ if __name__ == "__main__":
         """Test generation of actionable recommendations."""
         # Create file with obvious dead code
         test_file = tmp_path / "recommendations_test.py"
-        test_file.write_text('''
+        test_file.write_text("""
 def used_function():
     return "used"
 
@@ -451,12 +409,9 @@ def another_unused():
 
 if __name__ == "__main__":
     print(used_function())
-''')
+""")
 
-        result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.8
-        )
+        result = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.8)
 
         assert "data" in result
         recommendations = result["data"]["recommendations"]
@@ -476,7 +431,7 @@ if __name__ == "__main__":
         """Test handling of Python AST parsing edge cases."""
         # Create file with syntax errors
         invalid_file = tmp_path / "invalid.py"
-        invalid_file.write_text('''
+        invalid_file.write_text("""
 def valid_function():
     return "valid"
 
@@ -487,12 +442,9 @@ def invalid_function(
 
 def another_valid():
     return "valid"
-''')
+""")
 
-        result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.5
-        )
+        result = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.5)
 
         # Should handle syntax errors gracefully
         assert "data" in result or "error" in result
@@ -505,7 +457,7 @@ def another_valid():
         """Test tracking of imports and their usage."""
         # Create module file
         module_file = tmp_path / "mymodule.py"
-        module_file.write_text('''
+        module_file.write_text("""
 def exported_function():
     return "exported"
 
@@ -519,23 +471,20 @@ class ExportedClass:
 class UnusedClass:
     def method(self):
         return "unused class"
-''')
+""")
 
         # Create main file that imports some things
         main_file = tmp_path / "main.py"
-        main_file.write_text('''
+        main_file.write_text("""
 from mymodule import exported_function, ExportedClass
 
 if __name__ == "__main__":
     result = exported_function()
     instance = ExportedClass()
     print(result, instance.method())
-''')
+""")
 
-        result = find_dead_code_impl(
-            project_root=str(tmp_path),
-            confidence_threshold=0.7
-        )
+        result = find_dead_code_impl(project_root=str(tmp_path), confidence_threshold=0.7)
 
         assert "data" in result
         usage_analysis = result["data"]["usage_analysis"]

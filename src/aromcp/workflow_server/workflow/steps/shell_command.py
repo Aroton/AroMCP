@@ -19,12 +19,9 @@ class ShellCommandProcessor:
         Returns:
             Execution result with output and any state updates
         """
-        command = step_definition.get('command')
+        command = step_definition.get("command")
         if not command:
-            return {
-                "status": "failed",
-                "error": "Missing 'command' in shell_command step"
-            }
+            return {"status": "failed", "error": "Missing 'command' in shell_command step"}
 
         try:
             # Execute command (shell=True is intentional for workflow step execution)
@@ -33,31 +30,31 @@ class ShellCommandProcessor:
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=30  # 30 second timeout
+                timeout=30,  # 30 second timeout
             )
 
             output = {
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "returncode": result.returncode,
-                "command": command
+                "command": command,
             }
 
             # Update state if specified
-            state_update = step_definition.get('state_update')
+            state_update = step_definition.get("state_update")
             if state_update:
-                path = state_update.get('path')
-                value_source = state_update.get('value', 'stdout')
+                path = state_update.get("path")
+                value_source = state_update.get("value", "stdout")
 
                 if path:
                     # Determine value to store
-                    if value_source == 'stdout':
+                    if value_source == "stdout":
                         value = result.stdout.strip()
-                    elif value_source == 'stderr':
+                    elif value_source == "stderr":
                         value = result.stderr.strip()
-                    elif value_source == 'returncode':
+                    elif value_source == "returncode":
                         value = result.returncode
-                    elif value_source == 'full_output':
+                    elif value_source == "full_output":
                         value = output
                     else:
                         value = value_source  # Literal value
@@ -66,22 +63,12 @@ class ShellCommandProcessor:
                     updates = [{"path": path, "value": value}]
                     state_manager.update(workflow_id, updates)
 
-            return {
-                "status": "success",
-                "output": output,
-                "execution_type": "internal"
-            }
+            return {"status": "success", "output": output, "execution_type": "internal"}
 
         except subprocess.TimeoutExpired:
-            return {
-                "status": "failed",
-                "error": f"Command timed out after 30 seconds: {command}"
-            }
+            return {"status": "failed", "error": f"Command timed out after 30 seconds: {command}"}
         except Exception as e:
-            return {
-                "status": "failed",
-                "error": f"Command execution failed: {e}"
-            }
+            return {"status": "failed", "error": f"Command execution failed: {e}"}
 
 
 class AgentShellCommandProcessor:
@@ -99,21 +86,18 @@ class AgentShellCommandProcessor:
         Returns:
             Formatted step for agent execution
         """
-        command = step_definition.get('command')
+        command = step_definition.get("command")
         if not command:
-            return {
-                "status": "failed",
-                "error": "Missing 'command' in agent_shell_command step"
-            }
+            return {"status": "failed", "error": "Missing 'command' in agent_shell_command step"}
 
         return {
             "status": "success",
             "agent_action": {
                 "type": "shell_command",
                 "command": command,
-                "reason": step_definition.get('reason', 'Custom command execution'),
-                "capture_output": step_definition.get('capture_output', True),
-                "state_update": step_definition.get('state_update')
+                "reason": step_definition.get("reason", "Custom command execution"),
+                "capture_output": step_definition.get("capture_output", True),
+                "state_update": step_definition.get("state_update"),
             },
-            "execution_type": "agent"
+            "execution_type": "agent",
         }

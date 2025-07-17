@@ -151,7 +151,7 @@ class TestSequentialExecution:
         steps = [
             WorkflowStep(id="step1", type="state_update", definition={"path": "raw.counter", "value": 1}),
             WorkflowStep(id="step2", type="user_message", definition={"message": "Hello"}),
-            WorkflowStep(id="step3", type="state_update", definition={"path": "raw.counter", "value": 2})
+            WorkflowStep(id="step3", type="state_update", definition={"path": "raw.counter", "value": 2}),
         ]
 
         workflow_def = WorkflowDefinition(
@@ -161,7 +161,7 @@ class TestSequentialExecution:
             default_state={"raw": {"counter": 0}},
             state_schema=StateSchema(),
             inputs={},
-            steps=steps
+            steps=steps,
         )
 
         # Start workflow
@@ -202,7 +202,7 @@ class TestSequentialExecution:
 
         steps = [
             WorkflowStep(id="step1", type="state_update", definition={"path": "raw.counter", "value": 1}),
-            WorkflowStep(id="step2", type="user_message", definition={"message": "This will fail"})
+            WorkflowStep(id="step2", type="user_message", definition={"message": "This will fail"}),
         ]
 
         workflow_def = WorkflowDefinition(
@@ -212,7 +212,7 @@ class TestSequentialExecution:
             default_state={"raw": {"counter": 0}},
             state_schema=StateSchema(),
             inputs={},
-            steps=steps
+            steps=steps,
         )
 
         # Start workflow and get first step
@@ -231,8 +231,9 @@ class TestSequentialExecution:
         assert next_step["step"]["id"] == "step2"
 
         # Fail second step
-        completion_result = executor.step_complete(workflow_id, "step2", "failed",
-                                                 error_message="Step execution failed")
+        completion_result = executor.step_complete(
+            workflow_id, "step2", "failed", error_message="Step execution failed"
+        )
         assert completion_result["status"] == "failed"
         assert completion_result["error"] == "Step execution failed"
 
@@ -252,10 +253,7 @@ class TestVariableReplacement:
     def test_variable_replacement_basic(self):
         """Test basic variable replacement."""
         state = {"counter": 5, "name": "test"}
-        step = {
-            "type": "user_message",
-            "message": "Hello {{ name }}, count is {{ counter }}"
-        }
+        step = {"type": "user_message", "message": "Hello {{ name }}, count is {{ counter }}"}
 
         replaced = VariableReplacer.replace(step, state)
 
@@ -268,14 +266,8 @@ class TestVariableReplacement:
         step = {
             "type": "mcp_call",
             "tool": "test_tool",
-            "parameters": {
-                "input": "{{ value }}",
-                "message": "{{ prefix }}: {{ value }}"
-            },
-            "config": {
-                "timeout": 30,
-                "description": "Processing {{ value }} items"
-            }
+            "parameters": {"input": "{{ value }}", "message": "{{ prefix }}: {{ value }}"},
+            "config": {"timeout": 30, "description": "Processing {{ value }} items"},
         }
 
         replaced = VariableReplacer.replace(step, state)
@@ -290,10 +282,7 @@ class TestVariableReplacement:
         state = {"item1": "first", "item2": "second"}
         step = {
             "type": "batch_update",
-            "updates": [
-                {"path": "raw.field1", "value": "{{ item1 }}"},
-                {"path": "raw.field2", "value": "{{ item2 }}"}
-            ]
+            "updates": [{"path": "raw.field1", "value": "{{ item1 }}"}, {"path": "raw.field2", "value": "{{ item2 }}"}],
         }
 
         replaced = VariableReplacer.replace(step, state)
@@ -304,9 +293,7 @@ class TestVariableReplacement:
     def test_variable_replacement_missing_vars(self):
         """Test behavior with missing variables."""
         state = {"existing": "value"}
-        step = {
-            "message": "Existing: {{ existing }}, Missing: {{ missing }}"
-        }
+        step = {"message": "Existing: {{ existing }}, Missing: {{ missing }}"}
 
         replaced = VariableReplacer.replace(step, state)
 
@@ -397,7 +384,7 @@ class TestWorkflowStatusAndManagement:
             default_state={"raw": {"value": 1}},
             state_schema=StateSchema(),
             inputs={},
-            steps=[WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"})]
+            steps=[WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"})],
         )
 
         result = executor.start(workflow_def)
@@ -429,7 +416,7 @@ class TestWorkflowStatusAndManagement:
             default_state={},
             state_schema=StateSchema(),
             inputs={},
-            steps=[WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"})]
+            steps=[WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"})],
         )
 
         workflow_def2 = WorkflowDefinition(
@@ -439,7 +426,7 @@ class TestWorkflowStatusAndManagement:
             default_state={},
             state_schema=StateSchema(),
             inputs={},
-            steps=[WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"})]
+            steps=[WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"})],
         )
 
         result1 = executor.start(workflow_def1)

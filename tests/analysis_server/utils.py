@@ -11,7 +11,7 @@ def create_test_standard(
     tags: list[str] = None,
     severity: str = "error",
     content: str = None,
-    **kwargs
+    **kwargs,
 ) -> str:
     """Create a test standard with specified metadata.
 
@@ -28,7 +28,7 @@ def create_test_standard(
         Complete markdown content with frontmatter
     """
     if name is None:
-        name = standard_id.replace('-', ' ').title()
+        name = standard_id.replace("-", " ").title()
 
     if patterns is None:
         patterns = ["**/*.py"]
@@ -40,17 +40,11 @@ def create_test_standard(
         content = f"# {name}\n\nThis is a test standard for {standard_id}."
 
     # Build frontmatter
-    frontmatter = {
-        "id": standard_id,
-        "name": name,
-        "patterns": patterns,
-        "tags": tags,
-        "severity": severity,
-        **kwargs
-    }
+    frontmatter = {"id": standard_id, "name": name, "patterns": patterns, "tags": tags, "severity": severity, **kwargs}
 
     # Convert to YAML
     import yaml
+
     yaml_content = yaml.dump(frontmatter, default_flow_style=False)
 
     return f"---\n{yaml_content}---\n\n{content}"
@@ -70,8 +64,8 @@ def create_test_standards_directory(temp_dir: str, standards: dict[str, str]) ->
     standards_path.mkdir(parents=True, exist_ok=True)
 
     for filename, content in standards.items():
-        if not filename.endswith('.md'):
-            filename += '.md'
+        if not filename.endswith(".md"):
+            filename += ".md"
         (standards_path / filename).write_text(content)
 
     return standards_path
@@ -119,7 +113,7 @@ def create_sample_project_structure(temp_dir: str) -> dict[str, Path]:
             "docs/api.md",
             "README.md",
             "docs/setup.md",
-        ]
+        ],
     }
 
     created_files = {}
@@ -131,13 +125,13 @@ def create_sample_project_structure(temp_dir: str) -> dict[str, Path]:
             full_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Create simple content based on file type
-            if full_path.suffix == '.py':
+            if full_path.suffix == ".py":
                 content = f"# {full_path.name}\ndef example_function():\n    pass\n"
-            elif full_path.suffix in ['.ts', '.tsx', '.js', '.jsx']:
+            elif full_path.suffix in [".ts", ".tsx", ".js", ".jsx"]:
                 content = f"// {full_path.name}\nexport default function example() {{}}\n"
-            elif full_path.suffix == '.md':
+            elif full_path.suffix == ".md":
                 content = f"# {full_path.stem}\n\nSample documentation.\n"
-            elif full_path.suffix in ['.json', '.yaml', '.yml']:
+            elif full_path.suffix in [".json", ".yaml", ".yml"]:
                 content = "# Sample configuration\nkey: value\n"
             else:
                 content = f"Sample content for {full_path.name}\n"
@@ -160,36 +154,36 @@ def mock_standards_with_overlapping_patterns() -> dict[str, str]:
             name="General Python Standards",
             patterns=["**/*.py"],
             tags=["python", "general"],
-            content="General Python coding standards."
+            content="General Python coding standards.",
         ),
         "api-routes": create_test_standard(
             "api-routes",
             name="API Route Standards",
             patterns=["**/api/**/*.py", "**/routes/**/*.py"],
             tags=["python", "api", "routes"],
-            content="Standards for API route handlers."
+            content="Standards for API route handlers.",
         ),
         "test-files": create_test_standard(
             "test-files",
             name="Test File Standards",
             patterns=["**/test_*.py", "**/*_test.py", "**/tests/**/*.py"],
             tags=["python", "testing"],
-            content="Standards for test files."
+            content="Standards for test files.",
         ),
         "typescript-components": create_test_standard(
             "typescript-components",
             name="TypeScript Component Standards",
             patterns=["**/*.tsx", "**/components/**/*.ts"],
             tags=["typescript", "react", "components"],
-            content="Standards for TypeScript React components."
+            content="Standards for TypeScript React components.",
         ),
         "config-files": create_test_standard(
             "config-files",
             name="Configuration File Standards",
             patterns=["**/*.json", "**/*.yaml", "**/*.yml", "**/config/**/*"],
             tags=["configuration", "json", "yaml"],
-            content="Standards for configuration files."
-        )
+            content="Standards for configuration files.",
+        ),
     }
 
 
@@ -205,8 +199,9 @@ def assert_error_response(result: dict[str, Any], expected_code: str = None):
     assert "message" in result["error"], "Error response missing message"
 
     if expected_code:
-        assert result["error"]["code"] == expected_code, \
+        assert result["error"]["code"] == expected_code, (
             f"Expected error code {expected_code}, got {result['error']['code']}"
+        )
 
 
 def assert_success_response(result: dict[str, Any]):

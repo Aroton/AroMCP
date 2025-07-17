@@ -29,7 +29,7 @@ class TestAddHint:
             "tags": ["test"],
             "appliesTo": ["*.py"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         result = register_impl("standards/test.md", metadata, self.temp_dir)
@@ -38,6 +38,7 @@ class TestAddHint:
     def teardown_method(self):
         """Clean up test environment."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_add_basic_hint(self):
@@ -51,33 +52,28 @@ class TestAddHint:
                 "complexity": "basic",
                 "rule_type": "must",
                 "nextjs_api": ["app-router"],
-                "client_server": "server-only"
+                "client_server": "server-only",
             },
             "compression": {
                 "example_sharable": True,
                 "pattern_extractable": True,
-                "progressive_detail": ["minimal", "standard", "detailed", "full"]
+                "progressive_detail": ["minimal", "standard", "detailed", "full"],
             },
             "examples": {
                 "minimal": "validate(input)",
                 "standard": "const validated = validate(input);",
                 "detailed": "import { validate } from './utils';\nconst validated = validate(input);",
                 "full": "Complete example with error handling",
-                "reference": "See utils/validation.py"
+                "reference": "See utils/validation.py",
             },
-            "tokens": {
-                "minimal": 10,
-                "standard": 25,
-                "detailed": 50,
-                "full": 100
-            },
+            "tokens": {"minimal": 10, "standard": 25, "detailed": 50, "full": 100},
             "relationships": {
                 "similar_rules": ["validate-output"],
                 "prerequisite_rules": [],
-                "see_also": ["error-handling"]
+                "see_also": ["error-handling"],
             },
             "has_eslint_rule": True,
-            "import_map": []
+            "import_map": [],
         }
 
         result = add_hint_impl("test-standard", hint_data, self.temp_dir)
@@ -107,7 +103,7 @@ class TestAddHint:
             "rule": "First rule",
             "rule_id": "rule-1",
             "context": "Context for rule 1",
-            "examples": {"full": "Example 1"}
+            "examples": {"full": "Example 1"},
         }
 
         result1 = add_hint_impl("test-standard", hint1_data, self.temp_dir)
@@ -118,7 +114,7 @@ class TestAddHint:
             "rule": "Second rule",
             "rule_id": "rule-2",
             "context": "Context for rule 2",
-            "examples": {"full": "Example 2"}
+            "examples": {"full": "Example 2"},
         }
 
         result2 = add_hint_impl("test-standard", hint2_data, self.temp_dir)
@@ -131,12 +127,14 @@ class TestAddHint:
 
     def test_add_hint_with_json_string(self):
         """Test adding a hint with JSON string parameter."""
-        hint_data_json = json.dumps({
-            "rule": "JSON string rule",
-            "rule_id": "json-rule",
-            "context": "Rule from JSON string",
-            "examples": {"full": "JSON example"}
-        })
+        hint_data_json = json.dumps(
+            {
+                "rule": "JSON string rule",
+                "rule_id": "json-rule",
+                "context": "Rule from JSON string",
+                "examples": {"full": "JSON example"},
+            }
+        )
 
         result = add_hint_impl("test-standard", hint_data_json, self.temp_dir)
 
@@ -155,11 +153,7 @@ class TestAddHint:
 
     def test_add_hint_nonexistent_standard(self):
         """Test adding a hint to a nonexistent standard."""
-        hint_data = {
-            "rule": "Test rule",
-            "rule_id": "test-rule",
-            "context": "Test context"
-        }
+        hint_data = {"rule": "Test rule", "rule_id": "test-rule", "context": "Test context"}
 
         result = add_hint_impl("nonexistent-standard", hint_data, self.temp_dir)
 
@@ -176,7 +170,7 @@ class TestAddHint:
             "examples": {
                 "full": "const result = processData(input);\nreturn result;"
                 # minimal and standard will be auto-generated
-            }
+            },
         }
 
         result = add_hint_impl("test-standard", hint_data, self.temp_dir)
@@ -201,19 +195,19 @@ class TestAddHint:
             "examples": {
                 "minimal": "const validateInput = (data) => schema.parse(data);",
                 "standard": "const validateInput = (data) => { const schema = z.object({ email: z.string() }); "
-                           "return schema.parse(data); };",
+                "return schema.parse(data); };",
                 "detailed": "import { z } from 'zod'; const validateInput = (data) => { "
-                           "const schema = z.object({ email: z.string().email(), name: z.string().min(1) }); "
-                           "try { return schema.parse(data); } catch (error) { "
-                           "throw new ValidationError(error.message); } };",
+                "const schema = z.object({ email: z.string().email(), name: z.string().min(1) }); "
+                "try { return schema.parse(data); } catch (error) { "
+                "throw new ValidationError(error.message); } };",
                 "full": "import { z } from 'zod'; import { ValidationError } from './errors'; "
-                       "const createUserSchema = z.object({ email: z.string().email(), "
-                       "name: z.string().min(1).max(100), role: z.enum(['user', 'admin']).default('user') }); "
-                       "export const validateUserInput = (data: unknown) => { try { "
-                       "return createUserSchema.parse(data); } catch (error) { "
-                       "if (error instanceof z.ZodError) { throw new ValidationError('Invalid user data', "
-                       "error.errors); } throw error; } };"
-            }
+                "const createUserSchema = z.object({ email: z.string().email(), "
+                "name: z.string().min(1).max(100), role: z.enum(['user', 'admin']).default('user') }); "
+                "export const validateUserInput = (data: unknown) => { try { "
+                "return createUserSchema.parse(data); } catch (error) { "
+                "if (error instanceof z.ZodError) { throw new ValidationError('Invalid user data', "
+                "error.errors); } throw error; } };",
+            },
         }
 
         result = add_hint_impl("test-standard", hint_data, self.temp_dir)
@@ -232,13 +226,10 @@ class TestAddHint:
         hints_dir = Path(self.temp_dir) / ".aromcp" / "hints" / "test-standard"
         if hints_dir.exists():
             import shutil
+
             shutil.rmtree(hints_dir)
 
-        hint_data = {
-            "rule": "Test directory creation",
-            "rule_id": "dir-creation",
-            "context": "Test context"
-        }
+        hint_data = {"rule": "Test directory creation", "rule_id": "dir-creation", "context": "Test context"}
 
         result = add_hint_impl("test-standard", hint_data, self.temp_dir)
 
@@ -248,11 +239,7 @@ class TestAddHint:
 
     def test_add_hint_index_rebuild(self):
         """Test that index is rebuilt after adding a hint."""
-        hint_data = {
-            "rule": "Index rebuild test",
-            "rule_id": "index-rebuild",
-            "context": "Test index rebuild"
-        }
+        hint_data = {"rule": "Index rebuild test", "rule_id": "index-rebuild", "context": "Test index rebuild"}
 
         # Check index before
         index_file = Path(self.temp_dir) / ".aromcp" / "hints" / "index.json"

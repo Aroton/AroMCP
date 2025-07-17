@@ -11,9 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def find_import_cycles_impl(
-    project_root: str,
-    max_depth: int = 10,
-    include_node_modules: bool = False
+    project_root: str, max_depth: int = 10, include_node_modules: bool = False
 ) -> dict[str, Any]:
     """Detect circular import dependencies in the codebase.
 
@@ -29,20 +27,12 @@ def find_import_cycles_impl(
         # Validate project root
         project_path = Path(project_root)
         if not project_path.exists():
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": f"Project root directory does not exist: {project_root}"
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": f"Project root directory does not exist: {project_root}"}}
 
         # Validate max_depth
         if not 1 <= max_depth <= 50:
             return {
-                "error": {
-                    "code": "INVALID_INPUT",
-                    "message": f"Max depth must be between 1 and 50, got: {max_depth}"
-                }
+                "error": {"code": "INVALID_INPUT", "message": f"Max depth must be between 1 and 50, got: {max_depth}"}
             }
 
         # Get project files
@@ -51,17 +41,10 @@ def find_import_cycles_impl(
             # Exclude node_modules by filtering results
             pass  # We'll filter in _get_project_files
 
-        project_files = _get_project_files(
-            project_root, code_patterns, include_node_modules
-        )
+        project_files = _get_project_files(project_root, code_patterns, include_node_modules)
 
         if not project_files:
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": "No code files found in the project"
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": "No code files found in the project"}}
 
         # Build dependency graph
         dependency_graph = _build_dependency_graph(project_files, project_root)
@@ -87,8 +70,8 @@ def find_import_cycles_impl(
                 "analysis_settings": {
                     "max_depth": max_depth,
                     "include_node_modules": include_node_modules,
-                    "files_analyzed": len(project_files)
-                }
+                    "files_analyzed": len(project_files),
+                },
             }
         }
 
@@ -97,14 +80,12 @@ def find_import_cycles_impl(
             "error": {
                 "code": "OPERATION_FAILED",
                 "message": f"Failed to find import cycles: {str(e)}",
-                "traceback": traceback.format_exc()
+                "traceback": traceback.format_exc(),
             }
         }
 
 
-def _get_project_files(
-    project_root: str, patterns: list[str], include_node_modules: bool
-) -> list[str]:
+def _get_project_files(project_root: str, patterns: list[str], include_node_modules: bool) -> list[str]:
     """Get all project files matching the patterns.
 
     Args:
@@ -122,7 +103,7 @@ def _get_project_files(
     all_files = []
 
     for pattern in patterns:
-        if pattern.startswith('/'):
+        if pattern.startswith("/"):
             # Absolute pattern within project
             matches = list(project_path.glob(pattern[1:]))
         else:
@@ -143,9 +124,7 @@ def _get_project_files(
     return sorted(set(all_files))
 
 
-def _build_dependency_graph(
-    project_files: list[str], project_root: str
-) -> dict[str, list[str]]:
+def _build_dependency_graph(project_files: list[str], project_root: str) -> dict[str, list[str]]:
     """Build a dependency graph from import statements.
 
     Args:
@@ -165,9 +144,7 @@ def _build_dependency_graph(
             imports = _extract_imports_from_file(str(absolute_path), project_root)
 
             # Resolve import paths to actual files
-            resolved_imports = _resolve_import_paths(
-                imports, str(absolute_path), project_root
-            )
+            resolved_imports = _resolve_import_paths(imports, str(absolute_path), project_root)
 
             # Convert absolute paths to relative paths for the graph
             relative_imports = []
@@ -200,11 +177,11 @@ def _extract_imports_from_file(file_path: str, project_root: str) -> list[str]:
         List of import module names
     """
     try:
-        content = Path(file_path).read_text(encoding='utf-8', errors='ignore')
+        content = Path(file_path).read_text(encoding="utf-8", errors="ignore")
 
-        if file_path.endswith('.py'):
+        if file_path.endswith(".py"):
             return _extract_python_imports(content)
-        elif file_path.endswith(('.js', '.ts', '.jsx', '.tsx')):
+        elif file_path.endswith((".js", ".ts", ".jsx", ".tsx")):
             return _extract_javascript_imports(content)
         else:
             return []
@@ -254,10 +231,7 @@ def _extract_python_imports_regex(content: str) -> list[str]:
     imports = []
 
     # Match import statements
-    import_patterns = [
-        r"^import\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-        r"^from\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+import"
-    ]
+    import_patterns = [r"^import\s+([a-zA-Z_][a-zA-Z0-9_.]*)", r"^from\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+import"]
 
     lines = content.splitlines()
     for line in lines:
@@ -287,7 +261,7 @@ def _extract_javascript_imports(content: str) -> list[str]:
         r"import\s+.*\s+from\s+['\"]([^'\"]+)['\"]",
         r"import\s+['\"]([^'\"]+)['\"]",
         r"require\s*\(\s*['\"]([^'\"]+)['\"]\s*\)",
-        r"import\s*\(\s*['\"]([^'\"]+)['\"]\s*\)"  # Dynamic imports
+        r"import\s*\(\s*['\"]([^'\"]+)['\"]\s*\)",  # Dynamic imports
     ]
 
     lines = content.splitlines()
@@ -303,15 +277,13 @@ def _extract_javascript_imports(content: str) -> list[str]:
             for match in matches:
                 import_path = match.group(1)
                 # Filter out external modules (those without relative paths)
-                if import_path.startswith('.') or import_path.startswith('/'):
+                if import_path.startswith(".") or import_path.startswith("/"):
                     imports.append(import_path)
 
     return imports
 
 
-def _resolve_import_paths(
-    imports: list[str], current_file: str, project_root: str
-) -> list[str]:
+def _resolve_import_paths(imports: list[str], current_file: str, project_root: str) -> list[str]:
     """Resolve import paths to actual file paths.
 
     Args:
@@ -329,14 +301,12 @@ def _resolve_import_paths(
     for import_path in imports:
         try:
             # Handle different import types
-            if import_path.startswith('.'):
+            if import_path.startswith("."):
                 # Relative import
-                resolved_path = _resolve_relative_import(
-                    import_path, current_dir, project_path
-                )
-            elif import_path.startswith('/'):
+                resolved_path = _resolve_relative_import(import_path, current_dir, project_path)
+            elif import_path.startswith("/"):
                 # Absolute import (from project root)
-                resolved_path = project_path / import_path.lstrip('/')
+                resolved_path = project_path / import_path.lstrip("/")
             else:
                 # Module import - try to resolve within project
                 resolved_path = _resolve_module_import(import_path, project_path)
@@ -345,18 +315,13 @@ def _resolve_import_paths(
                 resolved.append(str(resolved_path))
 
         except Exception as e:
-            logger.warning(
-                "Failed to resolve import %s in file %s: %s",
-                import_path, current_file, str(e)
-            )
+            logger.warning("Failed to resolve import %s in file %s: %s", import_path, current_file, str(e))
             continue
 
     return resolved
 
 
-def _resolve_relative_import(
-    import_path: str, current_dir: Path, project_path: Path
-) -> Path | None:
+def _resolve_relative_import(import_path: str, current_dir: Path, project_path: Path) -> Path | None:
     """Resolve relative import path.
 
     Args:
@@ -368,20 +333,20 @@ def _resolve_relative_import(
         Resolved file path or None
     """
     # Handle JavaScript-style imports (e.g., './module.js', '../utils/helper.ts')
-    if '/' in import_path:
+    if "/" in import_path:
         # JavaScript/TypeScript style import
-        if import_path.startswith('./'):
+        if import_path.startswith("./"):
             # Same directory
             target_path = current_dir / import_path[2:]  # Remove './'
-        elif import_path.startswith('../'):
+        elif import_path.startswith("../"):
             # Parent directory(ies)
-            parts = import_path.split('/')
+            parts = import_path.split("/")
             target_dir = current_dir
             # Count the number of '../' parts
             up_count = 0
             remaining_parts = []
             for part in parts:
-                if part == '..':
+                if part == "..":
                     up_count += 1
                 elif part:  # Skip empty parts
                     remaining_parts.append(part)
@@ -394,7 +359,7 @@ def _resolve_relative_import(
 
             # Add remaining path
             if remaining_parts:
-                target_path = target_dir / '/'.join(remaining_parts)
+                target_path = target_dir / "/".join(remaining_parts)
             else:
                 target_path = target_dir
         else:
@@ -406,7 +371,7 @@ def _resolve_relative_import(
             return target_path
 
         # If not, try adding common extensions
-        extensions = ['.js', '.ts', '.jsx', '.tsx', '.py']
+        extensions = [".js", ".ts", ".jsx", ".tsx", ".py"]
         for ext in extensions:
             candidate = Path(str(target_path) + ext)
             if candidate.exists() and candidate.is_relative_to(project_path):
@@ -416,8 +381,8 @@ def _resolve_relative_import(
 
     else:
         # Python-style import (e.g., '..module.submodule')
-        parts = import_path.split('.')
-        up_levels = len([p for p in parts if p == ''])
+        parts = import_path.split(".")
+        up_levels = len([p for p in parts if p == ""])
 
         # Start from current directory and go up
         target_dir = current_dir
@@ -427,17 +392,14 @@ def _resolve_relative_import(
                 return None
 
         # Add remaining path parts
-        remaining_parts = [p for p in parts if p != '']
+        remaining_parts = [p for p in parts if p != ""]
         if remaining_parts:
-            target_path = target_dir / '/'.join(remaining_parts)
+            target_path = target_dir / "/".join(remaining_parts)
         else:
             target_path = target_dir
 
         # Try different file extensions
-        extensions = [
-            '.py', '.js', '.ts', '.jsx', '.tsx',
-            '/__init__.py', '/index.js', '/index.ts'
-        ]
+        extensions = [".py", ".js", ".ts", ".jsx", ".tsx", "/__init__.py", "/index.js", "/index.ts"]
 
         for ext in extensions:
             candidate = Path(str(target_path) + ext)
@@ -458,22 +420,22 @@ def _resolve_module_import(import_path: str, project_path: Path) -> Path | None:
         Resolved file path or None
     """
     # Convert module path to file path
-    module_parts = import_path.split('.')
+    module_parts = import_path.split(".")
 
     # Try different combinations
     candidates = []
 
     # Direct file match
-    candidates.append(project_path / '/'.join(module_parts))
+    candidates.append(project_path / "/".join(module_parts))
 
     # With extensions
-    for ext in ['.py', '.js', '.ts']:
+    for ext in [".py", ".js", ".ts"]:
         candidates.append(project_path / (f"{'/'.join(module_parts)}{ext}"))
 
     # As package
-    candidates.append(project_path / '/'.join(module_parts) / '__init__.py')
-    candidates.append(project_path / '/'.join(module_parts) / 'index.js')
-    candidates.append(project_path / '/'.join(module_parts) / 'index.ts')
+    candidates.append(project_path / "/".join(module_parts) / "__init__.py")
+    candidates.append(project_path / "/".join(module_parts) / "index.js")
+    candidates.append(project_path / "/".join(module_parts) / "index.ts")
 
     for candidate in candidates:
         if candidate.exists():
@@ -482,9 +444,7 @@ def _resolve_module_import(import_path: str, project_path: Path) -> Path | None:
     return None
 
 
-def _find_cycles_in_graph(
-    graph: dict[str, list[str]], max_depth: int
-) -> list[list[str]]:
+def _find_cycles_in_graph(graph: dict[str, list[str]], max_depth: int) -> list[list[str]]:
     """Find cycles in the dependency graph using DFS.
 
     Args:
@@ -544,9 +504,7 @@ def _find_cycles_in_graph(
     return unique_cycles
 
 
-def _analyze_cycles(
-    cycles: list[list[str]], graph: dict[str, list[str]]
-) -> list[dict[str, Any]]:
+def _analyze_cycles(cycles: list[list[str]], graph: dict[str, list[str]]) -> list[dict[str, Any]]:
     """Analyze cycles for severity and impact.
 
     Args:
@@ -568,7 +526,7 @@ def _analyze_cycles(
             "severity": _calculate_cycle_severity(cycle_files, graph),
             "impact": _calculate_cycle_impact(cycle_files, graph),
             "type": _classify_cycle_type(cycle_files),
-            "suggestions": _generate_cycle_suggestions(cycle_files)
+            "suggestions": _generate_cycle_suggestions(cycle_files),
         }
 
         analyzed_cycles.append(analysis)
@@ -579,9 +537,7 @@ def _analyze_cycles(
     return analyzed_cycles
 
 
-def _calculate_cycle_severity(
-    cycle_files: list[str], graph: dict[str, list[str]]
-) -> int:
+def _calculate_cycle_severity(cycle_files: list[str], graph: dict[str, list[str]]) -> int:
     """Calculate severity score for a cycle.
 
     Args:
@@ -601,10 +557,7 @@ def _calculate_cycle_severity(
     # Check if cycle involves core/important files
     importance_score = 0
     for file in cycle_files:
-        if any(
-            keyword in file.lower()
-            for keyword in ['main', 'index', 'app', 'core', 'base']
-        ):
+        if any(keyword in file.lower() for keyword in ["main", "index", "app", "core", "base"]):
             importance_score += 1
 
     return min(length_score + connection_score + importance_score, 10)
@@ -650,9 +603,9 @@ def _classify_cycle_type(cycle_files: list[str]) -> str:
     # Check file extensions
     extensions = [Path(f).suffix for f in cycle_files]
 
-    if all(ext == '.py' for ext in extensions):
+    if all(ext == ".py" for ext in extensions):
         return "python_module_cycle"
-    elif all(ext in ['.js', '.ts', '.jsx', '.tsx'] for ext in extensions):
+    elif all(ext in [".js", ".ts", ".jsx", ".tsx"] for ext in extensions):
         return "javascript_module_cycle"
     elif len(set(extensions)) > 1:
         return "mixed_language_cycle"
@@ -673,14 +626,14 @@ def _generate_cycle_suggestions(cycle_files: list[str]) -> list[str]:
         "Extract common functionality into a separate module",
         "Use dependency injection to break direct dependencies",
         "Consider using interfaces or abstract base classes",
-        "Move shared constants/types to a separate file"
+        "Move shared constants/types to a separate file",
     ]
 
     # Add specific suggestions based on file types
-    if any(f.endswith('.py') for f in cycle_files):
+    if any(f.endswith(".py") for f in cycle_files):
         suggestions.append("Use TYPE_CHECKING imports for type hints")
 
-    if any(f.endswith(('.js', '.ts')) for f in cycle_files):
+    if any(f.endswith((".js", ".ts")) for f in cycle_files):
         suggestions.append("Consider using barrel exports (index files)")
 
     return suggestions
@@ -698,38 +651,32 @@ def _generate_cycle_recommendations(cycle_analysis: list[dict[str, Any]]) -> lis
     recommendations = []
 
     if not cycle_analysis:
-        recommendations.append(
-            "No import cycles detected - good dependency management!"
-        )
+        recommendations.append("No import cycles detected - good dependency management!")
         return recommendations
 
     high_severity_cycles = [c for c in cycle_analysis if c["severity"] >= 7]
     medium_severity_cycles = [c for c in cycle_analysis if 4 <= c["severity"] < 7]
 
     if high_severity_cycles:
-        recommendations.append(
-            f"Address {len(high_severity_cycles)} high-severity cycles immediately"
-        )
+        recommendations.append(f"Address {len(high_severity_cycles)} high-severity cycles immediately")
 
     if medium_severity_cycles:
-        recommendations.append(
-            f"Review {len(medium_severity_cycles)} medium-severity cycles"
-        )
+        recommendations.append(f"Review {len(medium_severity_cycles)} medium-severity cycles")
 
-    recommendations.extend([
-        "Consider implementing dependency inversion principle",
-        "Use static analysis tools in your CI/CD pipeline to prevent future cycles",
-        "Document intended dependency flow in your architecture",
-        "Regular refactoring can help prevent cycles from forming"
-    ])
+    recommendations.extend(
+        [
+            "Consider implementing dependency inversion principle",
+            "Use static analysis tools in your CI/CD pipeline to prevent future cycles",
+            "Document intended dependency flow in your architecture",
+            "Regular refactoring can help prevent cycles from forming",
+        ]
+    )
 
     return recommendations
 
 
 def _calculate_cycle_summary(
-    cycles: list[list[str]],
-    graph: dict[str, list[str]],
-    project_files: list[dict[str, Any]]
+    cycles: list[list[str]], graph: dict[str, list[str]], project_files: list[dict[str, Any]]
 ) -> dict[str, Any]:
     """Calculate summary statistics for cycle analysis.
 
@@ -759,7 +706,7 @@ def _calculate_cycle_summary(
         "average_cycle_length": round(avg_cycle_length, 1),
         "maximum_cycle_length": max_cycle_length,
         "dependency_graph_size": len(graph),
-        "total_dependencies": sum(len(deps) for deps in graph.values())
+        "total_dependencies": sum(len(deps) for deps in graph.values()),
     }
 
 
@@ -775,30 +722,25 @@ def _simplify_graph_for_output(graph: dict[str, list[str]]) -> dict[str, Any]:
     # Don't include the full graph in output (can be very large)
     # Instead, provide summary statistics
 
-    most_dependencies = (
-        max(graph.keys(), key=lambda k: len(graph[k])) if graph else None
-    )
+    most_dependencies = max(graph.keys(), key=lambda k: len(graph[k])) if graph else None
     most_depended_on = (
-        max(
-            graph.keys(),
-            key=lambda k: sum(1 for deps in graph.values() if k in deps)
-        ) if graph else None
+        max(graph.keys(), key=lambda k: sum(1 for deps in graph.values() if k in deps)) if graph else None
     )
 
     return {
         "total_files": len(graph),
         "total_dependencies": sum(len(deps) for deps in graph.values()),
-        "avg_dependencies_per_file": round(
-            sum(len(deps) for deps in graph.values()) / max(len(graph), 1), 2
-        ),
+        "avg_dependencies_per_file": round(sum(len(deps) for deps in graph.values()) / max(len(graph), 1), 2),
         "file_with_most_dependencies": {
             "file": most_dependencies,
-            "dependency_count": len(graph.get(most_dependencies, []))
-        } if most_dependencies else None,
+            "dependency_count": len(graph.get(most_dependencies, [])),
+        }
+        if most_dependencies
+        else None,
         "most_depended_on_file": {
             "file": most_depended_on,
-            "dependent_count": sum(
-                1 for deps in graph.values() if most_depended_on in deps
-            )
-        } if most_depended_on else None
+            "dependent_count": sum(1 for deps in graph.values() if most_depended_on in deps),
+        }
+        if most_depended_on
+        else None,
     }

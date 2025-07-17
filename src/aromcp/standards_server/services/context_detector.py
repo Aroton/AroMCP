@@ -19,40 +19,23 @@ class ContextDetector:
                 r"/api/.*route\.(ts|js)",
                 r"/api/.*\.ts",
                 r"export.*GET|POST|PUT|DELETE",
-                r"NextRequest|NextResponse"
+                r"NextRequest|NextResponse",
             ],
             "component_development": [
                 r"\.(tsx|jsx)$",
                 r"export.*React\.FC",
                 r"export.*function.*Component",
-                r"import.*React"
+                r"import.*React",
             ],
-            "testing": [
-                r"\.(test|spec)\.(ts|js|tsx|jsx)$",
-                r"describe\s*\(",
-                r"it\s*\(",
-                r"test\s*\(",
-                r"expect\s*\("
-            ],
-            "styling": [
-                r"\.(css|scss|sass|less)$",
-                r"styled-components",
-                r"@emotion",
-                r"tailwind",
-                r"className="
-            ],
+            "testing": [r"\.(test|spec)\.(ts|js|tsx|jsx)$", r"describe\s*\(", r"it\s*\(", r"test\s*\(", r"expect\s*\("],
+            "styling": [r"\.(css|scss|sass|less)$", r"styled-components", r"@emotion", r"tailwind", r"className="],
             "configuration": [
                 r"(next|webpack|babel|eslint|prettier)\.config\.(js|ts)",
                 r"package\.json",
                 r"tsconfig\.json",
-                r"\.env"
+                r"\.env",
             ],
-            "database": [
-                r"(prisma|mongoose|sequelize)",
-                r"\.sql$",
-                r"migration",
-                r"schema"
-            ]
+            "database": [r"(prisma|mongoose|sequelize)", r"\.sql$", r"migration", r"schema"],
         }
 
     def analyze_session_context(self, session: SessionState, current_file: str) -> dict[str, Any]:
@@ -66,7 +49,7 @@ class ContextDetector:
                 "working_area": self._detect_working_area(session.file_history),
                 "nextjs_context": self._detect_nextjs_context(current_file, session),
                 "pattern_familiarity": self._assess_pattern_familiarity(session),
-                "session_phase": self._detect_session_phase(session)
+                "session_phase": self._detect_session_phase(session),
             }
         except Exception as e:
             logger.error(f"Error analyzing context: {e}")
@@ -129,7 +112,7 @@ class ContextDetector:
             "prisma": [r"prisma/", r"@prisma"],
             "api_routes": [r"/api/.*route\.(ts|js)"],
             "server_components": [r"app/.*\.(ts|tsx)$"],
-            "client_components": [r"'use client'", r'"use client"']
+            "client_components": [r"'use client'", r'"use client"'],
         }
 
         detected = {}
@@ -182,7 +165,7 @@ class ContextDetector:
             "is_api_route": False,
             "is_server_component": True,  # Default assumption
             "route_type": None,
-            "rendering_strategy": "ssr"
+            "rendering_strategy": "ssr",
         }
 
         try:
@@ -242,7 +225,7 @@ class ContextDetector:
         """Check if file has 'use client' directive."""
         try:
             if os.path.exists(file_path):
-                with open(file_path, encoding='utf-8') as f:
+                with open(file_path, encoding="utf-8") as f:
                     first_few_lines = f.read(500)  # Check first 500 chars
                     return "'use client'" in first_few_lines or '"use client"' in first_few_lines
         except Exception:  # noqa: S110
@@ -262,8 +245,9 @@ class ContextDetector:
         """Detect debugging pattern."""
         recent_files = session.get_recent_files(3)
         return (
-            len(set(recent_files)) == 1 and len(recent_files) > 1 or  # Same file multiple times
-            any("error" in f.lower() or "debug" in f.lower() for f in recent_files)
+            len(set(recent_files)) == 1
+            and len(recent_files) > 1  # Same file multiple times
+            or any("error" in f.lower() or "debug" in f.lower() for f in recent_files)
         )
 
     def _assess_pattern_familiarity(self, session: SessionState) -> dict[str, str]:
@@ -309,8 +293,8 @@ class ContextDetector:
                 "is_api_route": False,
                 "is_server_component": True,
                 "route_type": None,
-                "rendering_strategy": "ssr"
+                "rendering_strategy": "ssr",
             },
             "pattern_familiarity": {},
-            "session_phase": "exploration"
+            "session_phase": "exploration",
         }

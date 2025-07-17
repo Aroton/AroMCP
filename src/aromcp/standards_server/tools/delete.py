@@ -23,12 +23,7 @@ def delete_impl(standard_id: str, project_root: str | None = None) -> dict[str, 
 
         # Validate standard ID
         if not standard_id or not isinstance(standard_id, str):
-            return {
-                "error": {
-                    "code": "INVALID_INPUT",
-                    "message": "standardId must be a non-empty string"
-                }
-            }
+            return {"error": {"code": "INVALID_INPUT", "message": "standardId must be a non-empty string"}}
 
         # Delete the standard and get summary
         deletion_summary = delete_standard(standard_id, project_root)
@@ -37,16 +32,7 @@ def delete_impl(standard_id: str, project_root: str | None = None) -> dict[str, 
         build_index(project_root)
         invalidate_index_cache()
 
-        return {
-            "data": {
-                "deleted": deletion_summary
-            }
-        }
+        return {"data": {"deleted": deletion_summary}}
 
     except Exception as e:
-        return {
-            "error": {
-                "code": "OPERATION_FAILED",
-                "message": f"Failed to delete standard: {str(e)}"
-            }
-        }
+        return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to delete standard: {str(e)}"}}

@@ -4,7 +4,6 @@ Test file for Phase 1: Core State Engine - State Manager
 Tests state management, flattened views, path validation, and atomic updates.
 """
 
-
 import pytest
 
 from aromcp.workflow_server.state.manager import StateManager
@@ -26,9 +25,7 @@ class TestStateManager:
         """Test state flattening for read operations"""
         # Given
         state = WorkflowState(
-            raw={"counter": 5, "name": "test"},
-            computed={"double": 10, "name": "computed"},
-            state={"version": "1.0"}
+            raw={"counter": 5, "name": "test"}, computed={"double": 10, "name": "computed"}, state={"version": "1.0"}
         )
         manager = StateManager()
 
@@ -47,7 +44,7 @@ class TestStateManager:
         state = WorkflowState(
             raw={"shared_key": "raw_value", "raw_only": "raw"},
             computed={"shared_key": "computed_value", "computed_only": "computed"},
-            state={"shared_key": "state_value", "state_only": "state"}
+            state={"shared_key": "state_value", "state_only": "state"},
         )
         manager = StateManager()
 
@@ -66,7 +63,7 @@ class TestStateManager:
         state = WorkflowState(
             raw={"user": {"name": "Alice", "age": 30}},
             computed={"user": {"name": "Alice Smith", "score": 95}},
-            state={"config": {"debug": True}}
+            state={"config": {"debug": True}},
         )
         manager = StateManager()
 
@@ -138,11 +135,14 @@ class TestStateUpdates:
         workflow_id = "wf_123"
 
         # When
-        manager.update(workflow_id, [
-            {"path": "raw.counter", "value": 10},
-            {"path": "state.version", "value": "2.0"},
-            {"path": "raw.name", "value": "test"}
-        ])
+        manager.update(
+            workflow_id,
+            [
+                {"path": "raw.counter", "value": 10},
+                {"path": "state.version", "value": "2.0"},
+                {"path": "raw.name", "value": "test"},
+            ],
+        )
         state = manager.read(workflow_id)
 
         # Then
@@ -157,11 +157,14 @@ class TestStateUpdates:
         workflow_id = "wf_123"
 
         # When
-        manager.update(workflow_id, [
-            {"path": "raw.user.name", "value": "Alice"},
-            {"path": "raw.user.age", "value": 30},
-            {"path": "state.config.debug", "value": True}
-        ])
+        manager.update(
+            workflow_id,
+            [
+                {"path": "raw.user.name", "value": "Alice"},
+                {"path": "raw.user.age", "value": 30},
+                {"path": "state.config.debug", "value": True},
+            ],
+        )
         state = manager.read(workflow_id)
 
         # Then
@@ -176,18 +179,24 @@ class TestStateUpdates:
         workflow_id = "wf_123"
 
         # Set initial state
-        manager.update(workflow_id, [
-            {"path": "raw.counter", "value": 5},
-            {"path": "raw.items", "value": ["a", "b"]},
-            {"path": "raw.metadata", "value": {"version": 1}}
-        ])
+        manager.update(
+            workflow_id,
+            [
+                {"path": "raw.counter", "value": 5},
+                {"path": "raw.items", "value": ["a", "b"]},
+                {"path": "raw.metadata", "value": {"version": 1}},
+            ],
+        )
 
         # When - Apply different operations
-        manager.update(workflow_id, [
-            {"path": "raw.counter", "operation": "increment", "value": 3},
-            {"path": "raw.items", "operation": "append", "value": "c"},
-            {"path": "raw.metadata", "operation": "merge", "value": {"author": "test"}}
-        ])
+        manager.update(
+            workflow_id,
+            [
+                {"path": "raw.counter", "operation": "increment", "value": 3},
+                {"path": "raw.items", "operation": "append", "value": "c"},
+                {"path": "raw.metadata", "operation": "merge", "value": {"author": "test"}},
+            ],
+        )
         state = manager.read(workflow_id)
 
         # Then
@@ -203,10 +212,13 @@ class TestStateUpdates:
 
         # When - Mix of valid and invalid updates
         with pytest.raises((InvalidPathError, ValueError)):
-            manager.update(workflow_id, [
-                {"path": "raw.valid", "value": "good"},
-                {"path": "computed.invalid", "value": "bad"}  # Invalid path
-            ])
+            manager.update(
+                workflow_id,
+                [
+                    {"path": "raw.valid", "value": "good"},
+                    {"path": "computed.invalid", "value": "bad"},  # Invalid path
+                ],
+            )
 
         # Then - No changes should be applied
         state = manager.read(workflow_id)
@@ -223,8 +235,8 @@ class TestCascadingUpdates:
             "raw": {"value": "number"},
             "computed": {
                 "double": {"from": "raw.value", "transform": "input * 2"},
-                "quadruple": {"from": "computed.double", "transform": "input * 2"}
-            }
+                "quadruple": {"from": "computed.double", "transform": "input * 2"},
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_123"
@@ -245,17 +257,14 @@ class TestCascadingUpdates:
             "raw": {"a": "number", "b": "number"},
             "computed": {
                 "sum": {"from": ["raw.a", "raw.b"], "transform": "input[0] + input[1]"},
-                "double_a": {"from": "raw.a", "transform": "input * 2"}
-            }
+                "double_a": {"from": "raw.a", "transform": "input * 2"},
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_123"
 
         # Set initial state
-        manager.update(workflow_id, [
-            {"path": "raw.a", "value": 5},
-            {"path": "raw.b", "value": 3}
-        ])
+        manager.update(workflow_id, [{"path": "raw.a", "value": 5}, {"path": "raw.b", "value": 3}])
 
         # When - Update only one field
         manager.update(workflow_id, [{"path": "raw.a", "value": 10}])
@@ -277,9 +286,9 @@ class TestCascadingUpdates:
                     "from": "raw.value",
                     "transform": "JSON.parse(input)",
                     "on_error": "use_fallback",
-                    "fallback": {}
+                    "fallback": {},
                 }
-            }
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_123"
@@ -303,11 +312,14 @@ class TestStateReading:
         workflow_id = "wf_123"
 
         # Set up state
-        manager.update(workflow_id, [
-            {"path": "raw.counter", "value": 10},
-            {"path": "raw.name", "value": "test"},
-            {"path": "state.version", "value": "1.0"}
-        ])
+        manager.update(
+            workflow_id,
+            [
+                {"path": "raw.counter", "value": 10},
+                {"path": "raw.name", "value": "test"},
+                {"path": "state.version", "value": "1.0"},
+            ],
+        )
 
         # When
         paths = ["counter", "version"]

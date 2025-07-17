@@ -22,7 +22,7 @@ def register_analysis_tools(mcp):
         project_root: str | None = None,
         entry_points: str | list[str] | None = None,
         include_tests: bool = False,
-        confidence_threshold: float = 0.8
+        confidence_threshold: float = 0.8,
     ) -> dict[str, Any]:
         """Identify potentially unused code that can be safely removed.
 
@@ -66,16 +66,12 @@ def register_analysis_tools(mcp):
         if isinstance(entry_points, str):
             entry_points = [entry_points]
 
-        return find_dead_code_impl(
-            project_root, entry_points, include_tests, confidence_threshold
-        )
+        return find_dead_code_impl(project_root, entry_points, include_tests, confidence_threshold)
 
     @mcp.tool
     @json_convert
     def find_import_cycles(
-        project_root: str | None = None,
-        max_depth: int = 10,
-        include_node_modules: bool = False
+        project_root: str | None = None, max_depth: int = 10, include_node_modules: bool = False
     ) -> dict[str, Any]:
         """Detect circular import dependencies that can cause runtime errors.
 
@@ -111,13 +107,10 @@ def register_analysis_tools(mcp):
         project_root = get_project_root(project_root)
         return find_import_cycles_impl(project_root, max_depth, include_node_modules)
 
-
     @mcp.tool
     @json_convert
     def extract_api_endpoints(
-        project_root: str | None = None,
-        route_patterns: str | list[str] | None = None,
-        include_middleware: bool = True
+        project_root: str | None = None, route_patterns: str | list[str] | None = None, include_middleware: bool = True
     ) -> dict[str, Any]:
         """Extract and document all API endpoints from route definitions.
 
@@ -158,13 +151,7 @@ def register_analysis_tools(mcp):
         if isinstance(route_patterns, str):
             route_patterns = [route_patterns]
 
-        return extract_api_endpoints_impl(
-            project_root, route_patterns, include_middleware
-        )
+        return extract_api_endpoints_impl(project_root, route_patterns, include_middleware)
 
 
-
-
-__all__ = [
-    "register_analysis_tools"
-]
+__all__ = ["register_analysis_tools"]

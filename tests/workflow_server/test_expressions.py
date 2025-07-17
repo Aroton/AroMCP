@@ -142,10 +142,7 @@ class TestExpressionEvaluator:
     def test_property_access(self):
         """Test nested property access."""
         evaluator = ExpressionEvaluator()
-        context = {
-            "user": {"name": "Alice", "age": 30},
-            "items": ["a", "b", "c"]
-        }
+        context = {"user": {"name": "Alice", "age": 30}, "items": ["a", "b", "c"]}
 
         # Test object property access
         assert evaluator.evaluate("user.name", context) == "Alice"
@@ -163,7 +160,7 @@ class TestExpressionEvaluator:
         assert evaluator.evaluate("a + b", context) == 13
         assert evaluator.evaluate("a - b", context) == 7
         assert evaluator.evaluate("a * b", context) == 30
-        assert evaluator.evaluate("a / b", context) == 10/3
+        assert evaluator.evaluate("a / b", context) == 10 / 3
         assert evaluator.evaluate("a % b", context) == 1
 
     def test_string_operations(self):
@@ -233,7 +230,7 @@ class TestExpressionEvaluator:
         context = {
             "user": {"profile": {"settings": {"theme": "dark"}}},
             "items": [{"name": "item1", "active": True}, {"name": "item2", "active": False}],
-            "count": 5
+            "count": 5,
         }
 
         # Nested property access
@@ -253,7 +250,7 @@ class TestExpressionEvaluator:
 
         # Test division by zero (should return infinity)
         result = evaluator.evaluate("5 / 0", {})
-        assert result == float('inf')
+        assert result == float("inf")
 
 
 class TestExpressionIntegration:
@@ -268,10 +265,7 @@ class TestExpressionIntegration:
             "files": ["file1.ts", "file2.js", "file3.ts"],
             "processed_count": 1,
             "is_ready": True,
-            "config": {
-                "max_files": 10,
-                "auto_process": True
-            }
+            "config": {"max_files": 10, "auto_process": True},
         }
 
         # Test various workflow conditions
@@ -300,7 +294,7 @@ class TestExpressionIntegration:
             "all_files": [
                 {"name": "file1.ts", "processed": False},
                 {"name": "file2.js", "processed": True},
-                {"name": "file3.ts", "processed": False}
+                {"name": "file3.ts", "processed": False},
             ]
         }
 

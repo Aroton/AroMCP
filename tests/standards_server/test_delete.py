@@ -27,23 +27,25 @@ class TestDelete:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             register_result = register_impl("standards/test.md", metadata, temp_dir)
             assert "data" in register_result
 
             # Add some hints and ESLint rules
-            ai_hints = [{
-                "rule": "Test rule",
-                "context": "Test context",
-                "correctExample": "correct",
-                "incorrectExample": "incorrect",
-                "hasEslintRule": False
-            }]
+            ai_hints = [
+                {
+                    "rule": "Test rule",
+                    "context": "Test context",
+                    "correctExample": "correct",
+                    "incorrectExample": "incorrect",
+                    "hasEslintRule": False,
+                }
+            ]
 
             eslint_rules = {
-                "rules/test-standard.js": '''module.exports = {
+                "rules/test-standard.js": """module.exports = {
   meta: {
     type: "problem",
     docs: {
@@ -61,7 +63,7 @@ class TestDelete:
       }
     };
   }
-};'''
+};"""
             }
 
             # Save hints and ESLint rules
@@ -140,7 +142,7 @@ class TestDelete:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             register_impl("standards/hints-only.md", metadata, temp_dir)
@@ -152,15 +154,15 @@ class TestDelete:
                     "context": "First context",
                     "correctExample": "correct1",
                     "incorrectExample": "incorrect1",
-                    "hasEslintRule": False
+                    "hasEslintRule": False,
                 },
                 {
                     "rule": "Second rule",
                     "context": "Second context",
                     "correctExample": "correct2",
                     "incorrectExample": "incorrect2",
-                    "hasEslintRule": False
-                }
+                    "hasEslintRule": False,
+                },
             ]
 
             save_ai_hints("hints-only", ai_hints, temp_dir)
@@ -185,14 +187,14 @@ class TestDelete:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             register_impl("standards/eslint-only.md", metadata, temp_dir)
 
             # Add only ESLint rules (no hints)
             eslint_rules = {
-                "rules/eslint-only.js": '''module.exports = {
+                "rules/eslint-only.js": """module.exports = {
   meta: {
     type: "problem",
     docs: {
@@ -210,7 +212,7 @@ class TestDelete:
       }
     };
   }
-};'''
+};"""
             }
 
             # Add individual ESLint rules
@@ -238,7 +240,7 @@ class TestDelete:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             metadata2 = {
@@ -248,7 +250,7 @@ class TestDelete:
                 "tags": ["api"],
                 "appliesTo": ["*.js"],
                 "severity": "warning",
-                "priority": "important"
+                "priority": "important",
             }
 
             register_impl("standards/standard-1.md", metadata1, temp_dir)

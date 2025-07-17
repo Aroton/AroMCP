@@ -4,16 +4,19 @@ Reusable pagination utilities for MCP tools that return lists.
 Provides deterministic pagination based on token estimation to keep responses
 under 20k tokens while maintaining consistent ordering across identical inputs.
 """
+
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 @dataclass
 class PaginationInfo:
     """Information about pagination state."""
+
     page: int
     page_size: int
     total_items: int
@@ -22,6 +25,7 @@ class PaginationInfo:
     has_previous: bool
     estimated_tokens: int
     max_tokens: int
+
 
 class TokenEstimator:
     """Estimates token count for JSON responses."""
@@ -43,7 +47,7 @@ class TokenEstimator:
         """
         try:
             # Convert to JSON string to get serialized size
-            json_str = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+            json_str = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
             char_count = len(json_str)
             return max(1, char_count // cls.CHARS_PER_TOKEN)
         except (TypeError, ValueError):
@@ -54,12 +58,7 @@ class TokenEstimator:
 class PaginatedResponse[T]:
     """Generic paginated response container."""
 
-    def __init__(
-        self,
-        items: list[T],
-        pagination: PaginationInfo,
-        metadata: dict[str, Any] | None = None
-    ):
+    def __init__(self, items: list[T], pagination: PaginationInfo, metadata: dict[str, Any] | None = None):
         self.items = items
         self.pagination = pagination
         self.metadata = metadata or {}
@@ -77,9 +76,9 @@ class PaginatedResponse[T]:
                     "has_next": self.pagination.has_next,
                     "has_previous": self.pagination.has_previous,
                     "estimated_tokens": self.pagination.estimated_tokens,
-                    "max_tokens": self.pagination.max_tokens
+                    "max_tokens": self.pagination.max_tokens,
                 },
-                **self.metadata
+                **self.metadata,
             }
         }
 
@@ -93,10 +92,7 @@ class ListPaginator[T]:
     """
 
     def __init__(
-        self,
-        max_tokens: int = 20000,
-        min_items_per_page: int = 1,
-        sort_key: Callable[[T], Any] | None = None
+        self, max_tokens: int = 20000, min_items_per_page: int = 1, sort_key: Callable[[T], Any] | None = None
     ):
         """
         Initialize paginator.
@@ -111,12 +107,7 @@ class ListPaginator[T]:
         self.sort_key = sort_key
         self.estimator = TokenEstimator()
 
-    def paginate(
-        self,
-        items: list[T],
-        page: int = 1,
-        metadata: dict[str, Any] | None = None
-    ) -> PaginatedResponse[T]:
+    def paginate(self, items: list[T], page: int = 1, metadata: dict[str, Any] | None = None) -> PaginatedResponse[T]:
         """
         Paginate a list of items with token-based sizing.
 
@@ -146,11 +137,9 @@ class ListPaginator[T]:
         page_items = sorted_items[start_idx:end_idx]
 
         # Calculate token estimate for this page
-        estimated_tokens = self.estimator.estimate_tokens({
-            "items": page_items,
-            "pagination": {"page": page, "total_pages": total_pages},
-            **(metadata or {})
-        })
+        estimated_tokens = self.estimator.estimate_tokens(
+            {"items": page_items, "pagination": {"page": page, "total_pages": total_pages}, **(metadata or {})}
+        )
 
         pagination_info = PaginationInfo(
             page=page,
@@ -160,7 +149,7 @@ class ListPaginator[T]:
             has_next=page < total_pages,
             has_previous=page > 1,
             estimated_tokens=estimated_tokens,
-            max_tokens=self.max_tokens
+            max_tokens=self.max_tokens,
         )
 
         return PaginatedResponse(page_items, pagination_info, metadata)
@@ -217,10 +206,7 @@ class ListPaginator[T]:
             page_items = items[start_idx:mid]
 
             # Estimate tokens for this page subset
-            estimated_tokens = self.estimator.estimate_tokens({
-                "items": page_items,
-                "pagination": {"estimated": True}
-            })
+            estimated_tokens = self.estimator.estimate_tokens({"items": page_items, "pagination": {"estimated": True}})
 
             if estimated_tokens <= self.max_tokens:
                 best_end = mid
@@ -240,15 +226,14 @@ class ListPaginator[T]:
             has_next=False,
             has_previous=False,
             estimated_tokens=self.estimator.estimate_tokens({"items": [], "pagination": {}}),
-            max_tokens=self.max_tokens
+            max_tokens=self.max_tokens,
         )
 
         return PaginatedResponse([], pagination_info, metadata)
 
+
 def create_paginator(
-    max_tokens: int = 20000,
-    sort_key: Callable[[Any], Any] | None = None,
-    min_items_per_page: int = 1
+    max_tokens: int = 20000, sort_key: Callable[[Any], Any] | None = None, min_items_per_page: int = 1
 ) -> ListPaginator:
     """
     Convenience function to create a paginator with common defaults.
@@ -261,18 +246,15 @@ def create_paginator(
     Returns:
         Configured ListPaginator instance
     """
-    return ListPaginator(
-        max_tokens=max_tokens,
-        min_items_per_page=min_items_per_page,
-        sort_key=sort_key
-    )
+    return ListPaginator(max_tokens=max_tokens, min_items_per_page=min_items_per_page, sort_key=sort_key)
+
 
 def simplify_pagination(
     items: list[Any],
     page: int,
     max_tokens: int,
     sort_key: Callable[[Any], Any] | None = None,
-    metadata: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Simplified pagination pattern that uses token-based pagination but cleaner output.
@@ -318,7 +300,7 @@ def simplify_pagination(
         "items": full_result["items"],
         "page": pagination_info["page"],
         "has_more": pagination_info["has_next"],
-        "total": pagination_info["total_items"] if pagination_info["total_items"] < 100 else "100+"
+        "total": pagination_info["total_items"] if pagination_info["total_items"] < 100 else "100+",
     }
 
     # Add any additional metadata
@@ -327,12 +309,13 @@ def simplify_pagination(
 
     return simplified_result
 
+
 def paginate_list(
     items: list[Any],
     page: int = 1,
     max_tokens: int = 20000,
     sort_key: Callable[[Any], Any] | None = None,
-    metadata: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Quick utility function to paginate a list and return MCP-formatted response.

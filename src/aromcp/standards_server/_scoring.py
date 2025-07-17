@@ -36,18 +36,11 @@ def score_relevance(metadata: dict[str, Any], file_path: str) -> float:
         score = 0.6
 
     # Tag in path: 0.4
-    elif tags and any(
-        tag in file_path.lower() or tag in file_name.lower()
-        for tag in tags
-    ):
+    elif tags and any(tag in file_path.lower() or tag in file_name.lower() for tag in tags):
         score = 0.4
 
     # Priority boost
-    priority_multiplier = {
-        "required": 1.2,
-        "important": 1.1,
-        "recommended": 1.0
-    }
+    priority_multiplier = {"required": 1.2, "important": 1.1, "recommended": 1.0}
 
     return score * priority_multiplier.get(priority, 1.0)
 
@@ -61,13 +54,13 @@ def _matches_pattern(file_path: str, pattern: str) -> bool:
 
 
 def select_hints_by_budget(
-    hints_with_scores: list[tuple[dict[str, Any], float]],
-    max_tokens: int
+    hints_with_scores: list[tuple[dict[str, Any], float]], max_tokens: int
 ) -> tuple[list[dict[str, Any]], int]:
     """
     Select hints that fit within the token budget.
     Returns (selected_hints, total_tokens_used).
     """
+
     # Sort by relevance score (descending), then by priority
     def sort_key(item):
         hint, score = item
@@ -93,7 +86,7 @@ def select_hints_by_budget(
             response_hint = {
                 "rule": hint.get("rule", ""),
                 "context": hint.get("context", ""),
-                "relevanceScore": round(score, 2)
+                "relevanceScore": round(score, 2),
             }
 
             # Handle examples - support both legacy and enhanced formats
@@ -145,12 +138,15 @@ def select_hints_by_budget(
 def _estimate_tokens(hint: dict[str, Any]) -> int:
     """Estimate token count for a hint (4 characters per token)."""
     import json
-    hint_json = json.dumps({
-        "rule": hint.get("rule", ""),
-        "context": hint.get("context", ""),
-        "correctExample": hint.get("correctExample", ""),
-        "incorrectExample": hint.get("incorrectExample", ""),
-    })
+
+    hint_json = json.dumps(
+        {
+            "rule": hint.get("rule", ""),
+            "context": hint.get("context", ""),
+            "correctExample": hint.get("correctExample", ""),
+            "incorrectExample": hint.get("incorrectExample", ""),
+        }
+    )
     return len(hint_json) // 4
 
 

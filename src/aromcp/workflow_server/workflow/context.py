@@ -103,20 +103,11 @@ class ExecutionContext:
 
     def create_workflow_frame(self, steps: list[WorkflowStep]) -> StackFrame:
         """Create a new workflow frame."""
-        return StackFrame(
-            frame_id=str(uuid.uuid4()),
-            frame_type="workflow",
-            steps=steps
-        )
+        return StackFrame(frame_id=str(uuid.uuid4()), frame_type="workflow", steps=steps)
 
     def create_conditional_frame(self, steps: list[WorkflowStep], condition_id: str) -> StackFrame:
         """Create a new conditional execution frame."""
-        return StackFrame(
-            frame_id=str(uuid.uuid4()),
-            frame_type="conditional",
-            step_id=condition_id,
-            steps=steps
-        )
+        return StackFrame(frame_id=str(uuid.uuid4()), frame_type="conditional", step_id=condition_id, steps=steps)
 
     def create_loop_frame(self, steps: list[WorkflowStep], loop_state: LoopState) -> StackFrame:
         """Create a new loop execution frame."""
@@ -125,7 +116,7 @@ class ExecutionContext:
             frame_type="loop",
             step_id=loop_state.loop_id,
             steps=steps,
-            loop_state=loop_state
+            loop_state=loop_state,
         )
 
     def enter_loop(self, loop_state: LoopState):
@@ -206,10 +197,7 @@ class ExecutionContext:
         """Create a new sub-agent context."""
         task_id = str(uuid.uuid4())
         context = SubAgentContext(
-            task_id=task_id,
-            parent_workflow_id=self.workflow_id,
-            task_name=task_name,
-            context_data=context_data
+            task_id=task_id, parent_workflow_id=self.workflow_id, task_name=task_name, context_data=context_data
         )
         self.sub_agent_contexts[task_id] = context
         self.last_updated = datetime.now()
@@ -281,15 +269,15 @@ class ExecutionContext:
             "sub_agent_tasks": {
                 "total": len(self.sub_agent_contexts),
                 "pending": len(self.get_pending_sub_agent_tasks()),
-                "completed": len(self.get_completed_sub_agent_tasks())
+                "completed": len(self.get_completed_sub_agent_tasks()),
             },
             "variables": {
                 "global": len(self.global_variables),
                 "local": len(self.current_frame().local_variables) if self.current_frame() else 0,
-                "loop": len(self.current_loop().variable_bindings) if self.current_loop() else 0
+                "loop": len(self.current_loop().variable_bindings) if self.current_loop() else 0,
             },
             "created_at": self.created_at.isoformat(),
-            "last_updated": self.last_updated.isoformat()
+            "last_updated": self.last_updated.isoformat(),
         }
 
 

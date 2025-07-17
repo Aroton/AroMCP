@@ -12,9 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def extract_api_endpoints_impl(
-    project_root: str,
-    route_patterns: list[str] | None = None,
-    include_middleware: bool = True
+    project_root: str, route_patterns: list[str] | None = None, include_middleware: bool = True
 ) -> dict[str, Any]:
     """Extract and document API endpoints from route files.
 
@@ -30,12 +28,7 @@ def extract_api_endpoints_impl(
         # Validate project root
         project_path = Path(project_root)
         if not project_path.exists():
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": f"Project root directory does not exist: {project_root}"
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": f"Project root directory does not exist: {project_root}"}}
 
         # Default route patterns if none provided
         if route_patterns is None:
@@ -51,11 +44,12 @@ def extract_api_endpoints_impl(
                 "**/*router*.ts",
                 "**/*router*.js",
                 "**/*route*.ts",
-                "**/*route*.js"
+                "**/*route*.js",
             ]
 
         # Set the project root temporarily for list_files_impl
         import os
+
         old_project_root = os.environ.get("MCP_FILE_ROOT")
         os.environ["MCP_FILE_ROOT"] = project_root
 
@@ -80,12 +74,7 @@ def extract_api_endpoints_impl(
                 "data": {
                     "endpoints": [],
                     "middleware": [],
-                    "summary": {
-                        "total_endpoints": 0,
-                        "files_analyzed": 0,
-                        "http_methods": {},
-                        "route_groups": {}
-                    }
+                    "summary": {"total_endpoints": 0, "files_analyzed": 0, "http_methods": {}, "route_groups": {}},
                 }
             }
 
@@ -137,9 +126,7 @@ def extract_api_endpoints_impl(
 
             except Exception as e:
                 # Skip files that can't be parsed
-                logger.warning(
-                    "Failed to parse file %s: %s", file_path, str(e)
-                )
+                logger.warning("Failed to parse file %s: %s", file_path, str(e))
                 continue
 
         # Sort endpoints by path and method
@@ -153,18 +140,13 @@ def extract_api_endpoints_impl(
                     "total_endpoints": len(all_endpoints),
                     "files_analyzed": len(route_files),
                     "http_methods": method_stats,
-                    "route_groups": route_groups
-                }
+                    "route_groups": route_groups,
+                },
             }
         }
 
     except Exception as e:
-        return {
-            "error": {
-                "code": "OPERATION_FAILED",
-                "message": f"Failed to extract API endpoints: {str(e)}"
-            }
-        }
+        return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to extract API endpoints: {str(e)}"}}
 
 
 def _extract_endpoints_from_file(file_path: str, content: str) -> list[dict[str, Any]]:
@@ -179,7 +161,7 @@ def _extract_endpoints_from_file(file_path: str, content: str) -> list[dict[str,
         # router.get('/path', handler)
         rf"(?:router|app)\.({'|'.join(http_methods)})\s*\(\s*['\"]([^'\"]+)['\"]",
         # app.get('/path', handler)
-        rf"app\.({'|'.join(http_methods)})\s*\(\s*['\"]([^'\"]+)['\"]"
+        rf"app\.({'|'.join(http_methods)})\s*\(\s*['\"]([^'\"]+)['\"]",
     ]
 
     # FastAPI style patterns
@@ -187,7 +169,7 @@ def _extract_endpoints_from_file(file_path: str, content: str) -> list[dict[str,
         # @app.get("/path")
         rf"@(?:app|router)\.({'|'.join(http_methods)})\s*\(\s*['\"]([^'\"]+)['\"]",
         # @router.get("/path")
-        rf"@router\.({'|'.join(http_methods)})\s*\(\s*['\"]([^'\"]+)['\"]"
+        rf"@router\.({'|'.join(http_methods)})\s*\(\s*['\"]([^'\"]+)['\"]",
     ]
 
     # NestJS style patterns
@@ -204,11 +186,9 @@ def _extract_endpoints_from_file(file_path: str, content: str) -> list[dict[str,
         rf"({'|'.join([m.upper() for m in http_methods])})\s*\(([^)]*)\)",
     ]
 
-    all_patterns = (
-        express_patterns + fastapi_patterns + nestjs_patterns + nextjs_patterns
-    )
+    all_patterns = express_patterns + fastapi_patterns + nestjs_patterns + nextjs_patterns
 
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     for line_num, line in enumerate(lines, 1):
         line_stripped = line.strip()
@@ -236,7 +216,7 @@ def _extract_endpoints_from_file(file_path: str, content: str) -> list[dict[str,
                     "is_async": handler_info.get("is_async", False),
                     "parameters": _extract_path_parameters(path),
                     "description": _extract_description(lines, line_num - 1),
-                    "middleware": _extract_inline_middleware(line_stripped)
+                    "middleware": _extract_inline_middleware(line_stripped),
                 }
 
                 endpoints.append(endpoint)
@@ -256,7 +236,7 @@ def _extract_middleware_from_file(file_path: str, content: str) -> list[dict[str
         r"(?:app|router)\.use\s*\(\s*['\"]([^'\"]+)['\"],\s*([^,)]+)",
     ]
 
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     for line_num, line in enumerate(lines, 1):
         line_stripped = line.strip()
@@ -279,7 +259,7 @@ def _extract_middleware_from_file(file_path: str, content: str) -> list[dict[str
                     "file_path": file_path,
                     "line_number": line_num,
                     "type": "global" if path == "*" else "path-specific",
-                    "description": _extract_description(lines, line_num - 1)
+                    "description": _extract_description(lines, line_num - 1),
                 }
 
                 middleware.append(middleware_info)
@@ -287,14 +267,9 @@ def _extract_middleware_from_file(file_path: str, content: str) -> list[dict[str
     return middleware
 
 
-def _extract_handler_info(
-    line: str, lines: list[str], line_index: int
-) -> dict[str, Any]:
+def _extract_handler_info(line: str, lines: list[str], line_index: int) -> dict[str, Any]:
     """Extract handler function information."""
-    info = {
-        "handler_name": "",
-        "is_async": False
-    }
+    info = {"handler_name": "", "is_async": False}
 
     # Look for handler name in the same line
     handler_match = re.search(r"(?:,\s*|=>\s*)(\w+)", line)
@@ -360,7 +335,7 @@ def _extract_description(lines: list[str], line_index: int) -> str:
         # Docstrings
         elif '"""' in line or "'''" in line:
             # Simple docstring extraction
-            docstring = line.replace('"""', '').replace("'''", '').strip()
+            docstring = line.replace('"""', "").replace("'''", "").strip()
             if docstring:
                 description_lines.insert(0, docstring)
         else:
@@ -386,16 +361,11 @@ def _extract_description(lines: list[str], line_index: int) -> str:
                         continue
                     if '"""' in next_line or "'''" in next_line:
                         # Extract docstring content
-                        docstring = (
-                            next_line.replace('"""', '').replace("'''", '').strip()
-                        )
+                        docstring = next_line.replace('"""', "").replace("'''", "").strip()
                         if docstring:
                             description_lines.append(docstring)
                         break
-                    elif (
-                        not next_line.startswith("#")
-                        and not next_line.startswith("//")
-                    ):
+                    elif not next_line.startswith("#") and not next_line.startswith("//"):
                         # Hit code, stop looking
                         break
                 break
@@ -409,14 +379,12 @@ def _extract_inline_middleware(line: str) -> list[str]:
 
     # Look for middleware functions between route definition and handler
     # Example: router.get('/path', auth, validate, handler)
-    parts = line.split(',')
+    parts = line.split(",")
     if len(parts) > 2:  # More than just path and handler
         for part in parts[1:-1]:  # Skip path and handler
             middleware_name = part.strip()
             # Filter out obvious non-middleware tokens
-            if middleware_name and not any(
-                char in middleware_name for char in ['(', ')', '"', "'"]
-            ):
+            if middleware_name and not any(char in middleware_name for char in ["(", ")", '"', "'"]):
                 middleware.append(middleware_name)
 
     return middleware
@@ -428,9 +396,9 @@ def _derive_nextjs_path(file_path: str) -> str:
 
     # Find 'api' in the path
     try:
-        api_index = path_parts.index('api')
+        api_index = path_parts.index("api")
         # Take everything after 'api'
-        route_parts = path_parts[api_index + 1:]
+        route_parts = path_parts[api_index + 1 :]
         # Remove file extension from last part
         if route_parts:
             last_part = route_parts[-1]
@@ -449,8 +417,8 @@ def _get_base_path(path: str) -> str:
         return "/"
 
     # Remove parameters and get first path segment
-    clean_path = re.sub(r'[:{][^}/]*[}]?', '', path)
-    parts = [p for p in clean_path.split('/') if p]
+    clean_path = re.sub(r"[:{][^}/]*[}]?", "", path)
+    parts = [p for p in clean_path.split("/") if p]
 
     if not parts:
         return "/"

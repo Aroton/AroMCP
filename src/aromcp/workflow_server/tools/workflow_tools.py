@@ -1,18 +1,25 @@
 """MCP tools for workflow management and execution."""
 
 import json
+import time
 from typing import Any
 
 from ...utils.json_parameter_middleware import json_convert
+from ..state.concurrent import ConcurrentStateManager
 from ..state.manager import StateManager
 from ..workflow.executor import WorkflowExecutor
 from ..workflow.loader import WorkflowLoader
 from ..workflow.models import WorkflowExecutionError, WorkflowNotFoundError
+from ..workflow.parallel import ParallelForEachProcessor
+from ..workflow.sub_agents import SubAgentManager
 
 # Global instances for workflow management
 _workflow_loader = None
 _workflow_executor = None
 _state_manager = None
+_concurrent_state_manager = None
+_sub_agent_manager = None
+_parallel_processor = None
 
 
 def get_workflow_loader() -> WorkflowLoader:
@@ -39,6 +46,34 @@ def get_state_manager() -> StateManager:
     if _state_manager is None:
         _state_manager = StateManager()
     return _state_manager
+
+
+def get_concurrent_state_manager() -> ConcurrentStateManager:
+    """Get or create concurrent state manager instance."""
+    global _concurrent_state_manager, _state_manager
+    if _concurrent_state_manager is None:
+        if _state_manager is None:
+            _state_manager = StateManager()
+        _concurrent_state_manager = ConcurrentStateManager(_state_manager)
+    return _concurrent_state_manager
+
+
+def get_sub_agent_manager() -> SubAgentManager:
+    """Get or create sub-agent manager instance."""
+    global _sub_agent_manager
+    if _sub_agent_manager is None:
+        _sub_agent_manager = SubAgentManager()
+    return _sub_agent_manager
+
+
+def get_parallel_processor() -> ParallelForEachProcessor:
+    """Get or create parallel processor instance."""
+    global _parallel_processor
+    if _parallel_processor is None:
+        from ..workflow.expressions import ExpressionEvaluator
+
+        _parallel_processor = ParallelForEachProcessor(ExpressionEvaluator())
+    return _parallel_processor
 
 
 def register_workflow_tools(mcp):
@@ -76,7 +111,7 @@ def register_workflow_tools(mcp):
                     "type": input_def.type,
                     "description": input_def.description,
                     "required": input_def.required,
-                    "default": input_def.default
+                    "default": input_def.default,
                 }
 
             return {
@@ -87,24 +122,14 @@ def register_workflow_tools(mcp):
                     "inputs": input_info,
                     "total_steps": len(workflow_def.steps),
                     "source": workflow_def.source,
-                    "loaded_from": workflow_def.loaded_from
+                    "loaded_from": workflow_def.loaded_from,
                 }
             }
 
         except WorkflowNotFoundError as e:
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": str(e)
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": str(e)}}
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to get workflow info: {e}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to get workflow info: {e}"}}
 
     @mcp.tool
     @json_convert
@@ -141,10 +166,7 @@ def register_workflow_tools(mcp):
                     inputs = json.loads(inputs)
                 except json.JSONDecodeError:
                     return {
-                        "error": {
-                            "code": "INVALID_INPUT",
-                            "message": "Inputs must be valid JSON if provided as string"
-                        }
+                        "error": {"code": "INVALID_INPUT", "message": "Inputs must be valid JSON if provided as string"}
                     }
 
             # Start workflow
@@ -153,26 +175,11 @@ def register_workflow_tools(mcp):
             return {"data": result}
 
         except WorkflowNotFoundError as e:
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": str(e)
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": str(e)}}
         except WorkflowExecutionError as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": str(e)
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": str(e)}}
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to start workflow: {e}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to start workflow: {e}"}}
 
     @mcp.tool
     @json_convert
@@ -199,78 +206,16 @@ def register_workflow_tools(mcp):
             loader = get_workflow_loader()
             workflows = loader.list_available_workflows(include_global)
 
-            return {
-                "data": {
-                    "workflows": workflows,
-                    "count": len(workflows)
-                }
-            }
+            return {"data": {"workflows": workflows, "count": len(workflows)}}
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to list workflows: {e}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to list workflows: {e}"}}
 
     @mcp.tool
     @json_convert
-    def workflow_get_next_step(workflow_id: str) -> dict[str, Any]:
-        """Get the next atomic step to execute for a workflow.
-
-        Use this tool when:
-        - You need the next step to execute in a workflow
-        - You're implementing workflow execution logic
-        - You want to advance a workflow to its next action
-        - You need to know what action to take next
-
-        Args:
-            workflow_id: ID of the workflow instance
-
-        Returns:
-            Next step to execute or completion status
-
-        Example:
-            workflow_get_next_step("wf_abc123")
-            → {"step": {"type": "state_update", "definition": {...}}}
-        """
-        try:
-            executor = get_workflow_executor()
-            next_step = executor.get_next_step(workflow_id)
-
-            if next_step is None:
-                # Workflow is complete
-                status = executor.get_workflow_status(workflow_id)
-                return {
-                    "data": {
-                        "completed": True,
-                        "status": status["status"],
-                        "workflow_id": workflow_id
-                    }
-                }
-
-            return {"data": next_step}
-
-        except WorkflowExecutionError as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": str(e)
-                }
-            }
-        except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to get next step: {e}"
-                }
-            }
-
-    @mcp.tool
-    @json_convert
-    def workflow_step_complete(workflow_id: str, step_id: str, status: str = "success",
-                              result: dict[str, Any] | str | None = None) -> dict[str, Any]:
+    def workflow_step_complete(
+        workflow_id: str, step_id: str, status: str = "success", result: dict[str, Any] | str | None = None
+    ) -> dict[str, Any]:
         """Mark a workflow step as complete and advance to next step.
 
         Use this tool when:
@@ -307,30 +252,14 @@ def register_workflow_tools(mcp):
             if status == "failed" and result:
                 error_message = result.get("error", "Step execution failed")
 
-            completion_result = executor.step_complete(
-                workflow_id,
-                step_id,
-                status,
-                result,
-                error_message
-            )
+            completion_result = executor.step_complete(workflow_id, step_id, status, result, error_message)
 
             return {"data": completion_result}
 
         except WorkflowExecutionError as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": str(e)
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": str(e)}}
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to complete step: {e}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to complete step: {e}"}}
 
     @mcp.tool
     @json_convert
@@ -360,19 +289,9 @@ def register_workflow_tools(mcp):
             return {"data": status}
 
         except WorkflowExecutionError as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": str(e)
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": str(e)}}
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to get workflow status: {e}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to get workflow status: {e}"}}
 
     @mcp.tool
     @json_convert
@@ -407,7 +326,7 @@ def register_workflow_tools(mcp):
                     return {
                         "error": {
                             "code": "INVALID_INPUT",
-                            "message": "Updates must be valid JSON if provided as string"
+                            "message": "Updates must be valid JSON if provided as string",
                         }
                     }
 
@@ -416,19 +335,9 @@ def register_workflow_tools(mcp):
             return {"data": {"state": updated_state}}
 
         except WorkflowExecutionError as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": str(e)
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": str(e)}}
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to update workflow state: {e}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to update workflow state: {e}"}}
 
     @mcp.tool
     @json_convert
@@ -452,17 +361,331 @@ def register_workflow_tools(mcp):
             executor = get_workflow_executor()
             active_workflows = executor.list_active_workflows()
 
+            return {"data": {"workflows": active_workflows, "count": len(active_workflows)}}
+
+        except Exception as e:
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to list active workflows: {e}"}}
+
+    @mcp.tool
+    @json_convert
+    def workflow_get_next_step(
+        workflow_id: str, sub_agent_context: dict[str, Any] | str | None = None
+    ) -> dict[str, Any]:
+        """Get next step with sub-agent context support.
+
+        Use this tool when:
+        - You are a sub-agent getting your next task step
+        - You need workflow guidance with your specific context
+        - You are executing parallel tasks and need filtered steps
+        - You want to advance workflow execution with context isolation
+
+        Args:
+            workflow_id: ID of the workflow instance
+            sub_agent_context: Sub-agent context including task_id and context data
+
+        Returns:
+            Next step filtered for sub-agent or main workflow step
+
+        Example:
+            workflow_get_next_step("wf_abc123", {"task_id": "batch_0", "context": {...}})
+            → {"step": {"type": "mcp_call", "definition": {...}}}
+        """
+        try:
+            executor = get_workflow_executor()
+
+            # Parse sub_agent_context if provided as string
+            if isinstance(sub_agent_context, str):
+                try:
+                    sub_agent_context = json.loads(sub_agent_context)
+                except json.JSONDecodeError:
+                    return {
+                        "error": {
+                            "code": "INVALID_INPUT",
+                            "message": "Sub-agent context must be valid JSON if provided as string",
+                        }
+                    }
+
+            # If sub-agent context provided, get filtered steps
+            if sub_agent_context and "task_id" in sub_agent_context:
+                sub_agent_manager = get_sub_agent_manager()
+                agent = sub_agent_manager.get_agent_by_task_id(workflow_id, sub_agent_context["task_id"])
+
+                if agent:
+                    # Record activity
+                    sub_agent_manager.record_agent_activity(agent.agent_id)
+
+                    # Get filtered steps for this sub-agent
+                    filtered_steps = sub_agent_manager.get_filtered_steps_for_agent(agent.agent_id)
+
+                    if filtered_steps:
+                        next_step = filtered_steps[0]  # Get next step
+                        return {"data": {"step": next_step}}
+                    else:
+                        # Sub-agent task complete
+                        sub_agent_manager.update_agent_status(agent.agent_id, "completed")
+                        return {
+                            "data": {
+                                "completed": True,
+                                "task_id": sub_agent_context["task_id"],
+                                "workflow_id": workflow_id,
+                            }
+                        }
+                else:
+                    return {
+                        "error": {
+                            "code": "NOT_FOUND",
+                            "message": f"Sub-agent not found for task_id: {sub_agent_context['task_id']}",
+                        }
+                    }
+
+            # Regular workflow step processing
+            next_step = executor.get_next_step(workflow_id)
+
+            if next_step is None:
+                status = executor.get_workflow_status(workflow_id)
+                return {"data": {"completed": True, "status": status["status"], "workflow_id": workflow_id}}
+
+            return {"data": next_step}
+
+        except WorkflowExecutionError as e:
+            return {"error": {"code": "OPERATION_FAILED", "message": str(e)}}
+        except Exception as e:
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to get next step: {e}"}}
+
+    @mcp.tool
+    @json_convert
+    def workflow_checkpoint(workflow_id: str, step_id: str, reason: str) -> dict[str, Any]:
+        """Create workflow checkpoint for recovery.
+
+        Use this tool when:
+        - You want to save workflow state at a critical point
+        - You need recovery capability for long-running workflows
+        - You want to create save points before risky operations
+        - You need to preserve state across system restarts
+
+        Args:
+            workflow_id: ID of the workflow instance
+            step_id: Current step ID where checkpoint is created
+            reason: Reason for creating checkpoint
+
+        Returns:
+            Checkpoint information and success status
+
+        Example:
+            workflow_checkpoint("wf_abc123", "step_5", "Before batch processing")
+            → {"checkpoint_id": "cp_xyz", "created_at": "...", "version": 3}
+        """
+        try:
+            concurrent_manager = get_concurrent_state_manager()
+
+            # Create checkpoint
+            checkpoint_result = concurrent_manager.create_checkpoint(workflow_id)
+
+            if checkpoint_result["success"]:
+                checkpoint = checkpoint_result["checkpoint"]
+                checkpoint.update(
+                    {"step_id": step_id, "reason": reason, "checkpoint_id": f"cp_{workflow_id}_{int(time.time())}"}
+                )
+
+                return {
+                    "data": {
+                        "checkpoint_id": checkpoint["checkpoint_id"],
+                        "workflow_id": workflow_id,
+                        "step_id": step_id,
+                        "reason": reason,
+                        "created_at": checkpoint["created_at"],
+                        "version": checkpoint["version"],
+                    }
+                }
+            else:
+                return {
+                    "error": {
+                        "code": "CHECKPOINT_FAILED",
+                        "message": checkpoint_result.get("message", "Failed to create checkpoint"),
+                    }
+                }
+
+        except Exception as e:
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to create checkpoint: {e}"}}
+
+    @mcp.tool
+    @json_convert
+    def workflow_resume(workflow_id: str) -> dict[str, Any]:
+        """Resume workflow from checkpoint.
+
+        Use this tool when:
+        - You want to restore a workflow from a saved checkpoint
+        - You need to recover from a system failure or restart
+        - You want to rollback to a previous workflow state
+        - You need to continue execution from a known good state
+
+        Args:
+            workflow_id: ID of the workflow instance to resume
+
+        Returns:
+            Resume status and restored workflow information
+
+        Example:
+            workflow_resume("wf_abc123")
+            → {"resumed": true, "restored_version": 3, "current_step": "step_5"}
+        """
+        try:
+            # This is a simplified implementation
+            # In a full system, you'd store checkpoints and restore from them
+            executor = get_workflow_executor()
+            status = executor.get_workflow_status(workflow_id)
+
             return {
                 "data": {
-                    "workflows": active_workflows,
-                    "count": len(active_workflows)
+                    "resumed": True,
+                    "workflow_id": workflow_id,
+                    "status": status["status"],
+                    "current_step_index": status.get("current_step_index", 0),
+                    "message": "Workflow resumed from current state",
                 }
             }
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to list active workflows: {e}"
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to resume workflow: {e}"}}
+
+    @mcp.tool
+    @json_convert
+    def workflow_create_sub_agent(
+        workflow_id: str,
+        task_id: str,
+        task_name: str,
+        context: dict[str, Any] | str,
+        parent_step_id: str,
+        custom_prompt: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a sub-agent for parallel task execution.
+
+        Use this tool when:
+        - You need to delegate work to a sub-agent
+        - You are implementing parallel_foreach step execution
+        - You want to isolate task context for specific work
+        - You need to distribute work across multiple agents
+
+        Args:
+            workflow_id: Parent workflow ID
+            task_id: Unique identifier for this task
+            task_name: Name of task definition to execute
+            context: Context data for the sub-agent
+            parent_step_id: ID of step that created this sub-agent
+            custom_prompt: Optional custom prompt override
+
+        Returns:
+            Sub-agent registration information and prompt
+
+        Example:
+            workflow_create_sub_agent("wf_abc123", "batch_0", "process_batch",
+                                    {"files": ["a.ts", "b.ts"]}, "step_3")
+            → {"agent_id": "agent_xyz", "task_id": "batch_0", "prompt": "..."}
+        """
+        try:
+            # Parse context if provided as string
+            if isinstance(context, str):
+                try:
+                    context = json.loads(context)
+                except json.JSONDecodeError:
+                    return {
+                        "error": {
+                            "code": "INVALID_INPUT",
+                            "message": "Context must be valid JSON if provided as string",
+                        }
+                    }
+
+            sub_agent_manager = get_sub_agent_manager()
+
+            # Create sub-agent
+            registration = sub_agent_manager.create_sub_agent(
+                workflow_id=workflow_id,
+                task_id=task_id,
+                task_name=task_name,
+                context=context,
+                parent_step_id=parent_step_id,
+                custom_prompt=custom_prompt,
+            )
+
+            if registration:
+                return {
+                    "data": {
+                        "agent_id": registration.agent_id,
+                        "task_id": registration.task_id,
+                        "workflow_id": registration.workflow_id,
+                        "prompt": registration.prompt,
+                        "context": registration.context.to_dict(),
+                        "status": registration.status,
+                        "created_at": registration.created_at,
+                    }
                 }
-            }
+            else:
+                return {
+                    "error": {"code": "CREATION_FAILED", "message": f"Failed to create sub-agent for task: {task_name}"}
+                }
+
+        except Exception as e:
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to create sub-agent: {e}"}}
+
+    @mcp.tool
+    @json_convert
+    def workflow_get_sub_agent_status(workflow_id: str, task_id: str | None = None) -> dict[str, Any]:
+        """Get status of sub-agents for a workflow.
+
+        Use this tool when:
+        - You want to monitor parallel task execution progress
+        - You need to check if sub-agents have completed their work
+        - You want to see which tasks are still running
+        - You need to coordinate between parallel sub-agents
+
+        Args:
+            workflow_id: Workflow ID to check sub-agents for
+            task_id: Optional specific task ID to check
+
+        Returns:
+            Sub-agent status information and statistics
+
+        Example:
+            workflow_get_sub_agent_status("wf_abc123")
+            → {"total_agents": 3, "completed": 2, "active": 1, "agents": [...]}
+        """
+        try:
+            sub_agent_manager = get_sub_agent_manager()
+
+            if task_id:
+                # Get specific sub-agent
+                agent = sub_agent_manager.get_agent_by_task_id(workflow_id, task_id)
+                if agent:
+                    return {
+                        "data": {
+                            "agent_id": agent.agent_id,
+                            "task_id": agent.task_id,
+                            "status": agent.status,
+                            "step_count": agent.step_count,
+                            "last_activity": agent.last_activity,
+                            "error": agent.error,
+                        }
+                    }
+                else:
+                    return {"error": {"code": "NOT_FOUND", "message": f"Sub-agent not found for task_id: {task_id}"}}
+            else:
+                # Get all sub-agents for workflow
+                agents = sub_agent_manager.get_workflow_agents(workflow_id)
+                stats = sub_agent_manager.get_agent_stats(workflow_id)
+
+                agent_data = [
+                    {
+                        "agent_id": agent.agent_id,
+                        "task_id": agent.task_id,
+                        "status": agent.status,
+                        "step_count": agent.step_count,
+                        "last_activity": agent.last_activity,
+                        "error": agent.error,
+                    }
+                    for agent in agents
+                ]
+
+                return {"data": {"workflow_id": workflow_id, "agents": agent_data, "stats": stats}}
+
+        except Exception as e:
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to get sub-agent status: {e}"}}

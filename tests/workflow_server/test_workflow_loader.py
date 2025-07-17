@@ -41,7 +41,7 @@ version: "1.0.0"
             global_file.write_text(global_content)
 
             # Mock home directory to point to our temp global location
-            with patch('os.path.expanduser') as mock_expanduser:
+            with patch("os.path.expanduser") as mock_expanduser:
                 mock_expanduser.return_value = str(Path(temp_dir) / "global")
 
                 loader = WorkflowLoader(project_root=temp_dir)
@@ -66,7 +66,7 @@ version: "1.0.0"
             global_file.write_text(global_content)
 
             # Mock home directory
-            with patch('os.path.expanduser') as mock_expanduser:
+            with patch("os.path.expanduser") as mock_expanduser:
                 mock_expanduser.return_value = str(Path(temp_dir) / "global")
 
                 loader = WorkflowLoader(project_root=temp_dir)
@@ -78,7 +78,7 @@ version: "1.0.0"
     def test_workflow_not_found(self):
         """Test error when workflow doesn't exist in either location."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch('os.path.expanduser') as mock_expanduser:
+            with patch("os.path.expanduser") as mock_expanduser:
                 mock_expanduser.return_value = str(Path(temp_dir) / "global")
 
                 loader = WorkflowLoader(project_root=temp_dir)
@@ -260,7 +260,7 @@ description: "Global version"
 version: "2.0.0"
 """)
 
-            with patch('os.path.expanduser') as mock_expanduser:
+            with patch("os.path.expanduser") as mock_expanduser:
                 mock_expanduser.return_value = str(Path(temp_dir) / "global")
 
                 loader = WorkflowLoader(project_root=temp_dir)
@@ -302,7 +302,7 @@ description: "Global workflow"
 version: "1.0.0"
 """)
 
-            with patch('os.path.expanduser') as mock_expanduser:
+            with patch("os.path.expanduser") as mock_expanduser:
                 mock_expanduser.return_value = str(Path(temp_dir) / "global")
 
                 loader = WorkflowLoader(project_root=temp_dir)

@@ -29,10 +29,7 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
 
     @mcp.tool
     @json_convert
-    def workflow_state_read(
-        workflow_id: str,
-        paths: list[str] | str | None = None
-    ) -> dict[str, Any]:
+    def workflow_state_read(workflow_id: str, paths: list[str] | str | None = None) -> dict[str, Any]:
         """
         Read workflow state with flattened view
 
@@ -70,34 +67,16 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
 
             state = manager.read(workflow_id, path_list)
 
-            return {
-                "data": {
-                    "workflow_id": workflow_id,
-                    "state": state
-                }
-            }
+            return {"data": {"workflow_id": workflow_id, "state": state}}
 
         except KeyError as e:
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": str(e)
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": str(e)}}
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to read state: {str(e)}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to read state: {str(e)}"}}
 
     @mcp.tool
     @json_convert
-    def workflow_state_update(
-        workflow_id: str,
-        updates: list[dict[str, Any]] | str
-    ) -> dict[str, Any]:
+    def workflow_state_update(workflow_id: str, updates: list[dict[str, Any]] | str) -> dict[str, Any]:
         """
         Update workflow state and trigger cascading transformations
 
@@ -135,43 +114,28 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
             # Handle JSON string input for updates
             if isinstance(updates, str):
                 import json
+
                 updates = json.loads(updates)
 
             if not isinstance(updates, list):
-                return {
-                    "error": {
-                        "code": "INVALID_INPUT",
-                        "message": "Updates must be a list of update operations"
-                    }
-                }
+                return {"error": {"code": "INVALID_INPUT", "message": "Updates must be a list of update operations"}}
 
             # Validate update structure
             for i, update in enumerate(updates):
                 if not isinstance(update, dict):
-                    return {
-                        "error": {
-                            "code": "INVALID_INPUT",
-                            "message": f"Update {i} must be a dictionary"
-                        }
-                    }
+                    return {"error": {"code": "INVALID_INPUT", "message": f"Update {i} must be a dictionary"}}
 
                 if "path" not in update or "value" not in update:
                     return {
                         "error": {
                             "code": "INVALID_INPUT",
-                            "message": f"Update {i} must contain 'path' and 'value' fields"
+                            "message": f"Update {i} must contain 'path' and 'value' fields",
                         }
                     }
 
             updated_state = manager.update(workflow_id, updates)
 
-            return {
-                "data": {
-                    "workflow_id": workflow_id,
-                    "state": updated_state,
-                    "updates_applied": len(updates)
-                }
-            }
+            return {"data": {"workflow_id": workflow_id, "state": updated_state, "updates_applied": len(updates)}}
 
         except Exception as e:
             error_message = str(e)
@@ -186,19 +150,11 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
             else:
                 error_code = "OPERATION_FAILED"
 
-            return {
-                "error": {
-                    "code": error_code,
-                    "message": f"Failed to update state: {error_message}"
-                }
-            }
+            return {"error": {"code": error_code, "message": f"Failed to update state: {error_message}"}}
 
     @mcp.tool
     @json_convert
-    def workflow_state_dependencies(
-        workflow_id: str,
-        field: str
-    ) -> dict[str, Any]:
+    def workflow_state_dependencies(workflow_id: str, field: str) -> dict[str, Any]:
         """
         Get computed field dependency information
 
@@ -234,22 +190,12 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
             # For now, return basic information
             # In a full implementation, this would analyze the dependency graph
             if not manager._cascade_calculator:
-                return {
-                    "error": {
-                        "code": "NOT_FOUND",
-                        "message": "No computed fields defined for this workflow"
-                    }
-                }
+                return {"error": {"code": "NOT_FOUND", "message": "No computed fields defined for this workflow"}}
 
             dependencies = manager._cascade_calculator.dependencies
 
             if field not in dependencies:
-                return {
-                    "error": {
-                        "code": "NOT_FOUND",
-                        "message": f"Computed field '{field}' not found"
-                    }
-                }
+                return {"error": {"code": "NOT_FOUND", "message": f"Computed field '{field}' not found"}}
 
             field_info = dependencies[field]
 
@@ -268,24 +214,17 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
                     "dependents": dependents,
                     "transform": field_info["transform"],
                     "on_error": field_info["on_error"],
-                    "fallback": field_info["fallback"]
+                    "fallback": field_info["fallback"],
                 }
             }
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to get dependencies: {str(e)}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to get dependencies: {str(e)}"}}
 
     @mcp.tool
     @json_convert
     def workflow_state_init(
-        workflow_id: str,
-        schema: dict[str, Any] | str | None = None,
-        initial_state: dict[str, Any] | str | None = None
+        workflow_id: str, schema: dict[str, Any] | str | None = None, initial_state: dict[str, Any] | str | None = None
     ) -> dict[str, Any]:
         """
         Initialize a new workflow with schema and default state
@@ -323,6 +262,7 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
             if schema is not None:
                 if isinstance(schema, str):
                     import json
+
                     schema = json.loads(schema)
                 state_schema = StateSchema(**schema)
 
@@ -339,6 +279,7 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
             if initial_state is not None:
                 if isinstance(initial_state, str):
                     import json
+
                     initial_state = json.loads(initial_state)
 
                 # Convert initial state to update operations
@@ -346,43 +287,21 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
                 for tier in ["raw", "state"]:
                     if tier in initial_state:
                         for key, value in initial_state[tier].items():
-                            updates.append({
-                                "path": f"{tier}.{key}",
-                                "value": value
-                            })
+                            updates.append({"path": f"{tier}.{key}", "value": value})
 
                 if updates:
                     updated_state = manager.update(workflow_id, updates)
-                    return {
-                        "data": {
-                            "workflow_id": workflow_id,
-                            "state": updated_state,
-                            "initialized": True
-                        }
-                    }
+                    return {"data": {"workflow_id": workflow_id, "state": updated_state, "initialized": True}}
 
             # Return empty initialized state
-            return {
-                "data": {
-                    "workflow_id": workflow_id,
-                    "state": {},
-                    "initialized": True
-                }
-            }
+            return {"data": {"workflow_id": workflow_id, "state": {}, "initialized": True}}
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to initialize workflow: {str(e)}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to initialize workflow: {str(e)}"}}
 
     @mcp.tool
     @json_convert
-    def workflow_state_validate_path(
-        path: str
-    ) -> dict[str, Any]:
+    def workflow_state_validate_path(path: str) -> dict[str, Any]:
         """
         Validate if a state path is writable
 
@@ -412,18 +331,11 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
             manager = get_state_manager()
             is_valid = manager.validate_update_path(path)
 
-            result = {
-                "path": path,
-                "valid": is_valid
-            }
+            result = {"path": path, "valid": is_valid}
 
             if is_valid:
                 tier, field = path.split(".", 1)
-                result.update({
-                    "writable": True,
-                    "tier": tier,
-                    "field": field
-                })
+                result.update({"writable": True, "tier": tier, "field": field})
             else:
                 # Determine why it's invalid
                 if not path or "." not in path:
@@ -435,17 +347,9 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
                 else:
                     reason = "Invalid path format"
 
-                result.update({
-                    "writable": False,
-                    "reason": reason
-                })
+                result.update({"writable": False, "reason": reason})
 
             return {"data": result}
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to validate path: {str(e)}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to validate path: {str(e)}"}}

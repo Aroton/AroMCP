@@ -57,9 +57,7 @@ class WorkflowLoader:
 
         # Not found in either location
         raise WorkflowNotFoundError(
-            f"Workflow '{workflow_name}' not found. Searched:\n"
-            f"  - {project_path}\n"
-            f"  - {user_path}"
+            f"Workflow '{workflow_name}' not found. Searched:\n  - {project_path}\n  - {user_path}"
         )
 
     def _load_from_file(self, file_path: Path, source: str) -> WorkflowDefinition:
@@ -73,7 +71,7 @@ class WorkflowLoader:
             Parsed workflow definition
         """
         try:
-            with open(file_path, encoding='utf-8') as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             return self._parse_yaml(content, str(file_path), source)
@@ -105,30 +103,30 @@ class WorkflowLoader:
             raise WorkflowValidationError("Workflow must be a YAML object")
 
         # Validate required fields
-        required_fields = ['name', 'description', 'version']
+        required_fields = ["name", "description", "version"]
         for field in required_fields:
             if field not in data:
                 raise WorkflowValidationError(f"Missing required field: {field}")
 
         # Parse components
         try:
-            default_state = data.get('default_state', {})
-            state_schema = self._parse_state_schema(data.get('state_schema', {}))
-            inputs = self._parse_inputs(data.get('inputs', {}))
-            steps = self._parse_steps(data.get('steps', []))
-            sub_agent_tasks = self._parse_sub_agent_tasks(data.get('sub_agent_tasks', {}))
+            default_state = data.get("default_state", {})
+            state_schema = self._parse_state_schema(data.get("state_schema", {}))
+            inputs = self._parse_inputs(data.get("inputs", {}))
+            steps = self._parse_steps(data.get("steps", []))
+            sub_agent_tasks = self._parse_sub_agent_tasks(data.get("sub_agent_tasks", {}))
 
             return WorkflowDefinition(
-                name=data['name'],
-                description=data['description'],
-                version=data['version'],
+                name=data["name"],
+                description=data["description"],
+                version=data["version"],
                 default_state=default_state,
                 state_schema=state_schema,
                 inputs=inputs,
                 steps=steps,
                 sub_agent_tasks=sub_agent_tasks,
                 loaded_from=file_path,
-                source=source
+                source=source,
             )
 
         except Exception as e:
@@ -136,9 +134,9 @@ class WorkflowLoader:
 
     def _parse_state_schema(self, schema_data: dict[str, Any]) -> StateSchema:
         """Parse state schema from YAML data."""
-        raw = schema_data.get('raw', {})
-        state = schema_data.get('state', {})
-        computed_data = schema_data.get('computed', {})
+        raw = schema_data.get("raw", {})
+        state = schema_data.get("state", {})
+        computed_data = schema_data.get("computed", {})
 
         # Parse computed field definitions (keep as raw dictionaries for compatibility)
         computed = {}
@@ -147,16 +145,9 @@ class WorkflowLoader:
                 computed[field_name] = field_def
             else:
                 # Simple type definition
-                computed[field_name] = {
-                    "from": [],
-                    "transform": "input"
-                }
+                computed[field_name] = {"from": [], "transform": "input"}
 
-        return StateSchema(
-            raw=raw,
-            computed=computed,
-            state=state
-        )
+        return StateSchema(raw=raw, computed=computed, state=state)
 
     def _parse_inputs(self, inputs_data: dict[str, Any]) -> dict[str, InputDefinition]:
         """Parse input definitions from YAML data."""
@@ -164,18 +155,15 @@ class WorkflowLoader:
         for name, input_def in inputs_data.items():
             if isinstance(input_def, dict):
                 inputs[name] = InputDefinition(
-                    type=input_def.get('type', 'string'),
-                    description=input_def.get('description', ''),
-                    required=input_def.get('required', True),
-                    default=input_def.get('default'),
-                    validation=input_def.get('validation')
+                    type=input_def.get("type", "string"),
+                    description=input_def.get("description", ""),
+                    required=input_def.get("required", True),
+                    default=input_def.get("default"),
+                    validation=input_def.get("validation"),
                 )
             else:
                 # Simple type string
-                inputs[name] = InputDefinition(
-                    type=str(input_def),
-                    description=f"Input parameter {name}"
-                )
+                inputs[name] = InputDefinition(type=str(input_def), description=f"Input parameter {name}")
 
         return inputs
 
@@ -186,21 +174,17 @@ class WorkflowLoader:
             if not isinstance(step_data, dict):
                 raise WorkflowValidationError(f"Step {i} must be an object")
 
-            step_type = step_data.get('type')
+            step_type = step_data.get("type")
             if not step_type:
                 raise WorkflowValidationError(f"Step {i} missing required 'type' field")
 
             # Generate ID if not provided
-            step_id = step_data.get('id', f"step_{i}")
+            step_id = step_data.get("id", f"step_{i}")
 
             # Extract definition (everything except id and type)
-            definition = {k: v for k, v in step_data.items() if k not in ['id', 'type']}
+            definition = {k: v for k, v in step_data.items() if k not in ["id", "type"]}
 
-            steps.append(WorkflowStep(
-                id=step_id,
-                type=step_type,
-                definition=definition
-            ))
+            steps.append(WorkflowStep(id=step_id, type=step_type, definition=definition))
 
         return steps
 
@@ -211,14 +195,14 @@ class WorkflowLoader:
             if not isinstance(task_data, dict):
                 raise WorkflowValidationError(f"Sub-agent task '{name}' must be an object")
 
-            inputs = self._parse_inputs(task_data.get('inputs', {}))
+            inputs = self._parse_inputs(task_data.get("inputs", {}))
 
             tasks[name] = SubAgentTask(
                 name=name,
-                description=task_data.get('description', ''),
+                description=task_data.get("description", ""),
                 inputs=inputs,
-                context_template=task_data.get('context_template', {}),
-                prompt_template=task_data.get('prompt_template', '')
+                context_template=task_data.get("context_template", {}),
+                prompt_template=task_data.get("prompt_template", ""),
             )
 
         return tasks
@@ -240,13 +224,15 @@ class WorkflowLoader:
             for file_path in project_dir.glob("*.yaml"):
                 try:
                     workflow = self._load_from_file(file_path, "project")
-                    workflows.append({
-                        "name": workflow.name,
-                        "description": workflow.description,
-                        "version": workflow.version,
-                        "source": "project",
-                        "path": str(file_path)
-                    })
+                    workflows.append(
+                        {
+                            "name": workflow.name,
+                            "description": workflow.description,
+                            "version": workflow.version,
+                            "source": "project",
+                            "path": str(file_path),
+                        }
+                    )
                 except Exception as e:
                     # Skip invalid workflows
                     logger.debug(f"Skipping invalid workflow file {file_path}: {e}")
@@ -260,13 +246,15 @@ class WorkflowLoader:
                         workflow = self._load_from_file(file_path, "global")
                         # Skip if already have project version
                         if not any(w["name"] == workflow.name for w in workflows):
-                            workflows.append({
-                                "name": workflow.name,
-                                "description": workflow.description,
-                                "version": workflow.version,
-                                "source": "global",
-                                "path": str(file_path)
-                            })
+                            workflows.append(
+                                {
+                                    "name": workflow.name,
+                                    "description": workflow.description,
+                                    "version": workflow.version,
+                                    "source": "global",
+                                    "path": str(file_path),
+                                }
+                            )
                     except Exception as e:
                         # Skip invalid workflows
                         logger.debug(f"Skipping invalid workflow file {file_path}: {e}")

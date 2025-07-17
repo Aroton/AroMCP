@@ -72,7 +72,7 @@ class SessionState:
             "pattern_frequency": dict(self.pattern_frequency),
             "rule_visit_counts": dict(self.rule_visit_counts),
             "last_activity": self.last_activity.isoformat(),
-            "session_duration": (datetime.now() - self.last_activity).total_seconds()
+            "session_duration": (datetime.now() - self.last_activity).total_seconds(),
         }
 
 
@@ -135,10 +135,7 @@ class SessionManager:
             "total_sessions": len(self.sessions),
             "active_sessions": list(self.sessions.keys()),
             "cleanup_interval": self.cleanup_interval,
-            "sessions": {
-                session_id: session.get_stats()
-                for session_id, session in self.sessions.items()
-            }
+            "sessions": {session_id: session.get_stats() for session_id, session in self.sessions.items()},
         }
 
     async def start_cleanup_task(self) -> None:

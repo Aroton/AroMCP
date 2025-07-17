@@ -55,7 +55,7 @@ class TestStorage:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             # Save metadata
@@ -77,15 +77,15 @@ class TestStorage:
                     "context": "Always catch exceptions",
                     "correctExample": "try: ...",
                     "incorrectExample": "just do it",
-                    "hasEslintRule": False
+                    "hasEslintRule": False,
                 },
                 {
                     "rule": "Use meaningful variable names",
                     "context": "Variables should be descriptive",
                     "correctExample": "user_count = 5",
                     "incorrectExample": "x = 5",
-                    "hasEslintRule": True
-                }
+                    "hasEslintRule": True,
+                },
             ]
 
             # Save hints
@@ -111,18 +111,20 @@ class TestStorage:
                 "tags": ["test", "example"],
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             save_standard_metadata("test-standard", metadata, temp_dir)
 
-            hints = [{
-                "rule": "Test rule",
-                "context": "Test context",
-                "correctExample": "correct",
-                "incorrectExample": "incorrect",
-                "hasEslintRule": False
-            }]
+            hints = [
+                {
+                    "rule": "Test rule",
+                    "context": "Test context",
+                    "correctExample": "correct",
+                    "incorrectExample": "incorrect",
+                    "hasEslintRule": False,
+                }
+            ]
 
             save_ai_hints("test-standard", hints, temp_dir)
 
@@ -152,7 +154,7 @@ class TestStorage:
                 "name": "API Standard",
                 "category": "api",
                 "appliesTo": ["api/**/*.js", "routes/**/*.js"],
-                "priority": "required"
+                "priority": "required",
             }
 
             component_metadata = {
@@ -160,7 +162,7 @@ class TestStorage:
                 "name": "Component Standard",
                 "category": "components",
                 "appliesTo": ["components/**/*.tsx", "ui/**/*.tsx"],
-                "priority": "recommended"
+                "priority": "recommended",
             }
 
             global_metadata = {
@@ -168,7 +170,7 @@ class TestStorage:
                 "name": "Global Standard",
                 "category": "general",
                 "appliesTo": [],  # No specific patterns
-                "priority": "important"
+                "priority": "important",
             }
 
             # Save metadata
@@ -211,7 +213,7 @@ class TestStorage:
                 "name": "API Validation",
                 "category": "api",
                 "appliesTo": ["api/**/*.js"],
-                "priority": "required"
+                "priority": "required",
             }
 
             component_metadata = {
@@ -219,7 +221,7 @@ class TestStorage:
                 "name": "Component Props",
                 "category": "components",
                 "appliesTo": ["components/**/*.tsx"],
-                "priority": "recommended"
+                "priority": "recommended",
             }
 
             save_standard_metadata("api-validation", api_metadata, temp_dir)
@@ -227,6 +229,7 @@ class TestStorage:
 
             # Create dummy rule files
             from aromcp.standards_server._storage import get_eslint_dir
+
             eslint_dir = get_eslint_dir(temp_dir)
             rules_dir = eslint_dir / "rules"
             rules_dir.mkdir(exist_ok=True)
@@ -244,6 +247,7 @@ class TestStorage:
 
             # Read and verify JSON config
             import json
+
             with open(eslint_dir / "standards-config.json") as f:
                 config = json.load(f)
 

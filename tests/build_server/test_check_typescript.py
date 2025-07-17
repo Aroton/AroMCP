@@ -23,9 +23,10 @@ class TestCheckTypeScript:
             mock_result.stderr = ""
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result):
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result),
+            ):
                 result = check_typescript_impl()
 
                 # Should only contain errors array and check_again flag when no errors
@@ -47,9 +48,10 @@ src/file2.ts(3,5): error TS2304: Cannot find name 'baz'.
 src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.returncode = 1
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result):
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result),
+            ):
                 result = check_typescript_impl()
 
                 # Should cap errors to first file only
@@ -77,9 +79,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with directory path
                 check_typescript_impl(files="src/components")
 
@@ -109,9 +112,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with file path
                 check_typescript_impl(files="src/test.ts")
 
@@ -138,9 +142,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with string input
                 result = check_typescript_impl(files="test.ts")
 
@@ -166,9 +171,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with list input
                 result = check_typescript_impl(files=["test1.ts", "test2.ts"])
 
@@ -197,9 +203,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with JSON string input
                 result = check_typescript_impl(files='["test1.ts", "test2.ts"]')
 
@@ -228,9 +235,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with mixed input
                 result = check_typescript_impl(files=["test.ts", "src"])
 
@@ -238,7 +246,7 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 mock_subprocess.assert_called_once()
                 call_args = mock_subprocess.call_args[0][0]
                 assert "test.ts" in call_args  # File unchanged
-                assert "src/*" in call_args    # Directory globbed
+                assert "src/*" in call_args  # Directory globbed
 
     def test_nonexistent_file_raises_error(self):
         """Test that nonexistent files raise appropriate error."""
@@ -248,7 +256,6 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             tsconfig.write_text('{"compilerOptions": {"strict": true}}')
 
             with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir):
-
                 try:
                     check_typescript_impl(files="nonexistent.ts")
                     raise AssertionError("Should have raised ValueError")
@@ -259,7 +266,6 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
         """Test that missing tsconfig.json raises appropriate error."""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir):
-
                 try:
                     check_typescript_impl()
                     raise AssertionError("Should have raised ValueError")
@@ -279,9 +285,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = "src/test.ts(10,5): error TS2304: Cannot find name 'undefinedVar'."
             mock_result.returncode = 1
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result):
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result),
+            ):
                 result = check_typescript_impl()
 
                 assert len(result["errors"]) == 1
@@ -308,9 +315,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with glob pattern
                 result = check_typescript_impl(files="src/**/*.ts")
 
@@ -334,9 +342,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = ""
             mock_result.returncode = 2
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result):
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result),
+            ):
                 result = check_typescript_impl()
 
                 assert len(result["errors"]) == 1
@@ -361,9 +370,10 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             mock_result.stderr = ""
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.check_typescript.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with no files parameter (None)
                 result = check_typescript_impl(files=None)
 

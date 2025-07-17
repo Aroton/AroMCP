@@ -28,12 +28,12 @@ class TestEnhancedHintsForFile:
                 "validation-standard": {
                     "sourcePath": "standards/validation.md",
                     "lastModified": "2024-01-01T00:00:00Z",
-                    "registered": True
+                    "registered": True,
                 }
             }
         }
 
-        with open(self.hints_dir / "manifest.json", 'w') as f:
+        with open(self.hints_dir / "manifest.json", "w") as f:
             json.dump(self.manifest, f)
 
         # Create sample standard metadata
@@ -44,14 +44,14 @@ class TestEnhancedHintsForFile:
             "tags": ["security", "validation"],
             "appliesTo": ["*.ts", "*.tsx", "components/*"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         # Create standard hints directory and metadata
         standard_hints_dir = self.hints_dir / "hints" / "validation-standard"
         standard_hints_dir.mkdir(exist_ok=True)
 
-        with open(standard_hints_dir / "metadata.json", 'w') as f:
+        with open(standard_hints_dir / "metadata.json", "w") as f:
             json.dump(self.standard_metadata, f)
 
         # Create sample AI hints in individual files
@@ -62,12 +62,10 @@ class TestEnhancedHintsForFile:
             "correctExample": "const result = schema.parse(input);",
             "incorrectExample": "const result = input;",
             "has_eslint_rule": True,
-            "importMap": [
-                {"statement": "import { z } from 'zod'", "module": "zod"}
-            ]
+            "importMap": [{"statement": "import { z } from 'zod'", "module": "zod"}],
         }
 
-        with open(standard_hints_dir / "hint-1.json", 'w') as f:
+        with open(standard_hints_dir / "hint-1.json", "w") as f:
             json.dump(self.hint, f)
 
         # Create index
@@ -76,17 +74,18 @@ class TestEnhancedHintsForFile:
                 "validation-standard": {
                     "category": "validation",
                     "tags": ["security", "validation"],
-                    "appliesTo": ["*.ts", "*.tsx", "components/*"]
+                    "appliesTo": ["*.ts", "*.tsx", "components/*"],
                 }
             }
         }
 
-        with open(self.hints_dir / "index.json", 'w') as f:
+        with open(self.hints_dir / "index.json", "w") as f:
             json.dump(self.index, f)
 
     def teardown_method(self):
         """Clean up test environment."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_basic_v2_functionality(self):
@@ -97,7 +96,7 @@ class TestEnhancedHintsForFile:
             project_root=self.project_root,
             session_id="test-session",
             compression_enabled=True,
-            grouping_enabled=True
+            grouping_enabled=True,
         )
 
         assert "data" in result
@@ -136,9 +135,7 @@ class TestEnhancedHintsForFile:
 
         # First call - should load rules
         result1 = hints_for_file_impl(
-            file_path="components/UserForm.tsx",
-            session_id=session_id,
-            project_root=self.project_root
+            file_path="components/UserForm.tsx", session_id=session_id, project_root=self.project_root
         )
 
         assert "data" in result1
@@ -147,9 +144,7 @@ class TestEnhancedHintsForFile:
 
         # Second call - should use references for previously loaded rules
         result2 = hints_for_file_impl(
-            file_path="components/ProductForm.tsx",
-            session_id=session_id,
-            project_root=self.project_root
+            file_path="components/ProductForm.tsx", session_id=session_id, project_root=self.project_root
         )
 
         assert "data" in result2
@@ -169,7 +164,7 @@ class TestEnhancedHintsForFile:
             file_path="components/UserForm.tsx",
             session_id="compression-test",
             compression_enabled=True,
-            project_root=self.project_root
+            project_root=self.project_root,
         )
 
         # Test with compression disabled
@@ -177,7 +172,7 @@ class TestEnhancedHintsForFile:
             file_path="components/UserForm.tsx",
             session_id="no-compression-test",
             compression_enabled=False,
-            project_root=self.project_root
+            project_root=self.project_root,
         )
 
         assert "data" in result_compressed
@@ -200,19 +195,19 @@ class TestEnhancedHintsForFile:
                 "rule_id": "validation-002",
                 "context": "Email validation context",
                 "correctExample": "email.match(/\\S+@\\S+\\.\\S+/)",
-                "has_eslint_rule": False
+                "has_eslint_rule": False,
             },
             {
                 "rule": "Validate password strength",
                 "rule_id": "validation-003",
                 "context": "Password validation context",
                 "correctExample": "password.length >= 8",
-                "has_eslint_rule": False
-            }
+                "has_eslint_rule": False,
+            },
         ]
 
         all_hints = [self.hint] + additional_hints
-        with open(self.hints_dir / "hints" / "validation-standard.json", 'w') as f:
+        with open(self.hints_dir / "hints" / "validation-standard.json", "w") as f:
             json.dump(all_hints, f)
 
         # Test with grouping enabled
@@ -220,7 +215,7 @@ class TestEnhancedHintsForFile:
             file_path="components/UserForm.tsx",
             session_id="grouping-test",
             grouping_enabled=True,
-            project_root=self.project_root
+            project_root=self.project_root,
         )
 
         # Test with grouping disabled
@@ -228,7 +223,7 @@ class TestEnhancedHintsForFile:
             file_path="components/UserForm.tsx",
             session_id="no-grouping-test",
             grouping_enabled=False,
-            project_root=self.project_root
+            project_root=self.project_root,
         )
 
         assert "data" in result_grouped
@@ -242,9 +237,7 @@ class TestEnhancedHintsForFile:
         """Test context detection for Next.js files."""
         # Test App Router API route
         result_api = hints_for_file_impl(
-            file_path="app/api/users/route.ts",
-            session_id="nextjs-test",
-            project_root=self.project_root
+            file_path="app/api/users/route.ts", session_id="nextjs-test", project_root=self.project_root
         )
 
         assert "data" in result_api
@@ -262,9 +255,7 @@ class TestEnhancedHintsForFile:
 
         # Test App Router page
         result_page = hints_for_file_impl(
-            file_path="app/dashboard/page.tsx",
-            session_id="nextjs-test",
-            project_root=self.project_root
+            file_path="app/dashboard/page.tsx", session_id="nextjs-test", project_root=self.project_root
         )
 
         assert "data" in result_page
@@ -282,28 +273,16 @@ class TestEnhancedHintsForFile:
         session_id = "complexity-test"
 
         # Start with simple session (should be basic)
-        result1 = hints_for_file_impl(
-            file_path="simple.ts",
-            session_id=session_id,
-            project_root=self.project_root
-        )
+        result1 = hints_for_file_impl(file_path="simple.ts", session_id=session_id, project_root=self.project_root)
 
         context1 = result1["data"]["context"]
         assert context1["complexity_level"] == "basic"
 
         # Add more files and patterns (should increase complexity)
         for i in range(10):
-            hints_for_file_impl(
-                file_path=f"file{i}.ts",
-                session_id=session_id,
-                project_root=self.project_root
-            )
+            hints_for_file_impl(file_path=f"file{i}.ts", session_id=session_id, project_root=self.project_root)
 
-        result2 = hints_for_file_impl(
-            file_path="complex.ts",
-            session_id=session_id,
-            project_root=self.project_root
-        )
+        result2 = hints_for_file_impl(file_path="complex.ts", session_id=session_id, project_root=self.project_root)
 
         context2 = result2["data"]["context"]
         # Should be higher complexity now
@@ -314,28 +293,16 @@ class TestEnhancedHintsForFile:
         session_id = "phase-test"
 
         # Initial call should be exploration
-        result1 = hints_for_file_impl(
-            file_path="file1.ts",
-            session_id=session_id,
-            project_root=self.project_root
-        )
+        result1 = hints_for_file_impl(file_path="file1.ts", session_id=session_id, project_root=self.project_root)
 
         context1 = result1["data"]["context"]
         assert context1["session_phase"] == "exploration"
 
         # Add more files for development phase
         for i in range(15):
-            hints_for_file_impl(
-                file_path=f"file{i}.ts",
-                session_id=session_id,
-                project_root=self.project_root
-            )
+            hints_for_file_impl(file_path=f"file{i}.ts", session_id=session_id, project_root=self.project_root)
 
-        result2 = hints_for_file_impl(
-            file_path="development.ts",
-            session_id=session_id,
-            project_root=self.project_root
-        )
+        result2 = hints_for_file_impl(file_path="development.ts", session_id=session_id, project_root=self.project_root)
 
         context2 = result2["data"]["context"]
         # Session should progress to a later phase (learning, development, or refinement)
@@ -347,10 +314,7 @@ class TestEnhancedHintsForFile:
         """Test dynamic token budget based on context."""
         # Test with different session contexts
         result_basic = hints_for_file_impl(
-            file_path="simple.ts",
-            session_id="basic-test",
-            max_tokens=1000,
-            project_root=self.project_root
+            file_path="simple.ts", session_id="basic-test", max_tokens=1000, project_root=self.project_root
         )
 
         # Basic users should get more detailed information
@@ -364,9 +328,7 @@ class TestEnhancedHintsForFile:
         from aromcp.standards_server.tools.hints_for_file import hints_for_file_legacy
 
         result = hints_for_file_legacy(
-            file_path="components/UserForm.tsx",
-            max_tokens=5000,
-            project_root=self.project_root
+            file_path="components/UserForm.tsx", max_tokens=5000, project_root=self.project_root
         )
 
         assert "data" in result
@@ -388,11 +350,7 @@ class TestEnhancedHintsForFile:
     def test_error_handling_invalid_input(self):
         """Test error handling for invalid input."""
         # Test with invalid max_tokens
-        result = hints_for_file_impl(
-            file_path="file.ts",
-            max_tokens=-1,
-            project_root=self.project_root
-        )
+        result = hints_for_file_impl(file_path="file.ts", max_tokens=-1, project_root=self.project_root)
 
         assert "error" in result
         assert result["error"]["code"] == "INVALID_INPUT"
@@ -401,10 +359,7 @@ class TestEnhancedHintsForFile:
     def test_error_handling_invalid_file_path(self):
         """Test error handling for invalid file paths."""
         # Test with path outside project root
-        result = hints_for_file_impl(
-            file_path="../../../etc/passwd",
-            project_root=self.project_root
-        )
+        result = hints_for_file_impl(file_path="../../../etc/passwd", project_root=self.project_root)
 
         assert "error" in result
         # Should catch security validation error
@@ -413,21 +368,19 @@ class TestEnhancedHintsForFile:
         """Test handling of empty standards database."""
         # Remove all data to create truly empty database
         import shutil
+
         shutil.rmtree(self.hints_dir)
         self.hints_dir.mkdir(exist_ok=True)
         (self.hints_dir / "hints").mkdir(exist_ok=True)
 
         # Create empty manifest
         manifest = {"standards": {}}
-        with open(self.hints_dir / "manifest.json", 'w') as f:
+        with open(self.hints_dir / "manifest.json", "w") as f:
             import json
+
             json.dump(manifest, f)
 
-        result = hints_for_file_impl(
-            file_path="file.ts",
-            session_id="empty-test",
-            project_root=self.project_root
-        )
+        result = hints_for_file_impl(file_path="file.ts", session_id="empty-test", project_root=self.project_root)
 
         assert "data" in result
         data = result["data"]
@@ -440,9 +393,7 @@ class TestEnhancedHintsForFile:
     def test_import_map_optimization(self):
         """Test import map optimization in v2."""
         result = hints_for_file_impl(
-            file_path="components/UserForm.tsx",
-            session_id="import-test",
-            project_root=self.project_root
+            file_path="components/UserForm.tsx", session_id="import-test", project_root=self.project_root
         )
 
         assert "data" in result
@@ -462,25 +413,13 @@ class TestEnhancedHintsForFile:
         session_id = "familiarity-test"
 
         # First few calls should show new patterns
-        hints_for_file_impl(
-            file_path="file1.ts",
-            session_id=session_id,
-            project_root=self.project_root
-        )
+        hints_for_file_impl(file_path="file1.ts", session_id=session_id, project_root=self.project_root)
 
         # Make several more calls to build familiarity
         for i in range(5):
-            hints_for_file_impl(
-                file_path=f"file{i}.ts",
-                session_id=session_id,
-                project_root=self.project_root
-            )
+            hints_for_file_impl(file_path=f"file{i}.ts", session_id=session_id, project_root=self.project_root)
 
-        result2 = hints_for_file_impl(
-            file_path="file_final.ts",
-            session_id=session_id,
-            project_root=self.project_root
-        )
+        result2 = hints_for_file_impl(file_path="file_final.ts", session_id=session_id, project_root=self.project_root)
 
         context2 = result2["data"]["context"]
         pattern_familiarity2 = context2["pattern_familiarity"]
@@ -494,18 +433,10 @@ class TestEnhancedHintsForFile:
         session_id = "references-test"
 
         # First call loads rules
-        hints_for_file_impl(
-            file_path="file1.ts",
-            session_id=session_id,
-            project_root=self.project_root
-        )
+        hints_for_file_impl(file_path="file1.ts", session_id=session_id, project_root=self.project_root)
 
         # Second call should show references
-        result2 = hints_for_file_impl(
-            file_path="file2.ts",
-            session_id=session_id,
-            project_root=self.project_root
-        )
+        result2 = hints_for_file_impl(file_path="file2.ts", session_id=session_id, project_root=self.project_root)
 
         assert "data" in result2
         data2 = result2["data"]
@@ -519,4 +450,3 @@ class TestEnhancedHintsForFile:
             for ref in references:
                 assert "rule_id" in ref
                 assert "reference" in ref or "ref" in ref
-

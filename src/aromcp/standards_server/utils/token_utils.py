@@ -12,7 +12,7 @@ def estimate_tokens(text: str) -> int:
         return 0
 
     # Remove extra whitespace
-    text = re.sub(r'\s+', ' ', text.strip())
+    text = re.sub(r"\s+", " ", text.strip())
 
     # Rough estimate: 1 token ≈ 4 characters
     # This is conservative to avoid exceeding token limits
@@ -30,20 +30,20 @@ def estimate_tokens(text: str) -> int:
 def is_code_text(text: str) -> bool:
     """Determine if text is primarily code."""
     code_indicators = [
-        r'function\s+\w+',
-        r'const\s+\w+',
-        r'import\s+.*from',
-        r'export\s+',
-        r'class\s+\w+',
-        r'interface\s+\w+',
-        r'type\s+\w+',
-        r'{\s*[^}]*}',
-        r'[\[\](){}]',
-        r'=>',
-        r'===?',
-        r'!==?',
-        r'//',
-        r'/\*',
+        r"function\s+\w+",
+        r"const\s+\w+",
+        r"import\s+.*from",
+        r"export\s+",
+        r"class\s+\w+",
+        r"interface\s+\w+",
+        r"type\s+\w+",
+        r"{\s*[^}]*}",
+        r"[\[\](){}]",
+        r"=>",
+        r"===?",
+        r"!==?",
+        r"//",
+        r"/\*",
     ]
 
     code_matches = sum(1 for pattern in code_indicators if re.search(pattern, text))
@@ -59,8 +59,8 @@ def calculate_token_counts(rule: EnhancedRule) -> TokenCount:
     # Calculate or estimate other formats
     minimal_tokens = estimate_tokens(rule.examples.minimal) if rule.examples.minimal else 20
     standard_tokens = estimate_tokens(rule.examples.standard) if rule.examples.standard else min(100, full_tokens // 2)
-    detailed_tokens = estimate_tokens(rule.examples.detailed) if rule.examples.detailed else min(
-        200, full_tokens * 3 // 4
+    detailed_tokens = (
+        estimate_tokens(rule.examples.detailed) if rule.examples.detailed else min(200, full_tokens * 3 // 4)
     )
 
     # Ensure logical ordering: minimal <= standard <= detailed <= full
@@ -71,12 +71,7 @@ def calculate_token_counts(rule: EnhancedRule) -> TokenCount:
     detailed_tokens = min(detailed_tokens, 300)  # Cap detailed at 300
     full_tokens = max(full_tokens, detailed_tokens)
 
-    return TokenCount(
-        minimal=minimal_tokens,
-        standard=standard_tokens,
-        detailed=detailed_tokens,
-        full=full_tokens
-    )
+    return TokenCount(minimal=minimal_tokens, standard=standard_tokens, detailed=detailed_tokens, full=full_tokens)
 
 
 def estimate_content_tokens(content: dict[str, Any]) -> int:
@@ -167,7 +162,7 @@ def optimize_token_distribution(rules: list, target_tokens: int) -> dict[str, An
         "total_tokens": final_tokens,
         "compression_ratio": calculate_compression_ratio(current_tokens, final_tokens),
         "rules_included": len(optimized_rules),
-        "rules_excluded": len(rules) - len(optimized_rules)
+        "rules_excluded": len(rules) - len(optimized_rules),
     }
 
 
@@ -181,7 +176,7 @@ def create_compressed_rule(rule: dict[str, Any], max_tokens: int) -> dict[str, A
         "rule_id": rule.get("rule_id"),
         "rule": rule.get("rule", "")[:100] + "..." if len(rule.get("rule", "")) > 100 else rule.get("rule", ""),
         "tokens": min(max_tokens, 30),
-        "compressed": True
+        "compressed": True,
     }
 
     # Add hint if space allows

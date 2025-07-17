@@ -25,7 +25,7 @@ class TestUpdateRule:
             "tags": ["test"],
             "appliesTo": ["*.py"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         # Register the standard first
@@ -34,12 +34,13 @@ class TestUpdateRule:
     def teardown_method(self):
         """Clean up after tests."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_add_eslint_files(self):
         """Test adding ESLint files."""
         eslint_files = {
-            "rules/test-standard.js": '''module.exports = {
+            "rules/test-standard.js": """module.exports = {
   meta: {
     type: "problem",
     docs: {
@@ -57,7 +58,7 @@ class TestUpdateRule:
       }
     };
   }
-};'''
+};"""
         }
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
@@ -83,7 +84,7 @@ class TestUpdateRule:
         """Test adding multiple ESLint files."""
         eslint_files = {
             "rules/test-rule1.js": "module.exports = { meta: {}, create: function() {} };",
-            "rules/test-rule2.js": "module.exports = { meta: {}, create: function() {} };"
+            "rules/test-rule2.js": "module.exports = { meta: {}, create: function() {} };",
         }
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
@@ -109,9 +110,7 @@ class TestUpdateRule:
 
     def test_nonexistent_standard(self):
         """Test updating rules for a non-existent standard."""
-        eslint_files = {
-            "rules/test.js": "module.exports = { meta: {}, create: function() {} };"
-        }
+        eslint_files = {"rules/test.js": "module.exports = { meta: {}, create: function() {} };"}
 
         result = update_rule_impl("nonexistent-standard", eslint_files, self.temp_dir)
 
@@ -138,9 +137,7 @@ class TestUpdateRule:
 
     def test_eslint_files_invalid_filename(self):
         """Test ESLint files with invalid filename."""
-        eslint_files = {
-            "../../../etc/passwd": "malicious content"
-        }
+        eslint_files = {"../../../etc/passwd": "malicious content"}
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
@@ -162,9 +159,7 @@ class TestUpdateRule:
 
     def test_eslint_files_not_in_rules_directory(self):
         """Test ESLint files not in rules/ directory."""
-        eslint_files = {
-            "test.js": "module.exports = { meta: {}, create: function() {} };"
-        }
+        eslint_files = {"test.js": "module.exports = { meta: {}, create: function() {} };"}
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
@@ -174,9 +169,7 @@ class TestUpdateRule:
 
     def test_eslint_files_config_in_filename(self):
         """Test ESLint files with 'config' in filename."""
-        eslint_files = {
-            "rules/test-config.js": "module.exports = { meta: {}, create: function() {} };"
-        }
+        eslint_files = {"rules/test-config.js": "module.exports = { meta: {}, create: function() {} };"}
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
@@ -186,9 +179,7 @@ class TestUpdateRule:
 
     def test_eslint_files_index_filename(self):
         """Test ESLint files named 'index'."""
-        eslint_files = {
-            "rules/index.js": "module.exports = { meta: {}, create: function() {} };"
-        }
+        eslint_files = {"rules/index.js": "module.exports = { meta: {}, create: function() {} };"}
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
@@ -198,9 +189,7 @@ class TestUpdateRule:
 
     def test_eslint_files_invalid_content(self):
         """Test ESLint files with invalid content."""
-        eslint_files = {
-            "rules/test.js": "not a valid ESLint rule"
-        }
+        eslint_files = {"rules/test.js": "not a valid ESLint rule"}
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 
@@ -228,9 +217,7 @@ class TestUpdateRule:
 
     def test_index_rebuild_after_update(self):
         """Test that index is rebuilt after updating rules."""
-        eslint_files = {
-            "rules/test.js": "module.exports = { meta: {}, create: function() {} };"
-        }
+        eslint_files = {"rules/test.js": "module.exports = { meta: {}, create: function() {} };"}
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
         assert "data" in result
@@ -243,7 +230,7 @@ class TestUpdateRule:
         """Test that ESLint configuration files are generated when rules are added."""
         eslint_files = {
             "rules/test-rule.js": "module.exports = { meta: {}, create: function() {} };",
-            "rules/another-rule.js": "module.exports = { meta: {}, create: function() {} };"
+            "rules/another-rule.js": "module.exports = { meta: {}, create: function() {} };",
         }
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
@@ -305,9 +292,7 @@ class TestUpdateRule:
 
     def test_json_string_input(self):
         """Test that JSON string input is properly parsed."""
-        eslint_files_json = json.dumps({
-            "rules/test.js": "module.exports = { meta: {}, create: function() {} };"
-        })
+        eslint_files_json = json.dumps({"rules/test.js": "module.exports = { meta: {}, create: function() {} };"})
 
         result = update_rule_impl("test-standard", eslint_files_json, self.temp_dir)
 

@@ -44,9 +44,9 @@ class TestTokenEstimator:
         complex_data = {
             "items": [
                 {"id": 1, "name": "test", "data": {"nested": "value"}},
-                {"id": 2, "name": "test2", "data": {"nested": "value2"}}
+                {"id": 2, "name": "test2", "data": {"nested": "value2"}},
             ],
-            "metadata": {"total": 2, "page": 1}
+            "metadata": {"total": 2, "page": 1},
         }
 
         tokens = estimator.estimate_tokens(complex_data)
@@ -126,13 +126,10 @@ class TestListPaginator:
             {"file": "b.py", "line": 2},
             {"file": "a.py", "line": 1},
             {"file": "b.py", "line": 1},
-            {"file": "a.py", "line": 2}
+            {"file": "a.py", "line": 2},
         ]
 
-        paginator = ListPaginator(
-            max_tokens=20000,
-            sort_key=lambda x: (x["file"], x["line"])
-        )
+        paginator = ListPaginator(max_tokens=20000, sort_key=lambda x: (x["file"], x["line"]))
 
         result = paginator.paginate(items)
 
@@ -141,7 +138,7 @@ class TestListPaginator:
             {"file": "a.py", "line": 1},
             {"file": "a.py", "line": 2},
             {"file": "b.py", "line": 1},
-            {"file": "b.py", "line": 2}
+            {"file": "b.py", "line": 2},
         ]
 
         assert result.items == expected_order
@@ -168,11 +165,7 @@ class TestPaginateListFunction:
         items = [{"id": i, "name": f"item_{i}"} for i in range(20)]
 
         result = paginate_list(
-            items=items,
-            page=1,
-            max_tokens=1000,
-            sort_key=lambda x: x["id"],
-            metadata={"source": "test"}
+            items=items, page=1, max_tokens=1000, sort_key=lambda x: x["id"], metadata={"source": "test"}
         )
 
         assert "data" in result
@@ -193,10 +186,7 @@ class TestPaginateListFunction:
     def test_metadata_inclusion(self):
         """Test that metadata is properly included in response."""
         items = ["item1", "item2", "item3"]
-        metadata = {
-            "summary": {"total": 3, "processed": 3},
-            "extra_info": "test data"
-        }
+        metadata = {"summary": {"total": 3, "processed": 3}, "extra_info": "test data"}
 
         result = paginate_list(items, metadata=metadata)
 
@@ -217,13 +207,11 @@ class TestCreatePaginator:
 
     def test_create_paginator_custom(self):
         """Test creating paginator with custom settings."""
+
         def sort_key(x):
             return x["name"]
-        paginator = create_paginator(
-            max_tokens=10000,
-            sort_key=sort_key,
-            min_items_per_page=5
-        )
+
+        paginator = create_paginator(max_tokens=10000, sort_key=sort_key, min_items_per_page=5)
 
         assert paginator.max_tokens == 10000
         assert paginator.min_items_per_page == 5

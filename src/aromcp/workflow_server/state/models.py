@@ -17,6 +17,7 @@ class WorkflowState:
     - computed: MCP-computed values (derived from transformations)
     - state: Legacy/manual values (backward compatibility)
     """
+
     raw: dict[str, Any] = field(default_factory=dict)
     computed: dict[str, Any] = field(default_factory=dict)
     state: dict[str, Any] = field(default_factory=dict)
@@ -39,6 +40,7 @@ class ComputedFieldDefinition:
     Computed fields are automatically updated when their dependencies change.
     They use JavaScript expressions for transformations.
     """
+
     from_paths: list[str]
     """List of dependency paths (e.g., ["raw.value", "state.multiplier"])"""
 
@@ -69,6 +71,7 @@ class StateSchema:
     """
     Schema defining the structure and computed fields for a workflow state
     """
+
     raw: dict[str, str] = field(default_factory=dict)
     """Raw field type definitions (for validation)"""
 
@@ -96,28 +99,46 @@ class StateSchema:
                 from_paths=from_paths,
                 transform=field_config.get("transform", "input"),
                 on_error=field_config.get("on_error", "use_fallback"),
-                fallback=field_config.get("fallback", None)
+                fallback=field_config.get("fallback", None),
             )
 
         return definitions
 
 
+@dataclass
+class StateUpdate:
+    """Represents a single state update operation."""
+
+    path: str
+    """State path to update (e.g., "raw.counter", "state.version")"""
+
+    value: Any
+    """Value to set at the path"""
+
+    operation: str = "set"
+    """Update operation: "set", "increment", "append", "delete" """
+
+
 # Exception classes for state management
 class StateError(Exception):
     """Base exception for state management errors"""
+
     pass
 
 
 class InvalidPathError(StateError):
     """Raised when an invalid state path is accessed"""
+
     pass
 
 
 class ComputedFieldError(StateError):
     """Raised when computed field evaluation fails"""
+
     pass
 
 
 class CircularDependencyError(StateError):
     """Raised when circular dependencies are detected in computed fields"""
+
     pass

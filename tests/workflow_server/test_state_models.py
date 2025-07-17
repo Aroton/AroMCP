@@ -4,7 +4,6 @@ Test file for Phase 1: Core State Engine - State Models
 Tests the basic state model structures and computed field definitions.
 """
 
-
 # Import implemented models
 from aromcp.workflow_server.state.models import ComputedFieldDefinition, WorkflowState
 
@@ -15,11 +14,7 @@ class TestWorkflowState:
     def test_workflow_state_initialization(self):
         """Test that WorkflowState initializes with three tiers"""
         # Given
-        initial_state = {
-            "raw": {"counter": 0},
-            "computed": {},
-            "state": {"version": "1.0"}
-        }
+        initial_state = {"raw": {"counter": 0}, "computed": {}, "state": {"version": "1.0"}}
 
         # When
         workflow_state = WorkflowState(**initial_state)
@@ -43,19 +38,9 @@ class TestWorkflowState:
         """Test WorkflowState with complex nested data"""
         # Given
         complex_state = {
-            "raw": {
-                "counter": 0,
-                "user": {"name": "Alice", "age": 30},
-                "items": ["a", "b", "c"]
-            },
-            "computed": {
-                "double_counter": 0,
-                "user_summary": "Alice (30)"
-            },
-            "state": {
-                "version": "1.0",
-                "config": {"debug": True}
-            }
+            "raw": {"counter": 0, "user": {"name": "Alice", "age": 30}, "items": ["a", "b", "c"]},
+            "computed": {"double_counter": 0, "user_summary": "Alice (30)"},
+            "state": {"version": "1.0", "config": {"debug": True}},
         }
 
         # When
@@ -75,10 +60,7 @@ class TestComputedFieldDefinition:
         """Test computed field definition structure"""
         # Given
         field_def = ComputedFieldDefinition(
-            from_paths=["raw.value"],
-            transform="input * 2",
-            on_error="use_fallback",
-            fallback=0
+            from_paths=["raw.value"], transform="input * 2", on_error="use_fallback", fallback=0
         )
 
         # Then
@@ -94,7 +76,7 @@ class TestComputedFieldDefinition:
             from_paths=["raw.a", "raw.b", "state.c"],
             transform="input[0] + input[1] + input[2]",
             on_error="propagate",
-            fallback=None
+            fallback=None,
         )
 
         # Then
@@ -110,10 +92,7 @@ class TestComputedFieldDefinition:
         for strategy in valid_strategies:
             # When
             field_def = ComputedFieldDefinition(
-                from_paths=["raw.value"],
-                transform="input",
-                on_error=strategy,
-                fallback="default"
+                from_paths=["raw.value"], transform="input", on_error=strategy, fallback="default"
             )
 
             # Then
@@ -126,7 +105,7 @@ class TestComputedFieldDefinition:
             from_paths=["raw.items"],
             transform="input.filter(x => x > 5).map(x => x * 2)",
             on_error="use_fallback",
-            fallback=[]
+            fallback=[],
         )
 
         # Then

@@ -18,32 +18,21 @@ class MCPCallProcessor:
         Returns:
             Formatted MCP call for agent execution
         """
-        tool = step_definition.get('tool')
+        tool = step_definition.get("tool")
         if not tool:
-            return {
-                "status": "failed",
-                "error": "Missing 'tool' in mcp_call step"
-            }
+            return {"status": "failed", "error": "Missing 'tool' in mcp_call step"}
 
-        parameters = step_definition.get('parameters', {})
-        state_update = step_definition.get('state_update')
+        parameters = step_definition.get("parameters", {})
+        state_update = step_definition.get("state_update")
 
         # Format for agent execution
-        mcp_call = {
-            "type": "mcp_call",
-            "tool": tool,
-            "parameters": parameters
-        }
+        mcp_call = {"type": "mcp_call", "tool": tool, "parameters": parameters}
 
         # Add state update instructions if specified
         if state_update:
             mcp_call["state_update"] = state_update
 
-        return {
-            "status": "success",
-            "agent_action": mcp_call,
-            "execution_type": "agent"
-        }
+        return {"status": "success", "agent_action": mcp_call, "execution_type": "agent"}
 
 
 class InternalMCPCallProcessor:
@@ -62,15 +51,12 @@ class InternalMCPCallProcessor:
         Returns:
             Execution result from the MCP tool
         """
-        tool = step_definition.get('tool')
+        tool = step_definition.get("tool")
         if not tool:
-            return {
-                "status": "failed",
-                "error": "Missing 'tool' in internal_mcp_call step"
-            }
+            return {"status": "failed", "error": "Missing 'tool' in internal_mcp_call step"}
 
-        parameters = step_definition.get('parameters', {})
-        state_update = step_definition.get('state_update')
+        parameters = step_definition.get("parameters", {})
+        state_update = step_definition.get("state_update")
 
         try:
             # For now, we'll format this for agent execution since we don't have
@@ -93,13 +79,10 @@ class InternalMCPCallProcessor:
                     "tool": tool,
                     "parameters": parameters,
                     "state_update": state_update,
-                    "execution_mode": "internal"
+                    "execution_mode": "internal",
                 },
-                "execution_type": "agent"
+                "execution_type": "agent",
             }
 
         except Exception as e:
-            return {
-                "status": "failed",
-                "error": f"Internal MCP call failed: {e}"
-            }
+            return {"status": "failed", "error": f"Internal MCP call failed: {e}"}

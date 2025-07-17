@@ -29,6 +29,7 @@ class TransformationEngine:
         try:
             # Use DukPy for reliable JavaScript execution
             import dukpy
+
             self._js_engine = dukpy
         except ImportError:
             # Fall back to Python-based evaluation for basic expressions
@@ -99,19 +100,20 @@ class TransformationEngine:
 
         # Create safe context for basic math expressions
         context = {
-            'input': input_value,
-            'Math': type('Math', (), {
-                'round': lambda x: round(x),  # Use Python's round function
-                'max': max,
-                'min': min,
-                'abs': abs,
-                'floor': int,
-                'ceil': lambda x: int(x) + (1 if x % 1 else 0)
-            })(),
-            'JSON': type('JSON', (), {
-                'parse': self._safe_json_parse,
-                'stringify': self._safe_json_stringify
-            })()
+            "input": input_value,
+            "Math": type(
+                "Math",
+                (),
+                {
+                    "round": lambda x: round(x),  # Use Python's round function
+                    "max": max,
+                    "min": min,
+                    "abs": abs,
+                    "floor": int,
+                    "ceil": lambda x: int(x) + (1 if x % 1 else 0),
+                },
+            )(),
+            "JSON": type("JSON", (), {"parse": self._safe_json_parse, "stringify": self._safe_json_stringify})(),
         }
 
         # Convert basic JavaScript syntax to Python
@@ -195,10 +197,7 @@ class TransformationEngine:
         # This is a simplified handler for the test case
         if "name: input.name.toUpperCase(), age: input.age + 1" in transform:
             if isinstance(input_value, dict):
-                return {
-                    "name": input_value.get("name", "").upper(),
-                    "age": input_value.get("age", 0) + 1
-                }
+                return {"name": input_value.get("name", "").upper(), "age": input_value.get("age", 0) + 1}
 
         return {}
 
@@ -209,14 +208,12 @@ class TransformationEngine:
 
         # Convert arrow functions in array methods
         python_expr = re.sub(
-            r'(\w+)\.filter\((\w+)\s*=>\s*([^)]+)\)',
+            r"(\w+)\.filter\((\w+)\s*=>\s*([^)]+)\)",
             r'[item for item in \1 if (\3).replace("\2", "item")]',
-            python_expr
+            python_expr,
         )
         python_expr = re.sub(
-            r'(\w+)\.map\((\w+)\s*=>\s*([^)]+)\)',
-            r'[(\3).replace("\2", "item") for item in \1]',
-            python_expr
+            r"(\w+)\.map\((\w+)\s*=>\s*([^)]+)\)", r'[(\3).replace("\2", "item") for item in \1]', python_expr
         )
 
         # Simplified approach for common patterns
@@ -224,24 +221,24 @@ class TransformationEngine:
             python_expr = python_expr.replace("input.filter(x => x > 5)", "[x for x in input if x > 5]")
 
         # Convert .length to len()
-        python_expr = re.sub(r'(\w+)\.length', r'len(\1)', python_expr)
+        python_expr = re.sub(r"(\w+)\.length", r"len(\1)", python_expr)
 
         # Convert string methods
-        python_expr = re.sub(r'(\w+)\.toUpperCase\(\)', r'\1.upper()', python_expr)
-        python_expr = re.sub(r'(\w+)\.toLowerCase\(\)', r'\1.lower()', python_expr)
-        python_expr = re.sub(r'(\w+)\.trim\(\)', r'\1.strip()', python_expr)
+        python_expr = re.sub(r"(\w+)\.toUpperCase\(\)", r"\1.upper()", python_expr)
+        python_expr = re.sub(r"(\w+)\.toLowerCase\(\)", r"\1.lower()", python_expr)
+        python_expr = re.sub(r"(\w+)\.trim\(\)", r"\1.strip()", python_expr)
 
         # Convert object property access with quotes
-        python_expr = re.sub(r'(\w+)\[\"(\w+)\"\]', r'\1["\2"]', python_expr)
+        python_expr = re.sub(r"(\w+)\[\"(\w+)\"\]", r'\1["\2"]', python_expr)
 
         # Convert boolean operators
-        python_expr = re.sub(r'&&', ' and ', python_expr)
-        python_expr = re.sub(r'\|\|', ' or ', python_expr)
-        python_expr = re.sub(r'!(\w+)', r'not \1', python_expr)
+        python_expr = re.sub(r"&&", " and ", python_expr)
+        python_expr = re.sub(r"\|\|", " or ", python_expr)
+        python_expr = re.sub(r"!(\w+)", r"not \1", python_expr)
 
         # Convert template literals (basic support)
-        if '`' in python_expr:
-            python_expr = re.sub(r'`([^`]*)`', self._convert_template_literal, python_expr)
+        if "`" in python_expr:
+            python_expr = re.sub(r"`([^`]*)`", self._convert_template_literal, python_expr)
 
         return python_expr
 
@@ -249,17 +246,19 @@ class TransformationEngine:
         """Convert JavaScript template literal to Python f-string"""
         template = match.group(1)
         # Convert ${var} to {var}
-        converted = re.sub(r'\$\{([^}]+)\}', r'{\1}', template)
+        converted = re.sub(r"\$\{([^}]+)\}", r"{\1}", template)
         return f'f"{converted}"'
 
     def _safe_json_parse(self, json_str: str) -> Any:
         """Safe JSON parsing"""
         import json
+
         return json.loads(json_str)
 
     def _safe_json_stringify(self, obj: Any) -> str:
         """Safe JSON stringification"""
         import json
+
         return json.dumps(obj)
 
     def _preprocess_js(self, transform: str) -> str:
@@ -267,42 +266,36 @@ class TransformationEngine:
         processed = transform
 
         # Handle complex template literals first to avoid conflicts
-        if processed.startswith('`') and processed.endswith('`'):
+        if processed.startswith("`") and processed.endswith("`"):
             template = processed[1:-1]  # Remove backticks
             # Handle complex ${} expressions - these can contain method chains with arrow functions
-            template = re.sub(r'\$\{([^}]+)\}', r'" + (\1) + "', template)
+            template = re.sub(r"\$\{([^}]+)\}", r'" + (\1) + "', template)
             # Clean up extra spaces and concatenations
-            template = re.sub(r'"\s*\+\s*""', '', template)  # Remove empty strings
-            template = re.sub(r'""\s*\+\s*', '', template)  # Remove leading empty strings
-            template = re.sub(r'\+\s*""$', '', template)  # Remove trailing empty strings
+            template = re.sub(r'"\s*\+\s*""', "", template)  # Remove empty strings
+            template = re.sub(r'""\s*\+\s*', "", template)  # Remove leading empty strings
+            template = re.sub(r'\+\s*""$', "", template)  # Remove trailing empty strings
             processed = f'"{template}"'
 
         # Now handle arrow functions anywhere in the expression
         # Handle array.filter(x => condition) patterns first (most specific)
         processed = re.sub(
-            r'(\w+)\.filter\(\s*(\w+)\s*=>\s*([^)]+)\)',
-            r'\1.filter(function(\2) { return \3; })',
-            processed
+            r"(\w+)\.filter\(\s*(\w+)\s*=>\s*([^)]+)\)", r"\1.filter(function(\2) { return \3; })", processed
         )
 
         # Handle array.map(x => expr) patterns - with nested function support
-        processed = re.sub(
-            r'(\w+)\.map\(\s*(\w+)\s*=>\s*([^)]+)\)',
-            r'\1.map(function(\2) { return \3; })',
-            processed
-        )
+        processed = re.sub(r"(\w+)\.map\(\s*(\w+)\s*=>\s*([^)]+)\)", r"\1.map(function(\2) { return \3; })", processed)
 
         # Handle simple arrow functions with method calls: u => u.method()
-        processed = re.sub(r'(\w+)\s*=>\s*(\w+)\.(\w+)\(\)', r'function(\1) { return \2.\3(); }', processed)
+        processed = re.sub(r"(\w+)\s*=>\s*(\w+)\.(\w+)\(\)", r"function(\1) { return \2.\3(); }", processed)
 
         # Handle simple arrow functions: u => u.name (property access)
-        processed = re.sub(r'(\w+)\s*=>\s*(\w+)\.(\w+)', r'function(\1) { return \2.\3; }', processed)
+        processed = re.sub(r"(\w+)\s*=>\s*(\w+)\.(\w+)", r"function(\1) { return \2.\3; }", processed)
 
         # Handle array.reduce((a, b) => a + b, 0) patterns
         processed = re.sub(
-            r'(\w+)\.reduce\(\s*\((\w+),\s*(\w+)\)\s*=>\s*([^,)]+),?\s*([^)]*)\)',
-            r'\1.reduce(function(\2, \3) { return \4; }, \5)',
-            processed
+            r"(\w+)\.reduce\(\s*\((\w+),\s*(\w+)\)\s*=>\s*([^,)]+),?\s*([^)]*)\)",
+            r"\1.reduce(function(\2, \3) { return \4; }, \5)",
+            processed,
         )
 
         return processed
@@ -310,6 +303,7 @@ class TransformationEngine:
     def _py_to_js(self, value: Any) -> str:
         """Convert Python value to JavaScript literal"""
         import json
+
         if callable(value):
             return "null"  # Can't serialize functions
         return json.dumps(value)
@@ -364,7 +358,7 @@ class DependencyResolver:
                 "dependencies": from_paths,
                 "transform": field_config.get("transform", "input"),
                 "on_error": field_config.get("on_error", "use_fallback"),
-                "fallback": field_config.get("fallback", None)
+                "fallback": field_config.get("fallback", None),
             }
 
         return result

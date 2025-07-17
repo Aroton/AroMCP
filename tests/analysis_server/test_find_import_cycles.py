@@ -1,6 +1,5 @@
 """Tests for find_import_cycles tool."""
 
-
 from aromcp.analysis_server.tools.find_import_cycles import find_import_cycles_impl
 
 
@@ -11,26 +10,23 @@ class TestFindImportCycles:
         """Test basic import cycle detection."""
         # Create files with circular imports
         file_a = tmp_path / "module_a.py"
-        file_a.write_text('''
+        file_a.write_text("""
 from module_b import function_b
 
 def function_a():
     return function_b()
-''')
+""")
 
         file_b = tmp_path / "module_b.py"
-        file_b.write_text('''
+        file_b.write_text("""
 from module_a import function_a
 
 def function_b():
     return "result from b"
-''')
+""")
 
         # Run cycle detection
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         # Verify result structure
         assert "data" in result
@@ -55,33 +51,30 @@ def function_b():
         """Test detection of three-way import cycle."""
         # Create A -> B -> C -> A cycle
         file_a = tmp_path / "a.py"
-        file_a.write_text('''
+        file_a.write_text("""
 from b import b_function
 
 def a_function():
     return b_function()
-''')
+""")
 
         file_b = tmp_path / "b.py"
-        file_b.write_text('''
+        file_b.write_text("""
 from c import c_function
 
 def b_function():
     return c_function()
-''')
+""")
 
         file_c = tmp_path / "c.py"
-        file_c.write_text('''
+        file_c.write_text("""
 from a import a_function
 
 def c_function():
     return "end of chain"
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
         cycles = result["data"]["cycles"]
@@ -97,31 +90,28 @@ def c_function():
         """Test when no import cycles exist."""
         # Create files with proper dependency hierarchy
         file_a = tmp_path / "base.py"
-        file_a.write_text('''
+        file_a.write_text("""
 def base_function():
     return "base"
-''')
+""")
 
         file_b = tmp_path / "middle.py"
-        file_b.write_text('''
+        file_b.write_text("""
 from base import base_function
 
 def middle_function():
     return base_function() + " middle"
-''')
+""")
 
         file_c = tmp_path / "top.py"
-        file_c.write_text('''
+        file_c.write_text("""
 from middle import middle_function
 
 def top_function():
     return middle_function() + " top"
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
         cycles = result["data"]["cycles"]
@@ -137,27 +127,24 @@ def top_function():
         """Test cycle detection in JavaScript files."""
         # Create JavaScript files with imports
         file_a = tmp_path / "moduleA.js"
-        file_a.write_text('''
+        file_a.write_text("""
 import { functionB } from './moduleB.js';
 
 export function functionA() {
     return functionB();
 }
-''')
+""")
 
         file_b = tmp_path / "moduleB.js"
-        file_b.write_text('''
+        file_b.write_text("""
 import { functionA } from './moduleA.js';
 
 export function functionB() {
     return "result";
 }
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
         cycles = result["data"]["cycles"]
@@ -174,7 +161,7 @@ export function functionB() {
         """Test cycle detection in TypeScript files."""
         # Create TypeScript files with imports
         file_a = tmp_path / "serviceA.ts"
-        file_a.write_text('''
+        file_a.write_text("""
 import { ServiceB } from './serviceB';
 
 export class ServiceA {
@@ -184,10 +171,10 @@ export class ServiceA {
         return this.serviceB.process();
     }
 }
-''')
+""")
 
         file_b = tmp_path / "serviceB.ts"
-        file_b.write_text('''
+        file_b.write_text("""
 import { ServiceA } from './serviceA';
 
 export class ServiceB {
@@ -195,12 +182,9 @@ export class ServiceB {
         return "processed";
     }
 }
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
         cycles = result["data"]["cycles"]
@@ -212,35 +196,32 @@ export class ServiceB {
         """Test cycle detection across different file types."""
         # Create mixed language project
         py_file = tmp_path / "python_module.py"
-        py_file.write_text('''
+        py_file.write_text("""
 # Python module that might interact with JS via subprocess or API
 def python_function():
     return "python"
-''')
+""")
 
         js_file = tmp_path / "javascript_module.js"
-        js_file.write_text('''
+        js_file.write_text("""
 // JavaScript module
 function jsFunction() {
     return "javascript";
 }
 
 export { jsFunction };
-''')
+""")
 
         ts_file = tmp_path / "typescript_module.ts"
-        ts_file.write_text('''
+        ts_file.write_text("""
 import { jsFunction } from './javascript_module.js';
 
 export function tsFunction(): string {
     return jsFunction() + " typescript";
 }
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
 
@@ -261,22 +242,15 @@ export function tsFunction(): string {
                 # Each file imports the next
                 next_i = (i + 1) % num_files
                 content = (
-                    f'from module_{next_i} import function_{next_i}\n\n'
-                    f'def function_{i}():\n    return "module_{i}"'
+                    f'from module_{next_i} import function_{next_i}\n\ndef function_{i}():\n    return "module_{i}"'
                 )
             current_file.write_text(content)
 
         # Test with shallow max_depth
-        result_shallow = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=3
-        )
+        result_shallow = find_import_cycles_impl(project_root=str(tmp_path), max_depth=3)
 
         # Test with deep max_depth
-        result_deep = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result_deep = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result_shallow
         assert "data" in result_deep
@@ -297,33 +271,27 @@ export function tsFunction(): string {
         package_dir.mkdir()
 
         package_file = package_dir / "index.js"
-        package_file.write_text('''
+        package_file.write_text("""
 export function packageFunction() {
     return "package";
 }
-''')
+""")
 
         # Create main project file
         main_file = tmp_path / "main.js"
-        main_file.write_text('''
+        main_file.write_text("""
 import { packageFunction } from './node_modules/some-package/index.js';
 
 export function mainFunction() {
     return packageFunction();
 }
-''')
+""")
 
         # Test excluding node_modules
-        result_exclude = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            include_node_modules=False
-        )
+        result_exclude = find_import_cycles_impl(project_root=str(tmp_path), include_node_modules=False)
 
         # Test including node_modules
-        result_include = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            include_node_modules=True
-        )
+        result_include = find_import_cycles_impl(project_root=str(tmp_path), include_node_modules=True)
 
         assert "data" in result_exclude
         assert "data" in result_include
@@ -342,26 +310,23 @@ export function mainFunction() {
 
         # File in subdirectory
         sub_file = subdir / "sub_module.py"
-        sub_file.write_text('''
+        sub_file.write_text("""
 from ..main_module import main_function
 
 def sub_function():
     return main_function()
-''')
+""")
 
         # Main file
         main_file = tmp_path / "main_module.py"
-        main_file.write_text('''
+        main_file.write_text("""
 from subdir.sub_module import sub_function
 
 def main_function():
     return "main"
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
 
@@ -371,10 +336,7 @@ def main_function():
 
     def test_invalid_project_root(self):
         """Test handling of invalid project root."""
-        result = find_import_cycles_impl(
-            project_root="/nonexistent/path",
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root="/nonexistent/path", max_depth=10)
 
         assert "error" in result
         assert result["error"]["code"] == "NOT_FOUND"
@@ -382,16 +344,10 @@ def main_function():
     def test_invalid_max_depth(self, tmp_path):
         """Test handling of invalid max_depth values."""
         # Test max_depth too low
-        result1 = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=0
-        )
+        result1 = find_import_cycles_impl(project_root=str(tmp_path), max_depth=0)
 
         # Test max_depth too high
-        result2 = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=100
-        )
+        result2 = find_import_cycles_impl(project_root=str(tmp_path), max_depth=100)
 
         assert "error" in result1
         assert result1["error"]["code"] == "INVALID_INPUT"
@@ -403,42 +359,39 @@ def main_function():
         """Test cycle severity calculation."""
         # Create a cycle involving important files
         main_file = tmp_path / "main.py"
-        main_file.write_text('''
+        main_file.write_text("""
 from core import core_function
 
 def main():
     return core_function()
-''')
+""")
 
         core_file = tmp_path / "core.py"
-        core_file.write_text('''
+        core_file.write_text("""
 from main import main
 
 def core_function():
     return "core"
-''')
+""")
 
         # Create another cycle with less important files
         util1_file = tmp_path / "util1.py"
-        util1_file.write_text('''
+        util1_file.write_text("""
 from util2 import util2_function
 
 def util1_function():
     return util2_function()
-''')
+""")
 
         util2_file = tmp_path / "util2.py"
-        util2_file.write_text('''
+        util2_file.write_text("""
 from util1 import util1_function
 
 def util2_function():
     return "util"
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
         cycles = result["data"]["cycles"]
@@ -456,35 +409,32 @@ def util2_function():
         """Test cycle impact analysis."""
         # Create a cycle that affects many other files
         cycle_a = tmp_path / "cycle_a.py"
-        cycle_a.write_text('''
+        cycle_a.write_text("""
 from cycle_b import cycle_b_function
 
 def cycle_a_function():
     return cycle_b_function()
-''')
+""")
 
         cycle_b = tmp_path / "cycle_b.py"
-        cycle_b.write_text('''
+        cycle_b.write_text("""
 from cycle_a import cycle_a_function
 
 def cycle_b_function():
     return "cycle_b"
-''')
+""")
 
         # Create files that depend on the cycle
         for i in range(5):
             dependent_file = tmp_path / f"dependent_{i}.py"
-            dependent_file.write_text(f'''
+            dependent_file.write_text(f"""
 from cycle_a import cycle_a_function
 
 def dependent_{i}_function():
     return cycle_a_function()
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
         cycles = result["data"]["cycles"]
@@ -500,27 +450,24 @@ def dependent_{i}_function():
         """Test generation of cycle-breaking suggestions."""
         # Create Python cycle
         py_a = tmp_path / "python_a.py"
-        py_a.write_text('''
+        py_a.write_text("""
 from python_b import PythonB
 
 class PythonA:
     def __init__(self):
         self.b = PythonB()
-''')
+""")
 
         py_b = tmp_path / "python_b.py"
-        py_b.write_text('''
+        py_b.write_text("""
 from python_a import PythonA
 
 class PythonB:
     def method(self):
         return "b"
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
         cycles = result["data"]["cycles"]
@@ -546,7 +493,7 @@ class PythonB:
             "permission.py": ["user"],
             "api.py": ["auth", "user"],
             "utils.py": [],
-            "main.py": ["api", "utils"]
+            "main.py": ["api", "utils"],
         }
 
         for filename, imports in files_config.items():
@@ -555,10 +502,7 @@ class PythonB:
             content = "\n".join(import_lines) + f"\n\ndef {filename[:-3]}_function():\n    return '{filename[:-3]}'"
             file_path.write_text(content)
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
 
@@ -576,7 +520,7 @@ class PythonB:
         """Test dependency graph simplification for output."""
         # Create files with various dependency patterns
         file_a = tmp_path / "heavy_deps.py"
-        file_a.write_text('''
+        file_a.write_text("""
 import os
 import sys
 import json
@@ -585,20 +529,17 @@ from collections import defaultdict
 
 def heavy_function():
     return "heavy"
-''')
+""")
 
         file_b = tmp_path / "light_deps.py"
-        file_b.write_text('''
+        file_b.write_text("""
 from heavy_deps import heavy_function
 
 def light_function():
     return heavy_function()
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
         dependency_graph = result["data"]["dependency_graph"]
@@ -615,7 +556,7 @@ def light_function():
     def test_import_parsing_edge_cases(self, tmp_path):
         """Test handling of various import statement formats."""
         edge_cases_file = tmp_path / "edge_cases.py"
-        edge_cases_file.write_text('''
+        edge_cases_file.write_text("""
 # Various import formats
 import os
 import sys, json
@@ -641,12 +582,9 @@ from pandas import DataFrame as df
 
 def test_function():
     return "test"
-''')
+""")
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         # Should handle all import formats without errors
         assert "data" in result or "error" in result
@@ -665,17 +603,14 @@ def test_function():
             # Create some import patterns
             imports = []
             if i > 0:
-                imports.append(f"from module_{i-1} import function_{i-1}")
+                imports.append(f"from module_{i - 1} import function_{i - 1}")
             if i < num_files - 1 and i % 5 == 0:
-                imports.append(f"from module_{i+1} import function_{i+1}")
+                imports.append(f"from module_{i + 1} import function_{i + 1}")
 
             content = "\n".join(imports) + f"\n\ndef function_{i}():\n    return 'module_{i}'"
             file_path.write_text(content)
 
-        result = find_import_cycles_impl(
-            project_root=str(tmp_path),
-            max_depth=10
-        )
+        result = find_import_cycles_impl(project_root=str(tmp_path), max_depth=10)
 
         assert "data" in result
 

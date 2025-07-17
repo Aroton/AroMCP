@@ -17,17 +17,17 @@ class TestExtractMethodSignatures:
         """Create a temporary project directory and set MCP_FILE_ROOT."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Set environment variable for testing
-            original_root = os.environ.get('MCP_FILE_ROOT')
-            os.environ['MCP_FILE_ROOT'] = temp_dir
+            original_root = os.environ.get("MCP_FILE_ROOT")
+            os.environ["MCP_FILE_ROOT"] = temp_dir
 
             try:
                 yield temp_dir
             finally:
                 # Restore original value
                 if original_root is not None:
-                    os.environ['MCP_FILE_ROOT'] = original_root
-                elif 'MCP_FILE_ROOT' in os.environ:
-                    del os.environ['MCP_FILE_ROOT']
+                    os.environ["MCP_FILE_ROOT"] = original_root
+                elif "MCP_FILE_ROOT" in os.environ:
+                    del os.environ["MCP_FILE_ROOT"]
 
     def test_python_function_extraction(self, temp_project):
         """Test extracting Python function signatures."""
@@ -65,7 +65,7 @@ class TestClass:
 
     def test_javascript_function_extraction(self, temp_project):
         """Test extracting JavaScript function signatures."""
-        js_code = '''
+        js_code = """
 function regularFunction(a, b = 10) {
     return a + b;
 }
@@ -81,7 +81,7 @@ class MyClass {
         return this.name;
     }
 }
-'''
+"""
 
         test_file = Path(temp_project) / "test.js"
         test_file.write_text(js_code)
@@ -114,19 +114,11 @@ def decorated_function():
         test_file.write_text(python_code)
 
         # Test without docstrings
-        result = extract_method_signatures_impl(
-            file_paths="test.py",
-            include_docstrings=False,
-            include_decorators=True
-        )
+        result = extract_method_signatures_impl(file_paths="test.py", include_docstrings=False, include_decorators=True)
         assert isinstance(result, list)
 
         # Test without decorators
-        result = extract_method_signatures_impl(
-            file_paths="test.py",
-            include_docstrings=True,
-            include_decorators=False
-        )
+        result = extract_method_signatures_impl(file_paths="test.py", include_docstrings=True, include_decorators=False)
         assert isinstance(result, list)
 
     def test_async_functions(self, temp_project):
@@ -168,20 +160,14 @@ def complex_function(
 
     def test_pattern_expansion_basic(self, temp_project):
         """Test basic pattern expansion."""
-        files = {
-            "main.py": "def main(): pass",
-            "utils.py": "def helper(): pass"
-        }
+        files = {"main.py": "def main(): pass", "utils.py": "def helper(): pass"}
 
         for file_path, content in files.items():
             full_path = Path(temp_project) / file_path
             full_path.write_text(content)
 
         # Test *.py pattern
-        result = extract_method_signatures_impl(
-            file_paths=["*.py"],
-            expand_patterns=True
-        )
+        result = extract_method_signatures_impl(file_paths=["*.py"], expand_patterns=True)
 
         assert isinstance(result, list)
 
@@ -192,7 +178,7 @@ def complex_function(
             "src/utils.py": "def helper(): pass",
             "tests/test_main.py": "def test_main(): pass",
             "app.js": "function app() {}",
-            "utils.js": "function util() {}"
+            "utils.js": "function util() {}",
         }
 
         for file_path, content in files.items():
@@ -201,10 +187,7 @@ def complex_function(
             full_path.write_text(content)
 
         # Test **/*.py pattern
-        result = extract_method_signatures_impl(
-            file_paths=["**/*.py"],
-            expand_patterns=True
-        )
+        result = extract_method_signatures_impl(file_paths=["**/*.py"], expand_patterns=True)
 
         assert isinstance(result, list)
 
@@ -213,7 +196,7 @@ def complex_function(
         files = {
             "main.py": "def main(): pass",
             "utils.py": "def helper(): pass",
-            "specific.js": "function specific() {}"
+            "specific.js": "function specific() {}",
         }
 
         for file_path, content in files.items():
@@ -221,47 +204,32 @@ def complex_function(
             full_path.write_text(content)
 
         # Test mixing pattern and static path
-        result = extract_method_signatures_impl(
-            file_paths=["*.py", "specific.js"],
-            expand_patterns=True
-        )
+        result = extract_method_signatures_impl(file_paths=["*.py", "specific.js"], expand_patterns=True)
 
         assert isinstance(result, list)
 
     def test_pattern_expansion_disabled(self, temp_project):
         """Test pattern expansion disabled."""
-        files = {
-            "main.py": "def main(): pass",
-            "utils.py": "def helper(): pass"
-        }
+        files = {"main.py": "def main(): pass", "utils.py": "def helper(): pass"}
 
         for file_path, content in files.items():
             full_path = Path(temp_project) / file_path
             full_path.write_text(content)
 
         # Test with patterns but expansion disabled
-        result = extract_method_signatures_impl(
-            file_paths=["*.py"],
-            expand_patterns=False
-        )
+        result = extract_method_signatures_impl(file_paths=["*.py"], expand_patterns=False)
 
         # Should return empty list since "*.py" is treated as literal filename
         assert isinstance(result, list)
 
     def test_pattern_expansion_summary_statistics(self, temp_project):
         """Test summary statistics in pattern expansion."""
-        files = {
-            "main.py": "def main(): pass\ndef helper(): pass",
-            "utils.py": "def util1(): pass\ndef util2(): pass"
-        }
+        files = {"main.py": "def main(): pass\ndef helper(): pass", "utils.py": "def util1(): pass\ndef util2(): pass"}
 
         for file_path, content in files.items():
             full_path = Path(temp_project) / file_path
             full_path.write_text(content)
 
-        result = extract_method_signatures_impl(
-            file_paths=["*.py"],
-            expand_patterns=True
-        )
+        result = extract_method_signatures_impl(file_paths=["*.py"], expand_patterns=True)
 
         assert isinstance(result, list)

@@ -33,7 +33,7 @@ def load_manifest(project_root: str | None = None) -> dict[str, Any]:
         return {"standards": {}, "lastUpdated": datetime.now().isoformat()}
 
     try:
-        with open(manifest_path, encoding='utf-8') as f:
+        with open(manifest_path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return {"standards": {}, "lastUpdated": datetime.now().isoformat()}
@@ -44,7 +44,7 @@ def save_manifest(manifest: dict[str, Any], project_root: str | None = None) -> 
     manifest_path = get_manifest_path(project_root)
     manifest["lastUpdated"] = datetime.now().isoformat()
 
-    with open(manifest_path, 'w', encoding='utf-8') as f:
+    with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
 
@@ -89,7 +89,7 @@ def update_eslint_config(project_root: str | None = None) -> None:
     plugin_content += "  }\n};\n"
 
     plugin_file = eslint_dir / "eslint-plugin-aromcp.js"
-    with open(plugin_file, 'w', encoding='utf-8') as f:
+    with open(plugin_file, "w", encoding="utf-8") as f:
         f.write(plugin_content)
 
     # Create package.json to define the plugin module
@@ -97,11 +97,11 @@ def update_eslint_config(project_root: str | None = None) -> None:
         "name": "eslint-plugin-aromcp",
         "version": "1.0.0",
         "main": "eslint-plugin-aromcp.js",
-        "private": True
+        "private": True,
     }
 
     package_file = eslint_dir / "package.json"
-    with open(package_file, 'w', encoding='utf-8') as f:
+    with open(package_file, "w", encoding="utf-8") as f:
         json.dump(package_json, f, indent=2)
 
     # Load all standards metadata to get appliesTo patterns
@@ -164,22 +164,22 @@ module.exports = [
 """
 
     config_file = eslint_dir / "standards-config.js"
-    with open(config_file, 'w', encoding='utf-8') as f:
+    with open(config_file, "w", encoding="utf-8") as f:
         f.write(config_content)
 
     # Also create a JSON version for easier parsing
-    config_json = {
-        "configs": []
-    }
+    config_json = {"configs": []}
 
     for pattern_group in rule_patterns:
-        config_json["configs"].append({
-            "files": pattern_group["files"],
-            "rules": {f"aromcp/{rule_name}": "error" for rule_name in pattern_group["rules"]}
-        })
+        config_json["configs"].append(
+            {
+                "files": pattern_group["files"],
+                "rules": {f"aromcp/{rule_name}": "error" for rule_name in pattern_group["rules"]},
+            }
+        )
 
     config_json_file = eslint_dir / "standards-config.json"
-    with open(config_json_file, 'w', encoding='utf-8') as f:
+    with open(config_json_file, "w", encoding="utf-8") as f:
         json.dump(config_json, f, indent=2)
 
 
@@ -214,10 +214,7 @@ def _group_rules_by_patterns(rule_names: list[str], project_root: str | None = N
                     # Use tuple for hashable key
                     pattern_key = tuple(sorted(applies_to))
                     if pattern_key not in pattern_groups:
-                        pattern_groups[pattern_key] = {
-                            "files": applies_to,
-                            "rules": []
-                        }
+                        pattern_groups[pattern_key] = {"files": applies_to, "rules": []}
                     pattern_groups[pattern_key]["rules"].append(rule_name)
                     continue
 
@@ -229,17 +226,11 @@ def _group_rules_by_patterns(rule_names: list[str], project_root: str | None = N
 
     # Add a catch-all group for rules without specific patterns
     if rules_without_patterns:
-        result.append({
-            "files": ["**/*.{js,jsx,ts,tsx}"],
-            "rules": rules_without_patterns
-        })
+        result.append({"files": ["**/*.{js,jsx,ts,tsx}"], "rules": rules_without_patterns})
 
     # If no pattern groups found, create a default one
     if not result:
-        result.append({
-            "files": ["**/*.{js,jsx,ts,tsx}"],
-            "rules": rule_names
-        })
+        result.append({"files": ["**/*.{js,jsx,ts,tsx}"], "rules": rule_names})
 
     return result
 
@@ -249,7 +240,7 @@ def save_standard_metadata(standard_id: str, metadata: dict[str, Any], project_r
     standard_dir = get_standard_hints_dir(standard_id, project_root)
     metadata_path = standard_dir / "metadata.json"
 
-    with open(metadata_path, 'w', encoding='utf-8') as f:
+    with open(metadata_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
 
@@ -262,7 +253,7 @@ def load_standard_metadata(standard_id: str, project_root: str | None = None) ->
         return None
 
     try:
-        with open(metadata_path, encoding='utf-8') as f:
+        with open(metadata_path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
@@ -284,7 +275,7 @@ def save_ai_hints(standard_id: str, hints: list[dict[str, Any]], project_root: s
         tokens = len(hint_json) // 4
         hint_with_imports["tokens"] = tokens
 
-        with open(hint_path, 'w', encoding='utf-8') as f:
+        with open(hint_path, "w", encoding="utf-8") as f:
             json.dump(hint_with_imports, f, indent=2)
         count += 1
 
@@ -298,7 +289,7 @@ def load_ai_hints(standard_id: str, project_root: str | None = None) -> list[dic
     hints = []
     for hint_file in sorted(standard_dir.glob("hint-*.json")):
         try:
-            with open(hint_file, encoding='utf-8') as f:
+            with open(hint_file, encoding="utf-8") as f:
                 hints.append(json.load(f))
         except (OSError, json.JSONDecodeError):
             continue
@@ -323,7 +314,7 @@ def save_eslint_rules(standard_id: str, rules: dict[str, Any], project_root: str
     eslint_dir = get_eslint_dir(project_root)
     rules_path = eslint_dir / f"{standard_id}.json"
 
-    with open(rules_path, 'w', encoding='utf-8') as f:
+    with open(rules_path, "w", encoding="utf-8") as f:
         json.dump(rules, f, indent=2)
 
 
@@ -336,7 +327,7 @@ def load_eslint_rules(standard_id: str, project_root: str | None = None) -> dict
         return None
 
     try:
-        with open(rules_path, encoding='utf-8') as f:
+        with open(rules_path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
@@ -387,10 +378,7 @@ def delete_standard(standard_id: str, project_root: str | None = None) -> dict[s
         del manifest["standards"][standard_id]
         save_manifest(manifest, project_root)
 
-    return {
-        "aiHints": hint_count,
-        "eslintRules": eslint_existed
-    }
+    return {"aiHints": hint_count, "eslintRules": eslint_existed}
 
 
 def find_markdown_files(standards_path: str, project_root: str | None = None) -> list[dict[str, Any]]:
@@ -412,12 +400,14 @@ def find_markdown_files(standards_path: str, project_root: str | None = None) ->
 
         try:
             stat = md_file.stat()
-            files.append({
-                "path": str(md_file.relative_to(Path(project_root))),
-                "absolutePath": str(md_file),
-                "lastModified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                "size": stat.st_size
-            })
+            files.append(
+                {
+                    "path": str(md_file.relative_to(Path(project_root))),
+                    "absolutePath": str(md_file),
+                    "lastModified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "size": stat.st_size,
+                }
+            )
         except (OSError, ValueError):
             continue
 
@@ -443,11 +433,11 @@ def build_index(project_root: str | None = None) -> None:
                 "tags": metadata.get("tags", []),
                 "appliesTo": metadata.get("appliesTo", []),
                 "priority": metadata.get("priority", "recommended"),
-                "hintCount": len(list(standard_dir.glob("hint-*.json")))
+                "hintCount": len(list(standard_dir.glob("hint-*.json"))),
             }
 
     index_path = hints_dir / "index.json"
-    with open(index_path, 'w', encoding='utf-8') as f:
+    with open(index_path, "w", encoding="utf-8") as f:
         json.dump(index, f, indent=2)
 
 
@@ -460,11 +450,11 @@ def load_index(project_root: str | None = None) -> dict[str, Any]:
         build_index(project_root)
 
     try:
-        with open(index_path, encoding='utf-8') as f:
+        with open(index_path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         build_index(project_root)
-        with open(index_path, encoding='utf-8') as f:
+        with open(index_path, encoding="utf-8") as f:
             return json.load(f)
 
 
@@ -516,36 +506,42 @@ def _extract_imports_from_code(code: str) -> list[dict[str, str]]:
 
 def _strip_imports_from_code(code: str) -> str:
     """Strip import statements from code examples."""
-    lines = code.split('\n')
+    lines = code.split("\n")
     filtered_lines = []
 
     for line in lines:
         stripped_line = line.strip()
 
         # Skip Python import lines
-        if (stripped_line.startswith('import ') or
-            stripped_line.startswith('from ') or
+        if (
+            stripped_line.startswith("import ")
+            or stripped_line.startswith("from ")
+            or
             # Handle multi-line imports
-            (stripped_line.startswith('from ') and '(' in stripped_line)):
+            (stripped_line.startswith("from ") and "(" in stripped_line)
+        ):
             continue
 
         # Skip JavaScript/TypeScript import lines
-        if (stripped_line.startswith('import ') or
-            stripped_line.startswith('const ') and 'require(' in stripped_line or
-            stripped_line.startswith('import(')):
+        if (
+            stripped_line.startswith("import ")
+            or stripped_line.startswith("const ")
+            and "require(" in stripped_line
+            or stripped_line.startswith("import(")
+        ):
             continue
 
         filtered_lines.append(line)
 
     # Join lines and clean up excessive whitespace
-    result = '\n'.join(filtered_lines)
+    result = "\n".join(filtered_lines)
 
     # Remove excessive blank lines at the start
-    while result.startswith('\n\n'):
+    while result.startswith("\n\n"):
         result = result[1:]
 
     # Remove excessive blank lines at the end
-    while result.endswith('\n\n'):
+    while result.endswith("\n\n"):
         result = result[:-1]
 
     return result
@@ -561,12 +557,14 @@ def _extract_python_imports(code: str) -> list[dict[str, str]]:
         class ImportVisitor(ast.NodeVisitor):
             def visit_Import(self, node):  # noqa: N802 # Required by ast.NodeVisitor
                 for alias in node.names:
-                    imports.append({
-                        "type": "import",
-                        "module": alias.name,
-                        "alias": alias.asname or alias.name,
-                        "statement": f"import {alias.name}" + (f" as {alias.asname}" if alias.asname else "")
-                    })
+                    imports.append(
+                        {
+                            "type": "import",
+                            "module": alias.name,
+                            "alias": alias.asname or alias.name,
+                            "statement": f"import {alias.name}" + (f" as {alias.asname}" if alias.asname else ""),
+                        }
+                    )
 
             def visit_ImportFrom(self, node):  # noqa: N802 # Required by ast.NodeVisitor
                 module = node.module or ""
@@ -575,13 +573,15 @@ def _extract_python_imports(code: str) -> list[dict[str, str]]:
                     if alias.asname:
                         statement += f" as {alias.asname}"
 
-                    imports.append({
-                        "type": "from_import",
-                        "module": module,
-                        "name": alias.name,
-                        "alias": alias.asname or alias.name,
-                        "statement": statement
-                    })
+                    imports.append(
+                        {
+                            "type": "from_import",
+                            "module": module,
+                            "name": alias.name,
+                            "alias": alias.asname or alias.name,
+                            "statement": statement,
+                        }
+                    )
 
         visitor = ImportVisitor()
         visitor.visit(tree)
@@ -603,33 +603,27 @@ def _extract_js_imports(code: str) -> list[dict[str, str]]:
         imported_items = match.group(1).strip()
         module_path = match.group(2)
 
-        imports.append({
-            "type": "es6_import",
-            "module": module_path,
-            "imported_items": imported_items,
-            "statement": f"import {imported_items} from '{module_path}'"
-        })
+        imports.append(
+            {
+                "type": "es6_import",
+                "module": module_path,
+                "imported_items": imported_items,
+                "statement": f"import {imported_items} from '{module_path}'",
+            }
+        )
 
     # CommonJS: require('...')
     require_pattern = r"require\s*\(\s*['\"](.+?)['\"]\s*\)"
     for match in re.finditer(require_pattern, code):
         module_path = match.group(1)
 
-        imports.append({
-            "type": "require",
-            "module": module_path,
-            "statement": f"require('{module_path}')"
-        })
+        imports.append({"type": "require", "module": module_path, "statement": f"require('{module_path}')"})
 
     # Dynamic imports: import('...')
     dynamic_pattern = r"import\s*\(\s*['\"](.+?)['\"]\s*\)"
     for match in re.finditer(dynamic_pattern, code):
         module_path = match.group(1)
 
-        imports.append({
-            "type": "dynamic_import",
-            "module": module_path,
-            "statement": f"import('{module_path}')"
-        })
+        imports.append({"type": "dynamic_import", "module": module_path, "statement": f"import('{module_path}')"})
 
     return imports

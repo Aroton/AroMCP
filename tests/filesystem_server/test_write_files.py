@@ -20,20 +20,21 @@ class TestWriteFiles:
         project_path = Path(temp_dir)
 
         # Create initial files
-        (project_path / "existing.txt").write_text("Original content", encoding='utf-8')
+        (project_path / "existing.txt").write_text("Original content", encoding="utf-8")
         (project_path / "src").mkdir()
-        (project_path / "src" / "existing.py").write_text("# Original Python file", encoding='utf-8')
+        (project_path / "src" / "existing.py").write_text("# Original Python file", encoding="utf-8")
 
         # Set environment variable for testing
         import os
-        os.environ['MCP_FILE_ROOT'] = str(project_path)
+
+        os.environ["MCP_FILE_ROOT"] = str(project_path)
 
         yield str(project_path)
 
         # Cleanup
         shutil.rmtree(temp_dir)
-        if 'MCP_FILE_ROOT' in os.environ:
-            del os.environ['MCP_FILE_ROOT']
+        if "MCP_FILE_ROOT" in os.environ:
+            del os.environ["MCP_FILE_ROOT"]
 
     def test_write_single_file(self, temp_project):
         """Test writing a single file."""
@@ -45,14 +46,14 @@ class TestWriteFiles:
         project_path = Path(temp_project)
         created_file = project_path / "new_file.txt"
         assert created_file.exists()
-        assert created_file.read_text(encoding='utf-8') == "Hello, World!"
+        assert created_file.read_text(encoding="utf-8") == "Hello, World!"
 
     def test_write_multiple_files(self, temp_project):
         """Test writing multiple files at once."""
         files = {
             "file1.txt": "Content of file 1",
             "file2.py": "# Python file\nprint('Hello')",
-            "config.json": '{"setting": "value"}'
+            "config.json": '{"setting": "value"}',
         }
 
         write_files_impl(files)
@@ -62,7 +63,7 @@ class TestWriteFiles:
         for filename, expected_content in files.items():
             file_path = project_path / filename
             assert file_path.exists()
-            assert file_path.read_text(encoding='utf-8') == expected_content
+            assert file_path.read_text(encoding="utf-8") == expected_content
 
     def test_overwrite_existing_file(self, temp_project):
         """Test overwriting an existing file."""
@@ -73,13 +74,13 @@ class TestWriteFiles:
         # Verify file was overwritten
         project_path = Path(temp_project)
         file_path = project_path / "existing.txt"
-        assert file_path.read_text(encoding='utf-8') == "New content"
+        assert file_path.read_text(encoding="utf-8") == "New content"
 
     def test_create_subdirectories(self, temp_project):
         """Test automatic directory creation."""
         files = {
             "new_dir/subdir/file.txt": "Content in subdirectory",
-            "another/path/to/file.py": "# Python in deep path"
+            "another/path/to/file.py": "# Python in deep path",
         }
 
         write_files_impl(files)
@@ -89,11 +90,11 @@ class TestWriteFiles:
 
         file1 = project_path / "new_dir" / "subdir" / "file.txt"
         assert file1.exists()
-        assert file1.read_text(encoding='utf-8') == "Content in subdirectory"
+        assert file1.read_text(encoding="utf-8") == "Content in subdirectory"
 
         file2 = project_path / "another" / "path" / "to" / "file.py"
         assert file2.exists()
-        assert file2.read_text(encoding='utf-8') == "# Python in deep path"
+        assert file2.read_text(encoding="utf-8") == "# Python in deep path"
 
     def test_write_files_in_existing_subdirectory(self, temp_project):
         """Test writing files in existing subdirectories."""
@@ -105,7 +106,7 @@ class TestWriteFiles:
         project_path = Path(temp_project)
         file_path = project_path / "src" / "new_file.py"
         assert file_path.exists()
-        assert file_path.read_text(encoding='utf-8') == "# New Python file in existing dir"
+        assert file_path.read_text(encoding="utf-8") == "# New Python file in existing dir"
 
     def test_empty_files_dict(self, temp_project):
         """Test error handling for empty files dictionary."""
@@ -114,10 +115,7 @@ class TestWriteFiles:
 
     def test_json_string_input(self, temp_project):
         """Test handling JSON string input for files parameter."""
-        files_json = json.dumps({
-            "from_json.txt": "Content from JSON string",
-            "another.py": "# Python from JSON"
-        })
+        files_json = json.dumps({"from_json.txt": "Content from JSON string", "another.py": "# Python from JSON"})
 
         write_files_impl(files_json)
 
@@ -126,11 +124,11 @@ class TestWriteFiles:
 
         file1 = project_path / "from_json.txt"
         assert file1.exists()
-        assert file1.read_text(encoding='utf-8') == "Content from JSON string"
+        assert file1.read_text(encoding="utf-8") == "Content from JSON string"
 
         file2 = project_path / "another.py"
         assert file2.exists()
-        assert file2.read_text(encoding='utf-8') == "# Python from JSON"
+        assert file2.read_text(encoding="utf-8") == "# Python from JSON"
 
     def test_invalid_json_string(self, temp_project):
         """Test error handling for invalid JSON string."""
@@ -143,7 +141,7 @@ class TestWriteFiles:
         """Test writing files with Unicode content."""
         files = {
             "unicode.txt": "Hello 世界! 🌍",
-            "emoji.md": "# Documentation with emojis 📝\n\n✅ Completed\n❌ Failed"
+            "emoji.md": "# Documentation with emojis 📝\n\n✅ Completed\n❌ Failed",
         }
 
         write_files_impl(files)
@@ -152,10 +150,10 @@ class TestWriteFiles:
         project_path = Path(temp_project)
 
         unicode_file = project_path / "unicode.txt"
-        assert unicode_file.read_text(encoding='utf-8') == "Hello 世界! 🌍"
+        assert unicode_file.read_text(encoding="utf-8") == "Hello 世界! 🌍"
 
         emoji_file = project_path / "emoji.md"
-        content = emoji_file.read_text(encoding='utf-8')
+        content = emoji_file.read_text(encoding="utf-8")
         assert "🌍" not in content  # This emoji is in unicode.txt
         assert "📝" in content
         assert "✅" in content
@@ -173,7 +171,7 @@ class TestWriteFiles:
         large_file = project_path / "large_file.txt"
         assert large_file.exists()
 
-        content = large_file.read_text(encoding='utf-8')
+        content = large_file.read_text(encoding="utf-8")
         assert "Line 0:" in content
         assert "Line 999:" in content
         assert len(content) > 100000  # Should be substantial
@@ -190,15 +188,14 @@ def main():
 if __name__ == "__main__":
     main()
 ''',
-            "config.json": json.dumps({
-                "database": {
-                    "host": "localhost",
-                    "port": 5432,
-                    "name": "testdb"
+            "config.json": json.dumps(
+                {
+                    "database": {"host": "localhost", "port": 5432, "name": "testdb"},
+                    "features": ["auth", "logging", "caching"],
                 },
-                "features": ["auth", "logging", "caching"]
-            }, indent=2),
-            "README.md": '''# Test Project
+                indent=2,
+            ),
+            "README.md": """# Test Project
 
 This is a test project for file writing.
 
@@ -211,8 +208,8 @@ This is a test project for file writing.
 ```python
 write_files({"file.txt": "content"})
 ```
-''',
-            "style.css": '''body {
+""",
+            "style.css": """body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 20px;
@@ -222,7 +219,7 @@ write_files({"file.txt": "content"})
     max-width: 800px;
     margin: 0 auto;
 }
-'''
+""",
         }
 
         write_files_impl(files)
@@ -232,14 +229,14 @@ write_files({"file.txt": "content"})
         for filename, expected_content in files.items():
             file_path = project_path / filename
             assert file_path.exists()
-            actual_content = file_path.read_text(encoding='utf-8')
+            actual_content = file_path.read_text(encoding="utf-8")
             assert actual_content == expected_content
 
     def test_special_characters_in_content(self, temp_project):
         """Test writing files with special characters and escape sequences."""
         files = {
-            "special.txt": 'Line with "quotes" and \'apostrophes\'\nLine with tabs:\t\tand newlines\n',
-            "escaped.json": '{"message": "String with \\"escaped\\" quotes and \\n newlines"}'
+            "special.txt": "Line with \"quotes\" and 'apostrophes'\nLine with tabs:\t\tand newlines\n",
+            "escaped.json": '{"message": "String with \\"escaped\\" quotes and \\n newlines"}',
         }
 
         write_files_impl(files)
@@ -248,15 +245,15 @@ write_files({"file.txt": "content"})
         project_path = Path(temp_project)
 
         special_file = project_path / "special.txt"
-        content = special_file.read_text(encoding='utf-8')
+        content = special_file.read_text(encoding="utf-8")
         assert '"quotes"' in content
         assert "'apostrophes'" in content
-        assert '\t\t' in content
+        assert "\t\t" in content
 
         escaped_file = project_path / "escaped.json"
-        content = escaped_file.read_text(encoding='utf-8')
+        content = escaped_file.read_text(encoding="utf-8")
         assert '\\"escaped\\"' in content
-        assert '\\n' in content
+        assert "\\n" in content
 
     def test_path_safety(self, temp_project):
         """Test that file paths are relative to project root."""
@@ -280,10 +277,7 @@ write_files({"file.txt": "content"})
         readonly_dir.mkdir()
         readonly_dir.chmod(0o444)  # Read-only
 
-        files = {
-            "good_file.txt": "This should work",
-            "readonly/bad_file.txt": "This should fail"
-        }
+        files = {"good_file.txt": "This should work", "readonly/bad_file.txt": "This should fail"}
 
         try:
             # This should raise an error

@@ -29,7 +29,7 @@ class TestAddRule:
             "tags": ["test"],
             "appliesTo": ["*.js"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         result = register_impl("standards/test.md", metadata, self.temp_dir)
@@ -38,6 +38,7 @@ class TestAddRule:
     def teardown_method(self):
         """Clean up test environment."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_add_basic_rule(self):
@@ -171,6 +172,7 @@ class TestAddRule:
         eslint_dir = Path(self.temp_dir) / ".aromcp" / "eslint"
         if eslint_dir.exists():
             import shutil
+
             shutil.rmtree(eslint_dir)
 
         rule_content = "module.exports = {};"
@@ -223,7 +225,7 @@ class TestListRules:
             "tags": ["test"],
             "appliesTo": ["*.js"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         result = register_impl("standards/test.md", metadata, self.temp_dir)
@@ -236,6 +238,7 @@ class TestListRules:
     def teardown_method(self):
         """Clean up test environment."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_list_rules_basic(self):
@@ -269,7 +272,7 @@ class TestListRules:
             "tags": ["test"],
             "appliesTo": ["*.js"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         register_impl("standards/empty.md", metadata, self.temp_dir)
@@ -294,6 +297,7 @@ class TestListRules:
         eslint_dir = Path(self.temp_dir) / ".aromcp" / "eslint"
         if eslint_dir.exists():
             import shutil
+
             shutil.rmtree(eslint_dir)
 
         result = list_rules_impl("test-standard", self.temp_dir)

@@ -74,7 +74,7 @@ def hints_for_file_impl(
     project_root: str | None = None,
     session_id: str | None = None,
     compression_enabled: bool = True,
-    grouping_enabled: bool = True
+    grouping_enabled: bool = True,
 ) -> dict[str, Any]:
     """
     Gets relevant hints with smart compression and session deduplication.
@@ -95,16 +95,12 @@ def hints_for_file_impl(
 
         # Validate file path
         from pathlib import Path
+
         validate_file_path_legacy(file_path, Path(project_root))
 
         # Validate max_tokens
         if max_tokens <= 0:
-            return {
-                "error": {
-                    "code": "INVALID_INPUT",
-                    "message": "maxTokens must be a positive integer"
-                }
-            }
+            return {"error": {"code": "INVALID_INPUT", "message": "maxTokens must be a positive integer"}}
 
         # Get services
         session_manager, context_detector, rule_compressor, rule_grouper = _get_services()
@@ -123,14 +119,7 @@ def hints_for_file_impl(
         standards = index.get("standards", {})
 
         if not standards:
-            return {
-                "data": {
-                    "hints": [],
-                    "totalTokens": 0,
-                    "context": context,
-                    "session_stats": session.get_stats()
-                }
-            }
+            return {"data": {"hints": [], "totalTokens": 0, "context": context, "session_stats": session.get_stats()}}
 
         # Collect all enhanced rules with relevance scores
         enhanced_rules: list[EnhancedRule] = []
@@ -159,9 +148,7 @@ def hints_for_file_impl(
 
         # Apply compression and grouping
         if compression_enabled:
-            compressed_result = rule_compressor.compress_rule_batch(
-                enhanced_rules, context, session, dynamic_budget
-            )
+            compressed_result = rule_compressor.compress_rule_batch(enhanced_rules, context, session, dynamic_budget)
 
             output_rules = compressed_result["rules"]
             references = compressed_result["references"]
@@ -192,15 +179,13 @@ def hints_for_file_impl(
                         continue
 
             if rules_for_grouping:
-                grouping_result = rule_grouper.group_rules_for_session(
-                    rules_for_grouping, session, dynamic_budget
-                )
+                grouping_result = rule_grouper.group_rules_for_session(rules_for_grouping, session, dynamic_budget)
 
                 output_rules = grouping_result["groups"]
                 total_tokens = grouping_result["total_tokens"]
                 grouping_stats = {
                     "rules_processed": grouping_result["rules_processed"],
-                    "compression_ratio": grouping_result["compression_ratio"]
+                    "compression_ratio": grouping_result["compression_ratio"],
                 }
             else:
                 grouping_stats = {}
@@ -241,10 +226,7 @@ def hints_for_file_impl(
                                     modules_used.append(module_name)
 
                 # Create optimized hint - exclude complex nested objects
-                excluded_keys = (
-                    "importMap", "metadata", "standardId",
-                    "examples", "compression", "relationships"
-                )
+                excluded_keys = ("importMap", "metadata", "standardId", "examples", "compression", "relationships")
                 optimized_hint = {k: v for k, v in rule.items() if k not in excluded_keys}
 
                 # Handle examples - convert enhanced format to legacy format for backward compatibility
@@ -272,10 +254,8 @@ def hints_for_file_impl(
 
                 # Apply import stripping to all example fields
                 from .._storage import _strip_imports_from_code
-                example_fields = [
-                    "correctExample", "incorrectExample", "example",
-                    "minimalExample", "detailedExample"
-                ]
+
+                example_fields = ["correctExample", "incorrectExample", "example", "minimalExample", "detailedExample"]
                 for example_field in example_fields:
                     if example_field in optimized_hint and optimized_hint[example_field]:
                         optimized_hint[example_field] = _strip_imports_from_code(optimized_hint[example_field])
@@ -298,19 +278,14 @@ def hints_for_file_impl(
                 "optimization_enabled": {
                     "compression": compression_enabled,
                     "grouping": grouping_enabled,
-                    "dynamic_budget": dynamic_budget != max_tokens
-                }
+                    "dynamic_budget": dynamic_budget != max_tokens,
+                },
             }
         }
 
     except Exception as e:
         logger.error(f"Error in hints_for_file_impl: {e}")
-        return {
-            "error": {
-                "code": "OPERATION_FAILED",
-                "message": f"Failed to get hints for file: {str(e)}"
-            }
-        }
+        return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to get hints for file: {str(e)}"}}
 
 
 def _convert_hint_to_enhanced_rule(
@@ -340,7 +315,7 @@ def _convert_hint_to_enhanced_rule(
                 complexity=hint_metadata.get("complexity", metadata.get("complexity", "intermediate")),
                 rule_type=hint_metadata.get("rule_type", metadata.get("priority", "should")),
                 nextjs_api=hint_metadata.get("nextjs_api", metadata.get("nextjs_features", [])),
-                client_server=hint_metadata.get("client_server", metadata.get("client_server", "isomorphic"))
+                client_server=hint_metadata.get("client_server", metadata.get("client_server", "isomorphic")),
             )
         else:
             # Fallback to standard metadata (legacy format)
@@ -349,7 +324,7 @@ def _convert_hint_to_enhanced_rule(
                 complexity=metadata.get("complexity", "intermediate"),
                 rule_type=metadata.get("priority", "should"),
                 nextjs_api=metadata.get("nextjs_features", []),
-                client_server=metadata.get("client_server", "isomorphic")
+                client_server=metadata.get("client_server", "isomorphic"),
             )
 
         # Handle examples - check if hint already has enhanced examples
@@ -362,7 +337,7 @@ def _convert_hint_to_enhanced_rule(
                 detailed=hint_examples.get("detailed"),
                 full=hint_examples.get("full", ""),
                 reference=hint_examples.get("reference"),
-                context_variants=hint_examples.get("context_variants", {})
+                context_variants=hint_examples.get("context_variants", {}),
             )
         else:
             # Fallback to legacy example fields
@@ -370,7 +345,7 @@ def _convert_hint_to_enhanced_rule(
             examples = RuleExamples(
                 full=correct_example,
                 standard=correct_example[:500] if correct_example else None,
-                minimal=rule_text[:100] if rule_text else None
+                minimal=rule_text[:100] if rule_text else None,
             )
 
         # Handle tokens - use existing if present and is a dict
@@ -380,7 +355,7 @@ def _convert_hint_to_enhanced_rule(
                 minimal=hint_tokens.get("minimal", 25),
                 standard=hint_tokens.get("standard", 50),
                 detailed=hint_tokens.get("detailed", 75),
-                full=hint_tokens.get("full", 100)
+                full=hint_tokens.get("full", 100),
             )
         else:
             tokens = TokenCount(full=100, detailed=75, standard=50, minimal=25)  # Placeholder
@@ -395,7 +370,7 @@ def _convert_hint_to_enhanced_rule(
             tokens=tokens,
             import_map=hint.get("import_map", []),
             has_eslint_rule=hint.get("has_eslint_rule", False),
-            relationships=hint.get("relationships", {})
+            relationships=hint.get("relationships", {}),
         )
 
         # Calculate actual token counts if they weren't provided as a dict
@@ -423,7 +398,7 @@ def _dict_to_enhanced_rule(rule_dict: dict[str, Any]) -> EnhancedRule | None:
                 context=rule_dict.get("context", ""),
                 metadata=rule_dict.get("metadata", {}),
                 examples=rule_dict.get("examples", {}),
-                tokens=rule_dict.get("tokens", {})
+                tokens=rule_dict.get("tokens", {}),
             )
         else:
             # Try to create full enhanced rule
@@ -435,11 +410,7 @@ def _dict_to_enhanced_rule(rule_dict: dict[str, Any]) -> EnhancedRule | None:
 
 
 # Legacy function for backwards compatibility
-def hints_for_file_legacy(
-    file_path: str,
-    max_tokens: int = 10000,
-    project_root: str | None = None
-) -> dict[str, Any]:
+def hints_for_file_legacy(file_path: str, max_tokens: int = 10000, project_root: str | None = None) -> dict[str, Any]:
     """Legacy version without session management."""
     return hints_for_file_impl(
         file_path=file_path,
@@ -447,5 +418,5 @@ def hints_for_file_legacy(
         project_root=project_root,
         session_id=None,
         compression_enabled=False,
-        grouping_enabled=False
+        grouping_enabled=False,
     )

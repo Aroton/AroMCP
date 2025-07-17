@@ -17,7 +17,7 @@ def find_dead_code_impl(
     project_root: str,
     entry_points: list[str] | None = None,
     include_tests: bool = False,
-    confidence_threshold: float = 0.8
+    confidence_threshold: float = 0.8,
 ) -> dict[str, Any]:
     """Find unused code that can potentially be removed.
 
@@ -34,22 +34,14 @@ def find_dead_code_impl(
         # Validate project root
         project_path = Path(project_root)
         if not project_path.exists():
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": f"Project root directory does not exist: {project_root}"
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": f"Project root directory does not exist: {project_root}"}}
 
         # Validate confidence threshold
         if not 0.0 <= confidence_threshold <= 1.0:
             return {
                 "error": {
                     "code": "INVALID_INPUT",
-                    "message": (
-                        f"Confidence threshold must be between 0.0 and 1.0, "
-                        f"got: {confidence_threshold}"
-                    )
+                    "message": (f"Confidence threshold must be between 0.0 and 1.0, got: {confidence_threshold}"),
                 }
             }
 
@@ -65,45 +57,28 @@ def find_dead_code_impl(
             validated_entry_points = []
             for entry_point in entry_points:
                 try:
-                    validated_path = validate_file_path_legacy(
-                        entry_point, project_path
-                    )
+                    validated_path = validate_file_path_legacy(entry_point, project_path)
                     if validated_path.exists():
                         validated_entry_points.append(str(validated_path))
                 except Exception as e:
-                    logger.warning(
-                        "Failed to validate entry point %s: %s", entry_point, str(e)
-                    )
+                    logger.warning("Failed to validate entry point %s: %s", entry_point, str(e))
                     continue
             entry_points = validated_entry_points
 
         if not entry_points:
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": "No entry points found or provided"
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": "No entry points found or provided"}}
 
         # Analyze code usage
         usage_analysis = _analyze_code_usage(project_files, entry_points, project_root)
 
         # Find potentially dead code
-        dead_code_candidates = _find_dead_code_candidates(
-            usage_analysis,
-            confidence_threshold
-        )
+        dead_code_candidates = _find_dead_code_candidates(usage_analysis, confidence_threshold)
 
         # Generate recommendations
         recommendations = _generate_dead_code_recommendations(dead_code_candidates)
 
         # Calculate statistics
-        summary = _calculate_dead_code_summary(
-            dead_code_candidates,
-            project_files,
-            usage_analysis,
-            project_root
-        )
+        summary = _calculate_dead_code_summary(dead_code_candidates, project_files, usage_analysis, project_root)
 
         return {
             "data": {
@@ -112,7 +87,7 @@ def find_dead_code_impl(
                 "usage_analysis": usage_analysis,
                 "recommendations": recommendations,
                 "summary": summary,
-                "confidence_threshold": confidence_threshold
+                "confidence_threshold": confidence_threshold,
             }
         }
 
@@ -121,7 +96,7 @@ def find_dead_code_impl(
             "error": {
                 "code": "OPERATION_FAILED",
                 "message": f"Failed to find dead code: {str(e)}",
-                "traceback": traceback.format_exc()
+                "traceback": traceback.format_exc(),
             }
         }
 
@@ -138,6 +113,7 @@ def _get_project_files(project_root: str, patterns: list[str]) -> list[str]:
     """
     # Set the project root temporarily for list_files_impl
     import os
+
     old_project_root = os.environ.get("MCP_FILE_ROOT")
     os.environ["MCP_FILE_ROOT"] = project_root
 
@@ -159,9 +135,7 @@ def _get_project_files(project_root: str, patterns: list[str]) -> list[str]:
             del os.environ["MCP_FILE_ROOT"]
 
 
-def _detect_entry_points(
-    project_files: list[str], include_tests: bool, project_root: str
-) -> list[str]:
+def _detect_entry_points(project_files: list[str], include_tests: bool, project_root: str) -> list[str]:
     """Detect entry points in the project.
 
     Args:
@@ -181,16 +155,13 @@ def _detect_entry_points(
         r"server\.py$",
         r"index\.(js|ts)$",
         r"main\.(js|ts)$",
-        r"app\.(js|ts)$"
+        r"app\.(js|ts)$",
     ]
 
     # Test file patterns (if including tests)
-    test_patterns = [
-        r"test_.*\.py$",
-        r".*_test\.py$",
-        r".*\.test\.(js|ts)$",
-        r".*\.spec\.(js|ts)$"
-    ] if include_tests else []
+    test_patterns = (
+        [r"test_.*\.py$", r".*_test\.py$", r".*\.test\.(js|ts)$", r".*\.spec\.(js|ts)$"] if include_tests else []
+    )
 
     all_patterns = entry_point_patterns + test_patterns
 
@@ -205,26 +176,19 @@ def _detect_entry_points(
                 break
 
         # Check for executable scripts (Python)
-        if file_path.endswith('.py'):
+        if file_path.endswith(".py"):
             try:
-                content = Path(absolute_path).read_text(
-                    encoding='utf-8', errors='ignore'
-                )
+                content = Path(absolute_path).read_text(encoding="utf-8", errors="ignore")
                 if 'if __name__ == "__main__"' in content:
                     entry_points.append(str(absolute_path))
             except Exception as e:
-                logger.warning(
-                    "Failed to read file %s for entry point detection: %s",
-                    absolute_path, str(e)
-                )
+                logger.warning("Failed to read file %s for entry point detection: %s", absolute_path, str(e))
                 continue
 
     return list(set(entry_points))  # Remove duplicates
 
 
-def _analyze_code_usage(
-    project_files: list[str], entry_points: list[str], project_root: str
-) -> dict[str, Any]:
+def _analyze_code_usage(project_files: list[str], entry_points: list[str], project_root: str) -> dict[str, Any]:
     """Analyze code usage patterns across the project.
 
     Args:
@@ -236,9 +200,9 @@ def _analyze_code_usage(
     """
     # Track definitions and usages
     definitions = {}  # {identifier: [file_locations]}
-    usages = {}       # {identifier: [file_locations]}
-    imports = {}      # {file: [imported_modules]}
-    exports = {}      # {file: [exported_identifiers]}
+    usages = {}  # {identifier: [file_locations]}
+    imports = {}  # {file: [imported_modules]}
+    exports = {}  # {file: [exported_identifiers]}
 
     # Analyze each file
     for file_path in project_files:
@@ -266,9 +230,7 @@ def _analyze_code_usage(
 
         except Exception as e:
             # Skip files that can't be analyzed
-            logger.warning(
-                "Failed to analyze file %s: %s", absolute_path, str(e)
-            )
+            logger.warning("Failed to analyze file %s: %s", absolute_path, str(e))
             continue
 
     # Calculate usage statistics
@@ -279,8 +241,7 @@ def _analyze_code_usage(
 
         # Check if used in entry points
         used_in_entry_points = any(
-            any(loc["file"] == entry_point for loc in usages.get(identifier, []))
-            for entry_point in entry_points
+            any(loc["file"] == entry_point for loc in usages.get(identifier, [])) for entry_point in entry_points
         )
 
         usage_stats[identifier] = {
@@ -288,7 +249,7 @@ def _analyze_code_usage(
             "usages": usage_count,
             "used_in_entry_points": used_in_entry_points,
             "definition_locations": definitions[identifier],
-            "usage_locations": usages.get(identifier, [])
+            "usage_locations": usages.get(identifier, []),
         }
 
     return {
@@ -297,10 +258,9 @@ def _analyze_code_usage(
         "imports": imports,
         "exports": exports,
         "usage_stats": usage_stats,
-        "total_files_analyzed": len([
-            f for f in project_files
-            if _analyze_single_file_safe(str(Path(project_root) / f)) is not None
-        ])
+        "total_files_analyzed": len(
+            [f for f in project_files if _analyze_single_file_safe(str(Path(project_root) / f)) is not None]
+        ),
     }
 
 
@@ -313,11 +273,11 @@ def _analyze_single_file(file_path: str) -> dict[str, Any]:
     Returns:
         Analysis results for the file
     """
-    content = Path(file_path).read_text(encoding='utf-8', errors='ignore')
+    content = Path(file_path).read_text(encoding="utf-8", errors="ignore")
 
-    if file_path.endswith('.py'):
+    if file_path.endswith(".py"):
         return _analyze_python_file(file_path, content)
-    elif file_path.endswith(('.js', '.ts', '.jsx', '.tsx')):
+    elif file_path.endswith((".js", ".ts", ".jsx", ".tsx")):
         return _analyze_javascript_file(file_path, content)
     else:
         return {"definitions": {}, "usages": {}, "imports": [], "exports": []}
@@ -361,11 +321,7 @@ def _analyze_python_file(file_path: str, content: str) -> dict[str, Any]:
             if isinstance(node, ast.FunctionDef | ast.ClassDef | ast.AsyncFunctionDef):
                 # Function/class definitions
                 identifier = node.name
-                location = {
-                    "file": file_path,
-                    "line": node.lineno,
-                    "type": type(node).__name__
-                }
+                location = {"file": file_path, "line": node.lineno, "type": type(node).__name__}
 
                 if identifier not in definitions:
                     definitions[identifier] = []
@@ -379,11 +335,7 @@ def _analyze_python_file(file_path: str, content: str) -> dict[str, Any]:
                 # Variable usages
                 if isinstance(node.ctx, ast.Load):
                     identifier = node.id
-                    location = {
-                        "file": file_path,
-                        "line": node.lineno,
-                        "type": "usage"
-                    }
+                    location = {"file": file_path, "line": node.lineno, "type": "usage"}
 
                     if identifier not in usages:
                         usages[identifier] = []
@@ -403,12 +355,7 @@ def _analyze_python_file(file_path: str, content: str) -> dict[str, Any]:
         # Skip files with syntax errors
         pass
 
-    return {
-        "definitions": definitions,
-        "usages": usages,
-        "imports": imports,
-        "exports": exports
-    }
+    return {"definitions": definitions, "usages": usages, "imports": imports, "exports": exports}
 
 
 def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
@@ -439,30 +386,22 @@ def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
         r"var\s+(\w+)\s*=\s*\([^)]*\)\s*=>\s*",
     ]
 
-    class_patterns = [
-        r"class\s+(\w+)",
-        r"interface\s+(\w+)",
-        r"type\s+(\w+)\s*="
-    ]
+    class_patterns = [r"class\s+(\w+)", r"interface\s+(\w+)", r"type\s+(\w+)\s*="]
 
     # Variable/const definitions
-    var_patterns = [
-        r"const\s+(\w+)\s*=",
-        r"let\s+(\w+)\s*=",
-        r"var\s+(\w+)\s*="
-    ]
+    var_patterns = [r"const\s+(\w+)\s*=", r"let\s+(\w+)\s*=", r"var\s+(\w+)\s*="]
 
     # Import/export patterns
     import_patterns = [
         r"import\s+.*\s+from\s+['\"]([^'\"]+)['\"]",
         r"import\s+['\"]([^'\"]+)['\"]",
-        r"require\s*\(\s*['\"]([^'\"]+)['\"]\s*\)"
+        r"require\s*\(\s*['\"]([^'\"]+)['\"]\s*\)",
     ]
 
     export_patterns = [
         r"export\s+(?:default\s+)?(?:function\s+)?(\w+)",
         r"export\s*\{\s*([^}]+)\s*\}",
-        r"module\.exports\s*=\s*(\w+)"
+        r"module\.exports\s*=\s*(\w+)",
     ]
 
     all_patterns = function_patterns + class_patterns + var_patterns
@@ -473,11 +412,7 @@ def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
             matches = re.finditer(pattern, line)
             for match in matches:
                 identifier = match.group(1)
-                location = {
-                    "file": file_path,
-                    "line": line_num,
-                    "type": "definition"
-                }
+                location = {"file": file_path, "line": line_num, "type": "definition"}
 
                 if identifier not in definitions:
                     definitions[identifier] = []
@@ -514,37 +449,23 @@ def _analyze_javascript_file(file_path: str, content: str) -> dict[str, Any]:
             identifier = match.group(1)
 
             # Skip keywords
-            if identifier in [
-                "function", "class", "const", "let", "var", "if", "else",
-                "for", "while", "return"
-            ]:
+            if identifier in ["function", "class", "const", "let", "var", "if", "else", "for", "while", "return"]:
                 continue
 
             # Skip identifiers being defined on this same line
             if identifier in defined_on_line:
                 continue
 
-            location = {
-                "file": file_path,
-                "line": line_num,
-                "type": "usage"
-            }
+            location = {"file": file_path, "line": line_num, "type": "usage"}
 
             if identifier not in usages:
                 usages[identifier] = []
             usages[identifier].append(location)
 
-    return {
-        "definitions": definitions,
-        "usages": usages,
-        "imports": imports,
-        "exports": exports
-    }
+    return {"definitions": definitions, "usages": usages, "imports": imports, "exports": exports}
 
 
-def _find_dead_code_candidates(
-    usage_analysis: dict[str, Any], confidence_threshold: float
-) -> list[dict[str, Any]]:
+def _find_dead_code_candidates(usage_analysis: dict[str, Any], confidence_threshold: float) -> list[dict[str, Any]]:
     """Find potentially dead code based on usage analysis.
 
     Args:
@@ -570,7 +491,7 @@ def _find_dead_code_candidates(
                 "usage_locations": stats["usage_locations"],
                 "definitions_count": stats["definitions"],
                 "usages_count": stats["usages"],
-                "used_in_entry_points": stats["used_in_entry_points"]
+                "used_in_entry_points": stats["used_in_entry_points"],
             }
             candidates.append(candidate)
 
@@ -648,31 +569,24 @@ def _generate_dead_code_recommendations(candidates: list[dict[str, Any]]) -> lis
     medium_confidence = [c for c in candidates if 0.7 <= c["confidence"] < 0.9]
 
     if high_confidence:
-        recommendations.append(
-            f"Review {len(high_confidence)} high-confidence dead code candidates "
-            f"for removal"
-        )
+        recommendations.append(f"Review {len(high_confidence)} high-confidence dead code candidates for removal")
 
     if medium_confidence:
-        recommendations.append(
-            f"Investigate {len(medium_confidence)} medium-confidence candidates"
-        )
+        recommendations.append(f"Investigate {len(medium_confidence)} medium-confidence candidates")
 
-    recommendations.extend([
-        "Consider running tests after removing dead code to ensure functionality is "
-        "preserved",
-        "Use version control to safely remove dead code with ability to rollback",
-        "Review dependencies - some 'dead' code might be used by external tools"
-    ])
+    recommendations.extend(
+        [
+            "Consider running tests after removing dead code to ensure functionality is preserved",
+            "Use version control to safely remove dead code with ability to rollback",
+            "Review dependencies - some 'dead' code might be used by external tools",
+        ]
+    )
 
     return recommendations
 
 
 def _calculate_dead_code_summary(
-    candidates: list[dict[str, Any]],
-    project_files: list[str],
-    usage_analysis: dict[str, Any],
-    project_root: str
+    candidates: list[dict[str, Any]], project_files: list[str], usage_analysis: dict[str, Any], project_root: str
 ) -> dict[str, Any]:
     """Calculate summary statistics for dead code analysis.
 
@@ -691,26 +605,20 @@ def _calculate_dead_code_summary(
     confidence_breakdown = {
         "high": len([c for c in candidates if c["confidence"] >= 0.9]),
         "medium": len([c for c in candidates if 0.7 <= c["confidence"] < 0.9]),
-        "low": len([c for c in candidates if c["confidence"] < 0.7])
+        "low": len([c for c in candidates if c["confidence"] < 0.7]),
     }
 
     # File breakdown
-    files_with_dead_code = len({
-        location["file"]
-        for candidate in candidates
-        for location in candidate["definition_locations"]
-    })
+    files_with_dead_code = len(
+        {location["file"] for candidate in candidates for location in candidate["definition_locations"]}
+    )
 
     return {
         "total_files_analyzed": len(project_files),
         "total_identifiers": total_identifiers,
         "dead_code_candidates": total_candidates,
-        "dead_code_percentage": round(
-            (total_candidates / max(total_identifiers, 1)) * 100, 2
-        ),
+        "dead_code_percentage": round((total_candidates / max(total_identifiers, 1)) * 100, 2),
         "confidence_breakdown": confidence_breakdown,
         "files_with_dead_code": files_with_dead_code,
-        "avg_confidence": round(
-            sum(c["confidence"] for c in candidates) / max(len(candidates), 1), 2
-        )
+        "avg_confidence": round(sum(c["confidence"] for c in candidates) / max(len(candidates), 1), 2),
     }

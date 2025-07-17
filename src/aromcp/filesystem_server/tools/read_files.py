@@ -9,11 +9,7 @@ from ...utils.pagination import simplify_pagination
 from .._security import get_project_root, validate_file_path_legacy
 
 
-def read_files_impl(
-    files: str | list[str],
-    page: int = 1,
-    max_tokens: int = 20000
-) -> dict[str, Any]:
+def read_files_impl(files: str | list[str], page: int = 1, max_tokens: int = 20000) -> dict[str, Any]:
     """Read multiple files and return their contents.
 
     Args:
@@ -51,36 +47,24 @@ def read_files_impl(
             # Detect encoding
             raw_content = full_path.read_bytes()
             detected_encoding = chardet.detect(raw_content)
-            encoding = detected_encoding.get('encoding', 'utf-8')
+            encoding = detected_encoding.get("encoding", "utf-8")
 
             if encoding is None:
-                encoding = 'utf-8'
+                encoding = "utf-8"
 
             try:
                 content = raw_content.decode(encoding)
             except UnicodeDecodeError:
                 # Fallback to utf-8 with error handling
-                content = raw_content.decode('utf-8', errors='replace')
+                content = raw_content.decode("utf-8", errors="replace")
 
-            file_contents.append({
-                "file": file_path,
-                "content": content,
-                "encoding": encoding,
-                "size": len(content)
-            })
+            file_contents.append({"file": file_path, "content": content, "encoding": encoding, "size": len(content)})
 
         # Apply pagination
-        metadata = {
-            "total_files": len(file_contents),
-            "files_requested": len(files)
-        }
+        metadata = {"total_files": len(file_contents), "files_requested": len(files)}
 
         return simplify_pagination(
-            items=file_contents,
-            page=page,
-            max_tokens=max_tokens,
-            sort_key=lambda x: x["file"],
-            metadata=metadata
+            items=file_contents, page=page, max_tokens=max_tokens, sort_key=lambda x: x["file"], metadata=metadata
         )
 
     except Exception as e:

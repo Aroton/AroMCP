@@ -53,11 +53,7 @@ class StateManager:
 
     def _setup_transformations(self) -> None:
         """Initialize transformation and dependency resolution components"""
-        schema_dict = {
-            "computed": self._schema.computed,
-            "raw": self._schema.raw,
-            "state": self._schema.state
-        }
+        schema_dict = {"computed": self._schema.computed, "raw": self._schema.raw, "state": self._schema.state}
 
         self._dependency_resolver = DependencyResolver(schema_dict)
         resolved_deps = self._dependency_resolver.resolve()

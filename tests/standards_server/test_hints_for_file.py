@@ -30,7 +30,7 @@ class TestHintsForFile:
             "tags": ["error", "exceptions", "api"],
             "appliesTo": ["api/*.py", "*/api/*"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         self.component_metadata = {
@@ -40,7 +40,7 @@ class TestHintsForFile:
             "tags": ["component", "structure"],
             "appliesTo": ["*.tsx", "*.jsx"],
             "severity": "warning",
-            "priority": "important"
+            "priority": "important",
         }
 
         self.general_metadata = {
@@ -50,7 +50,7 @@ class TestHintsForFile:
             "tags": ["coding", "style"],
             "appliesTo": ["*.py", "*.js", "*.ts"],
             "severity": "info",
-            "priority": "recommended"
+            "priority": "recommended",
         }
 
         # Register standards
@@ -65,15 +65,15 @@ class TestHintsForFile:
                 "context": "Helps clients understand what happened",
                 "correctExample": "return Response(status=404)",
                 "incorrectExample": "return Response(status=200)",
-                "has_eslint_rule": False
+                "has_eslint_rule": False,
             },
             {
                 "rule": "Use structured error responses",
                 "context": "Consistent error format across API",
                 "correctExample": '{"error": {"code": "NOT_FOUND", "message": "..."}}',
                 "incorrectExample": '"Error: not found"',
-                "has_eslint_rule": True
-            }
+                "has_eslint_rule": True,
+            },
         ]
 
         self.component_hints = [
@@ -82,7 +82,7 @@ class TestHintsForFile:
                 "context": "Better type safety and documentation",
                 "correctExample": "interface Props { name: string; }",
                 "incorrectExample": "const Component = (props: any) => ...",
-                "has_eslint_rule": True
+                "has_eslint_rule": True,
             }
         ]
 
@@ -92,7 +92,7 @@ class TestHintsForFile:
                 "context": "Improves code readability",
                 "correctExample": "user_count = 5",
                 "incorrectExample": "x = 5",
-                "has_eslint_rule": False
+                "has_eslint_rule": False,
             }
         ]
 
@@ -104,6 +104,7 @@ class TestHintsForFile:
     def teardown_method(self):
         """Clean up after tests."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_exact_folder_match(self):
@@ -117,8 +118,7 @@ class TestHintsForFile:
         assert len(hints) > 0
         # Handle both full hints and reference hints (compression strategy)
         api_hint_found = any(
-            ("HTTP status codes" in hint.get("rule", "")) or
-            ("HTTP status codes" in hint.get("reference", ""))
+            ("HTTP status codes" in hint.get("rule", "")) or ("HTTP status codes" in hint.get("reference", ""))
             for hint in hints
         )
         assert api_hint_found
@@ -141,8 +141,7 @@ class TestHintsForFile:
         # Should get component hints
         # Handle both full hints and reference hints (compression strategy)
         component_hint_found = any(
-            ("TypeScript interfaces" in hint.get("rule", "")) or
-            ("TypeScript interfaces" in hint.get("reference", ""))
+            ("TypeScript interfaces" in hint.get("rule", "")) or ("TypeScript interfaces" in hint.get("reference", ""))
             for hint in hints
         )
         assert component_hint_found
@@ -157,8 +156,7 @@ class TestHintsForFile:
         # Should get API hints due to "error" tag match
         # Handle both full hints and reference hints (compression strategy)
         api_hint_found = any(
-            ("HTTP status codes" in hint.get("rule", "")) or
-            ("HTTP status codes" in hint.get("reference", ""))
+            ("HTTP status codes" in hint.get("rule", "")) or ("HTTP status codes" in hint.get("reference", ""))
             for hint in hints
         )
         assert api_hint_found
@@ -236,6 +234,7 @@ class TestHintsForFile:
             assert result["data"]["totalTokens"] == 0
         finally:
             import shutil
+
             shutil.rmtree(clean_temp_dir)
 
     def test_invalid_max_tokens(self):
@@ -293,19 +292,21 @@ class TestHintsForFile:
             "tags": ["cache", "test"],
             "appliesTo": ["*.py"],
             "severity": "info",
-            "priority": "recommended"
+            "priority": "recommended",
         }
 
         register_impl("standards/cache-test.md", new_metadata, self.temp_dir)
 
         # Add hints to the new standard
-        new_hints = [{
-            "rule": "New rule for cache invalidation test",
-            "context": "This should appear after cache invalidation",
-            "correctExample": "new_example()",
-            "incorrectExample": "old_way()",
-            "hasEslintRule": False
-        }]
+        new_hints = [
+            {
+                "rule": "New rule for cache invalidation test",
+                "context": "This should appear after cache invalidation",
+                "correctExample": "new_example()",
+                "incorrectExample": "old_way()",
+                "hasEslintRule": False,
+            }
+        ]
 
         save_ai_hints("cache-test-standard", new_hints, self.temp_dir)
 
@@ -330,7 +331,7 @@ class TestHintsForFile:
             "tags": ["import", "test"],
             "appliesTo": ["api/*.py"],
             "severity": "warning",
-            "priority": "important"
+            "priority": "important",
         }
 
         register_impl("standards/import-test.md", import_map_metadata, self.temp_dir)
@@ -348,7 +349,7 @@ export async function GET() {
                 "incorrectExample": """export async function GET() {
     return Response.json({data: 'test'});  // Missing import
 }""",
-                "has_eslint_rule": False
+                "has_eslint_rule": False,
             }
         ]
 

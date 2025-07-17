@@ -19,6 +19,7 @@ class TestStringParameters:
     def teardown_method(self):
         """Clean up after tests."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_register_with_string_metadata(self):
@@ -30,7 +31,7 @@ class TestStringParameters:
             "tags": ["test"],
             "appliesTo": ["*.py"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         # Convert to JSON string
@@ -51,7 +52,7 @@ class TestStringParameters:
             "tags": ["test"],
             "appliesTo": ["*.py"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         result = register_impl("standards/test2.md", metadata_dict, self.temp_dir)
@@ -80,7 +81,7 @@ class TestStringParameters:
             "tags": ["test"],
             "appliesTo": ["*.py"],
             "severity": "error",
-            "priority": "required"
+            "priority": "required",
         }
 
         register_impl("standards/test.md", metadata, self.temp_dir)

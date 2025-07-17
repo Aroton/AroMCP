@@ -13,12 +13,7 @@ from ..models import WorkflowStep
 class BreakContinueProcessor:
     """Processes break and continue workflow steps."""
 
-    def process_break(
-        self,
-        step: WorkflowStep,
-        context: ExecutionContext,
-        state: dict[str, Any]
-    ) -> dict[str, Any]:
+    def process_break(self, step: WorkflowStep, context: ExecutionContext, state: dict[str, Any]) -> dict[str, Any]:
         """
         Process a break statement to exit the current loop.
 
@@ -53,15 +48,10 @@ class BreakContinueProcessor:
             "loop_id": current_loop.loop_id,
             "loop_type": current_loop.loop_type,
             "iteration": current_loop.current_iteration,
-            "message": f"Break statement executed in {current_loop.loop_type} loop"
+            "message": f"Break statement executed in {current_loop.loop_type} loop",
         }
 
-    def process_continue(
-        self,
-        step: WorkflowStep,
-        context: ExecutionContext,
-        state: dict[str, Any]
-    ) -> dict[str, Any]:
+    def process_continue(self, step: WorkflowStep, context: ExecutionContext, state: dict[str, Any]) -> dict[str, Any]:
         """
         Process a continue statement to skip to the next loop iteration.
 
@@ -96,7 +86,7 @@ class BreakContinueProcessor:
             "loop_id": current_loop.loop_id,
             "loop_type": current_loop.loop_type,
             "iteration": current_loop.current_iteration,
-            "message": f"Continue statement executed in {current_loop.loop_type} loop"
+            "message": f"Continue statement executed in {current_loop.loop_type} loop",
         }
 
     def is_loop_control_step(self, step_type: str) -> bool:
@@ -125,25 +115,18 @@ class BreakContinueProcessor:
         step_type = step.type
 
         if not self.is_loop_control_step(step_type):
-            return {
-                "valid": True,
-                "message": "Not a loop control step"
-            }
+            return {"valid": True, "message": "Not a loop control step"}
 
         if not context.is_in_loop():
             return {
                 "valid": False,
                 "error": f"{step_type.capitalize()} statement used outside of loop",
-                "step_id": step.id
+                "step_id": step.id,
             }
 
         current_loop = context.current_loop()
         if not current_loop:
-            return {
-                "valid": False,
-                "error": f"No active loop found for {step_type} statement",
-                "step_id": step.id
-            }
+            return {"valid": False, "error": f"No active loop found for {step_type} statement", "step_id": step.id}
 
         # Check if loop type supports break/continue
         supported_loop_types = ("while", "foreach")
@@ -152,14 +135,14 @@ class BreakContinueProcessor:
                 "valid": False,
                 "error": f"{step_type.capitalize()} not supported in {current_loop.loop_type} loop",
                 "step_id": step.id,
-                "loop_type": current_loop.loop_type
+                "loop_type": current_loop.loop_type,
             }
 
         return {
             "valid": True,
             "message": f"{step_type.capitalize()} statement is valid in current {current_loop.loop_type} loop",
             "loop_id": current_loop.loop_id,
-            "loop_type": current_loop.loop_type
+            "loop_type": current_loop.loop_type,
         }
 
     def get_loop_control_info(self, context: ExecutionContext) -> dict[str, Any]:
@@ -173,17 +156,11 @@ class BreakContinueProcessor:
             Dictionary containing loop control information
         """
         if not context.is_in_loop():
-            return {
-                "in_loop": False,
-                "message": "Not currently in a loop"
-            }
+            return {"in_loop": False, "message": "Not currently in a loop"}
 
         current_loop = context.current_loop()
         if not current_loop:
-            return {
-                "in_loop": False,
-                "message": "No active loop state found"
-            }
+            return {"in_loop": False, "message": "No active loop state found"}
 
         return {
             "in_loop": True,
@@ -195,11 +172,7 @@ class BreakContinueProcessor:
             "supports_break_continue": current_loop.loop_type in ("while", "foreach"),
             "loop_depth": len(context.loop_stack),
             "nested_loops": [
-                {
-                    "loop_id": loop.loop_id,
-                    "loop_type": loop.loop_type,
-                    "iteration": loop.current_iteration
-                }
+                {"loop_id": loop.loop_id, "loop_type": loop.loop_type, "iteration": loop.current_iteration}
                 for loop in context.loop_stack
-            ]
+            ],
         }

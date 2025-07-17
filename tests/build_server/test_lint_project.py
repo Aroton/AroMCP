@@ -20,23 +20,30 @@ class TestLintProject:
 
             # Mock the subprocess call
             mock_result = Mock()
-            mock_result.stdout = json.dumps([{
-                "filePath": str(test_file),
-                "messages": [{
-                    "line": 1,
-                    "column": 1,
-                    "severity": 1,
-                    "ruleId": "no-console",
-                    "message": "Unexpected console statement.",
-                    "fix": None
-                }]
-            }])
+            mock_result.stdout = json.dumps(
+                [
+                    {
+                        "filePath": str(test_file),
+                        "messages": [
+                            {
+                                "line": 1,
+                                "column": 1,
+                                "severity": 1,
+                                "ruleId": "no-console",
+                                "message": "Unexpected console statement.",
+                                "fix": None,
+                            }
+                        ],
+                    }
+                ]
+            )
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result), \
-                 patch("pathlib.Path.exists", return_value=True):
-
+            with (
+                patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result),
+                patch("pathlib.Path.exists", return_value=True),
+            ):
                 # Test with string input
                 result = lint_project_impl(use_standards=False, target_files="test.js")
 
@@ -55,36 +62,43 @@ class TestLintProject:
 
             # Mock the subprocess call
             mock_result = Mock()
-            mock_result.stdout = json.dumps([
-                {
-                    "filePath": str(test_file1),
-                    "messages": [{
-                        "line": 1,
-                        "column": 1,
-                        "severity": 1,
-                        "ruleId": "no-console",
-                        "message": "Unexpected console statement.",
-                        "fix": None
-                    }]
-                },
-                {
-                    "filePath": str(test_file2),
-                    "messages": [{
-                        "line": 1,
-                        "column": 1,
-                        "severity": 1,
-                        "ruleId": "no-console",
-                        "message": "Unexpected console statement.",
-                        "fix": None
-                    }]
-                }
-            ])
+            mock_result.stdout = json.dumps(
+                [
+                    {
+                        "filePath": str(test_file1),
+                        "messages": [
+                            {
+                                "line": 1,
+                                "column": 1,
+                                "severity": 1,
+                                "ruleId": "no-console",
+                                "message": "Unexpected console statement.",
+                                "fix": None,
+                            }
+                        ],
+                    },
+                    {
+                        "filePath": str(test_file2),
+                        "messages": [
+                            {
+                                "line": 1,
+                                "column": 1,
+                                "severity": 1,
+                                "ruleId": "no-console",
+                                "message": "Unexpected console statement.",
+                                "fix": None,
+                            }
+                        ],
+                    },
+                ]
+            )
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result), \
-                 patch("pathlib.Path.exists", return_value=True):
-
+            with (
+                patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result),
+                patch("pathlib.Path.exists", return_value=True),
+            ):
                 # Test with list input
                 result = lint_project_impl(use_standards=False, target_files=["test1.js", "test2.js"])
 
@@ -106,14 +120,12 @@ class TestLintProject:
             mock_result.stdout = json.dumps([])
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with specific target files
-                result = lint_project_impl(
-                    use_standards=False,
-                    target_files=["src/app.js", "src/utils.js"]
-                )
+                result = lint_project_impl(use_standards=False, target_files=["src/app.js", "src/utils.js"])
 
                 # Verify result structure (no issues case)
                 assert "issues" in result
@@ -143,9 +155,10 @@ class TestLintProject:
             mock_result.stdout = json.dumps([])
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with single string file
                 result = lint_project_impl(use_standards=False, target_files="single-file.js")
 
@@ -172,9 +185,10 @@ class TestLintProject:
             mock_result.stdout = json.dumps([])
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with None target_files
                 result = lint_project_impl(use_standards=False, target_files=None)
 
@@ -199,23 +213,30 @@ class TestLintProject:
 
             # Mock the subprocess call with fixable issue
             mock_result = Mock()
-            mock_result.stdout = json.dumps([{
-                "filePath": str(test_file),
-                "messages": [{
-                    "line": 1,
-                    "column": 1,
-                    "severity": 1,
-                    "ruleId": "no-console",
-                    "message": "Unexpected console statement.",
-                    "fix": {"range": [0, 20], "text": ""}  # Fixable issue
-                }]
-            }])
+            mock_result.stdout = json.dumps(
+                [
+                    {
+                        "filePath": str(test_file),
+                        "messages": [
+                            {
+                                "line": 1,
+                                "column": 1,
+                                "severity": 1,
+                                "ruleId": "no-console",
+                                "message": "Unexpected console statement.",
+                                "fix": {"range": [0, 20], "text": ""},  # Fixable issue
+                            }
+                        ],
+                    }
+                ]
+            )
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result), \
-                 patch("pathlib.Path.exists", return_value=True):
-
+            with (
+                patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result),
+                patch("pathlib.Path.exists", return_value=True),
+            ):
                 # Test with fixable issue
                 result = lint_project_impl(use_standards=False, target_files="test.js")
 
@@ -243,9 +264,10 @@ class TestLintProject:
             mock_result.stdout = json.dumps([])
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with directory path
                 result = lint_project_impl(use_standards=False, target_files="src/components")
 
@@ -272,9 +294,10 @@ class TestLintProject:
             mock_result.stdout = json.dumps([])
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with glob pattern
                 result = lint_project_impl(use_standards=False, target_files="src/**/*.ts")
 
@@ -301,9 +324,10 @@ class TestLintProject:
             mock_result.stdout = json.dumps([])
             mock_result.returncode = 0
 
-            with patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir), \
-                 patch("subprocess.run", return_value=mock_result) as mock_subprocess:
-
+            with (
+                patch("aromcp.build_server.tools.lint_project.get_project_root", return_value=temp_dir),
+                patch("subprocess.run", return_value=mock_result) as mock_subprocess,
+            ):
                 # Test with no target_files parameter (defaults to None)
                 result = lint_project_impl(use_standards=True, target_files=None)
 

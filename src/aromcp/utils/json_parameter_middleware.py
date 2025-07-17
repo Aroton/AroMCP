@@ -14,7 +14,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypeVar, get_args, get_origin, get_type_hints
 
 # Type variable for generic function signatures
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 class JSONParameterMiddleware:
@@ -79,7 +79,7 @@ class JSONParameterMiddleware:
 
         # Check if the string looks like JSON
         value_stripped = value.strip()
-        if value_stripped.startswith(('[', '{', '"')) and value_stripped.endswith((']', '}', '"')):
+        if value_stripped.startswith(("[", "{", '"')) and value_stripped.endswith(("]", "}", '"')):
             return True
 
         return False
@@ -231,18 +231,14 @@ class JSONParameterMiddleware:
                     converted_kwargs[param_name] = converted_value
                 except ValueError as e:
                     # Return structured error response for invalid parameters
-                    return {
-                        "error": {
-                            "code": "INVALID_INPUT",
-                            "message": str(e)
-                        }
-                    }
+                    return {"error": {"code": "INVALID_INPUT", "message": str(e)}}
 
             # Call the original function with converted parameters
             return func(**converted_kwargs)
 
         # For async functions
         if inspect.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 # Convert args to kwargs for easier processing
@@ -263,12 +259,7 @@ class JSONParameterMiddleware:
                         converted_kwargs[param_name] = converted_value
                     except ValueError as e:
                         # Return structured error response for invalid parameters
-                        return {
-                            "error": {
-                                "code": "INVALID_INPUT",
-                                "message": str(e)
-                            }
-                        }
+                        return {"error": {"code": "INVALID_INPUT", "message": str(e)}}
 
                 # Call the original function with converted parameters
                 return await func(**converted_kwargs)

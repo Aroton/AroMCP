@@ -16,7 +16,7 @@ def get_project_root(project_root: str | None = None) -> str:
         or current directory as fallback
     """
     if project_root is None or project_root == ".":
-        return os.getenv('MCP_FILE_ROOT', '.')
+        return os.getenv("MCP_FILE_ROOT", ".")
     return project_root
 
 
@@ -44,21 +44,12 @@ def validate_file_path(file_path: str, project_root: str) -> dict[str, Any]:
         try:
             abs_path.relative_to(project_path)
         except ValueError:
-            return {
-                "valid": False,
-                "error": f"File path outside project root: {file_path}"
-            }
+            return {"valid": False, "error": f"File path outside project root: {file_path}"}
 
-        return {
-            "valid": True,
-            "abs_path": abs_path
-        }
+        return {"valid": True, "abs_path": abs_path}
 
     except Exception as e:
-        return {
-            "valid": False,
-            "error": f"Invalid file path: {str(e)}"
-        }
+        return {"valid": False, "error": f"Invalid file path: {str(e)}"}
 
 
 def validate_file_path_legacy(file_path: str, project_root: Path) -> Path:
@@ -103,32 +94,24 @@ def validate_pattern_safe(pattern: str) -> dict[str, Any]:
     """
     # Check for potentially dangerous patterns
     dangerous_patterns = [
-        '../',  # Directory traversal
-        '/..',  # Directory traversal
-        '//',   # Double slashes
-        '\\',   # Windows path separators that could cause issues
+        "../",  # Directory traversal
+        "/..",  # Directory traversal
+        "//",  # Double slashes
+        "\\",  # Windows path separators that could cause issues
     ]
 
     for dangerous in dangerous_patterns:
         if dangerous in pattern:
-            return {
-                "valid": False,
-                "error": f"Potentially unsafe pattern: {pattern}"
-            }
+            return {"valid": False, "error": f"Potentially unsafe pattern: {pattern}"}
 
     # Check for reasonable length
     if len(pattern) > 1000:
-        return {
-            "valid": False,
-            "error": "Pattern too long"
-        }
+        return {"valid": False, "error": "Pattern too long"}
 
     return {"valid": True}
 
 
-def validate_standards_directory(
-    standards_dir: str, project_root: str
-) -> dict[str, Any]:
+def validate_standards_directory(standards_dir: str, project_root: str) -> dict[str, Any]:
     """Validate that a standards directory path is safe and accessible.
 
     Args:
@@ -139,10 +122,7 @@ def validate_standards_directory(
         Dictionary with validation result and resolved path
     """
     if not standards_dir:
-        return {
-            "valid": False,
-            "error": "Standards directory cannot be empty"
-        }
+        return {"valid": False, "error": "Standards directory cannot be empty"}
 
     # Validate the path using existing validation
     full_path = str(Path(project_root) / standards_dir)
@@ -151,7 +131,4 @@ def validate_standards_directory(
     if not validation["valid"]:
         return validation
 
-    return {
-        "valid": True,
-        "abs_path": validation["abs_path"]
-    }
+    return {"valid": True, "abs_path": validation["abs_path"]}

@@ -21,7 +21,7 @@ def generate_minimal_example(rule: EnhancedRule) -> str:
         "async": _generate_async_minimal,
         "security": _generate_security_minimal,
         "performance": _generate_performance_minimal,
-        "testing": _generate_testing_minimal
+        "testing": _generate_testing_minimal,
     }
 
     generator = pattern_generators.get(rule.metadata.pattern_type)
@@ -40,7 +40,7 @@ def generate_standard_example(rule: EnhancedRule) -> str:
         return f"// {rule.metadata.pattern_type} implementation"
 
     # Extract core implementation (first 10 lines of meaningful code)
-    lines = rule.examples.full.split('\n')
+    lines = rule.examples.full.split("\n")
     core_lines = []
     brace_count = 0
     in_function = False
@@ -49,28 +49,28 @@ def generate_standard_example(rule: EnhancedRule) -> str:
         stripped = line.strip()
 
         # Skip empty lines and comments in extraction
-        if not stripped or stripped.startswith('//') or stripped.startswith('/*'):
+        if not stripped or stripped.startswith("//") or stripped.startswith("/*"):
             continue
 
         # Track function/class boundaries
-        if any(keyword in stripped for keyword in ['function', 'const', 'export', 'class', 'interface']):
+        if any(keyword in stripped for keyword in ["function", "const", "export", "class", "interface"]):
             in_function = True
 
         if in_function:
             core_lines.append(line)
 
             # Count braces to find complete blocks
-            brace_count += stripped.count('{') - stripped.count('}')
+            brace_count += stripped.count("{") - stripped.count("}")
 
             # Stop at complete function/block or after reasonable length
             if (brace_count == 0 and len(core_lines) > 3) or len(core_lines) >= 10:
                 break
 
     if core_lines:
-        return '\n'.join(core_lines)
+        return "\n".join(core_lines)
     else:
         # Fallback to first 10 lines
-        return '\n'.join(lines[:10])
+        return "\n".join(lines[:10])
 
 
 def _generate_validation_minimal(full_example: str) -> str:
@@ -189,18 +189,18 @@ def _generate_testing_minimal(full_example: str) -> str:
 
 def _extract_core_pattern(full_example: str) -> str:
     """Extract core pattern from full example as fallback."""
-    lines = full_example.split('\n')
+    lines = full_example.split("\n")
 
     # Find the first meaningful line of code
     for line in lines:
         stripped = line.strip()
 
         # Skip empty lines and comments
-        if not stripped or stripped.startswith('//') or stripped.startswith('/*'):
+        if not stripped or stripped.startswith("//") or stripped.startswith("/*"):
             continue
 
         # Look for key patterns
-        if any(keyword in stripped for keyword in ['const', 'function', 'export', 'import', 'class']):
+        if any(keyword in stripped for keyword in ["const", "function", "export", "import", "class"]):
             return stripped
 
     # If no meaningful pattern found, return first non-empty line
@@ -271,8 +271,8 @@ def enhance_example_with_imports(example: str, import_map: list[dict[str, Any]])
 
     # Extract existing imports
     existing_imports = set()
-    for line in example.split('\n'):
-        if line.strip().startswith('import'):
+    for line in example.split("\n"):
+        if line.strip().startswith("import"):
             existing_imports.add(line.strip())
 
     # Add missing imports
@@ -283,14 +283,14 @@ def enhance_example_with_imports(example: str, import_map: list[dict[str, Any]])
             new_imports.append(import_line)
 
     if new_imports:
-        return '\n'.join(new_imports) + '\n\n' + example
+        return "\n".join(new_imports) + "\n\n" + example
     else:
         return example
 
 
 def truncate_example(example: str, max_lines: int = 15) -> str:
     """Truncate example to maximum number of lines."""
-    lines = example.split('\n')
+    lines = example.split("\n")
     if len(lines) <= max_lines:
         return example
 
@@ -300,8 +300,9 @@ def truncate_example(example: str, max_lines: int = 15) -> str:
 
     for line in lines:
         stripped = line.strip()
-        if (stripped.startswith('import') or
-            any(keyword in stripped for keyword in ['function', 'const', 'export', 'class', 'interface'])):
+        if stripped.startswith("import") or any(
+            keyword in stripped for keyword in ["function", "const", "export", "class", "interface"]
+        ):
             important_lines.append(line)
         else:
             other_lines.append(line)
@@ -316,4 +317,4 @@ def truncate_example(example: str, max_lines: int = 15) -> str:
     if len(lines) > len(result_lines):
         result_lines.append("  // ... more code")
 
-    return '\n'.join(result_lines)
+    return "\n".join(result_lines)

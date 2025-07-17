@@ -182,11 +182,7 @@ class TestContextDetector:
 
     def test_detect_working_area(self):
         """Test detecting working area."""
-        files = [
-            "/project/app/components/Button.tsx",
-            "/project/app/components/Modal.tsx",
-            "/project/app/layout.tsx"
-        ]
+        files = ["/project/app/components/Button.tsx", "/project/app/components/Modal.tsx", "/project/app/layout.tsx"]
 
         for file in files:
             self.session.add_file(file)
@@ -262,7 +258,7 @@ class TestContextDetector:
 
     def test_has_use_client_directive(self):
         """Test detecting 'use client' directive."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.tsx', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsx", delete=False) as f:
             f.write("'use client'\n\nimport React from 'react'\n")
             f.flush()
 
@@ -271,7 +267,7 @@ class TestContextDetector:
 
             os.unlink(f.name)
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.tsx', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsx", delete=False) as f:
             f.write("import React from 'react'\n")
             f.flush()
 
@@ -391,4 +387,3 @@ class TestContextDetector:
         assert context["nextjs_context"]["router_type"] is None
         assert context["pattern_familiarity"] == {}
         assert context["session_phase"] == "exploration"
-

@@ -172,13 +172,9 @@ priority: required
             assert len(result["data"]["needsUpdate"]) == 2
 
             # Find the entries
-            field_entry = next(
-                item for item in result["data"]["needsUpdate"]
-                if item["standardId"] == "field-updated"
-            )
+            field_entry = next(item for item in result["data"]["needsUpdate"] if item["standardId"] == "field-updated")
             different_format_entry = next(
-                item for item in result["data"]["needsUpdate"]
-                if item["standardId"] == "different-format-updated"
+                item for item in result["data"]["needsUpdate"] if item["standardId"] == "different-format-updated"
             )
 
             # Verify updated field is used correctly
@@ -206,13 +202,13 @@ priority: required
                     "test-standard": {
                         "sourcePath": "standards/test-standard.md",
                         "lastModified": "2024-01-01T00:00:00Z",
-                        "registered": True
+                        "registered": True,
                     }
                 }
             }
 
             manifest_path = aromcp_dir / "manifest.json"
-            with open(manifest_path, 'w') as f:
+            with open(manifest_path, "w") as f:
                 json.dump(manifest, f)
 
             # Create file with newer template updated field

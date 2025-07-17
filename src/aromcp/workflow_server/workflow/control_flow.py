@@ -25,8 +25,8 @@ class ConditionalStep:
             definition={
                 "condition": self.condition,
                 "then_steps": [step.definition for step in self.then_steps],
-                "else_steps": [step.definition for step in self.else_steps] if self.else_steps else None
-            }
+                "else_steps": [step.definition for step in self.else_steps] if self.else_steps else None,
+            },
         )
 
 
@@ -46,8 +46,8 @@ class WhileLoopStep:
             definition={
                 "condition": self.condition,
                 "max_iterations": self.max_iterations,
-                "body": [step.definition for step in self.body]
-            }
+                "body": [step.definition for step in self.body],
+            },
         )
 
 
@@ -57,7 +57,7 @@ class ForEachStep:
 
     items: str  # Expression returning array to iterate over
     variable_name: str = "item"  # Variable name for current item
-    index_name: str = "index"   # Variable name for current index
+    index_name: str = "index"  # Variable name for current index
     body: list[WorkflowStep] = field(default_factory=list)
 
     def to_workflow_step(self, step_id: str) -> WorkflowStep:
@@ -69,8 +69,8 @@ class ForEachStep:
                 "items": self.items,
                 "variable_name": self.variable_name,
                 "index_name": self.index_name,
-                "body": [step.definition for step in self.body]
-            }
+                "body": [step.definition for step in self.body],
+            },
         )
 
 
@@ -98,8 +98,8 @@ class UserInputStep:
                 "validation_message": self.validation_message,
                 "input_type": self.input_type,
                 "required": self.required,
-                "max_attempts": self.max_attempts
-            }
+                "max_attempts": self.max_attempts,
+            },
         )
 
 
@@ -109,11 +109,7 @@ class BreakStep:
 
     def to_workflow_step(self, step_id: str) -> WorkflowStep:
         """Convert to a WorkflowStep for execution."""
-        return WorkflowStep(
-            id=step_id,
-            type="break",
-            definition={}
-        )
+        return WorkflowStep(id=step_id, type="break", definition={})
 
 
 @dataclass
@@ -122,11 +118,7 @@ class ContinueStep:
 
     def to_workflow_step(self, step_id: str) -> WorkflowStep:
         """Convert to a WorkflowStep for execution."""
-        return WorkflowStep(
-            id=step_id,
-            type="continue",
-            definition={}
-        )
+        return WorkflowStep(id=step_id, type="continue", definition={})
 
 
 @dataclass
@@ -137,7 +129,7 @@ class ParallelForEachStep:
     sub_agent_task: str  # Name of the sub-agent task to delegate
     max_parallel: int = 10  # Maximum number of parallel executions
     variable_name: str = "item"  # Variable name for current item
-    index_name: str = "index"   # Variable name for current index
+    index_name: str = "index"  # Variable name for current index
 
     def to_workflow_step(self, step_id: str) -> WorkflowStep:
         """Convert to a WorkflowStep for execution."""
@@ -149,8 +141,8 @@ class ParallelForEachStep:
                 "sub_agent_task": self.sub_agent_task,
                 "max_parallel": self.max_parallel,
                 "variable_name": self.variable_name,
-                "index_name": self.index_name
-            }
+                "index_name": self.index_name,
+            },
         )
 
 
@@ -166,11 +158,11 @@ class LoopState:
     """Tracks the state of a currently executing loop."""
 
     loop_type: str  # "while", "foreach", "parallel_foreach"
-    loop_id: str    # Unique identifier for this loop instance
+    loop_id: str  # Unique identifier for this loop instance
     current_iteration: int = 0
     max_iterations: int = 100
     items: list[Any] | None = None  # For foreach loops
-    current_item_index: int = 0     # For foreach loops
+    current_item_index: int = 0  # For foreach loops
     variable_bindings: dict[str, Any] = field(default_factory=dict)  # Loop variables
     control_signal: str | None = None  # "break" or "continue"
 
@@ -216,20 +208,23 @@ class ConditionalResult:
             "condition_result": self.condition_result,
             "original_condition": self.original_condition,
             "evaluated_values": self.evaluated_values,
-            "branch_taken": self.branch_taken
+            "branch_taken": self.branch_taken,
         }
 
 
 class ControlFlowError(Exception):
     """Raised when control flow execution fails."""
+
     pass
 
 
 class InfiniteLoopError(ControlFlowError):
     """Raised when a loop exceeds maximum iterations."""
+
     pass
 
 
 class ValidationError(ControlFlowError):
     """Raised when user input validation fails."""
+
     pass

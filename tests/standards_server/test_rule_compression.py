@@ -1,6 +1,5 @@
 """Tests for rule compression functionality."""
 
-
 from aromcp.standards_server.models.enhanced_rule import EnhancedRule, RuleExamples, RuleMetadata, TokenCount
 from aromcp.standards_server.services.rule_compressor import RuleCompressor
 from aromcp.standards_server.services.session_manager import SessionState
@@ -19,11 +18,7 @@ class TestRuleCompressor:
             rule="Always validate user input",
             rule_id="validation-001",
             context="When handling user input, always validate data before processing",
-            metadata=RuleMetadata(
-                pattern_type="validation",
-                complexity="intermediate",
-                rule_type="must"
-            ),
+            metadata=RuleMetadata(pattern_type="validation", complexity="intermediate", rule_type="must"),
             examples=RuleExamples(
                 minimal="validate(input)",
                 standard="const validated = schema.parse(input)",
@@ -31,10 +26,10 @@ class TestRuleCompressor:
                 full=(
                     "const validated = schema.parse(input); "
                     "if (!validated) { logger.error('Validation failed'); throw new Error('Invalid input'); }"
-                )
+                ),
             ),
             tokens=TokenCount(minimal=10, standard=25, detailed=50, full=100),
-            has_eslint_rule=True
+            has_eslint_rule=True,
         )
 
     def test_determine_compression_strategy_reference(self):
@@ -49,34 +44,26 @@ class TestRuleCompressor:
 
     def test_determine_compression_strategy_expert(self):
         """Test determining expert strategy."""
-        context = {
-            "pattern_familiarity": {"validation": "expert"}
-        }
+        context = {"pattern_familiarity": {"validation": "expert"}}
 
         strategy = self.compressor._determine_compression_strategy(self.sample_rule, context, self.session)
         assert strategy == "expert"
 
     def test_determine_compression_strategy_familiar(self):
         """Test determining familiar strategy."""
-        context = {
-            "pattern_familiarity": {"validation": "familiar"}
-        }
+        context = {"pattern_familiarity": {"validation": "familiar"}}
 
         strategy = self.compressor._determine_compression_strategy(self.sample_rule, context, self.session)
         assert strategy == "familiar"
 
-        context = {
-            "pattern_familiarity": {"validation": "novice"}
-        }
+        context = {"pattern_familiarity": {"validation": "novice"}}
 
         strategy = self.compressor._determine_compression_strategy(self.sample_rule, context, self.session)
         assert strategy == "familiar"
 
     def test_determine_compression_strategy_first_time(self):
         """Test determining first-time strategy."""
-        context = {
-            "pattern_familiarity": {"validation": "new"}
-        }
+        context = {"pattern_familiarity": {"validation": "new"}}
 
         strategy = self.compressor._determine_compression_strategy(self.sample_rule, context, self.session)
         assert strategy == "first_time"
@@ -88,11 +75,7 @@ class TestRuleCompressor:
 
     def test_format_for_first_time_detailed(self):
         """Test formatting for first-time viewing with detailed level."""
-        context = {
-            "task_type": "learning",
-            "complexity_level": "basic",
-            "session_phase": "exploration"
-        }
+        context = {"task_type": "learning", "complexity_level": "basic", "session_phase": "exploration"}
 
         result = self.compressor._format_for_first_time(self.sample_rule, context, self.session)
 
@@ -108,11 +91,7 @@ class TestRuleCompressor:
 
     def test_format_for_first_time_standard(self):
         """Test formatting for first-time viewing with standard level."""
-        context = {
-            "task_type": "implementation",
-            "complexity_level": "intermediate",
-            "session_phase": "development"
-        }
+        context = {"task_type": "implementation", "complexity_level": "intermediate", "session_phase": "development"}
 
         result = self.compressor._format_for_first_time(self.sample_rule, context, self.session)
 
@@ -196,7 +175,7 @@ class TestRuleCompressor:
             context="Basic context",
             metadata=RuleMetadata(pattern_type="validation", complexity="basic"),
             examples=RuleExamples(full="basic example"),
-            tokens=TokenCount(full=50)
+            tokens=TokenCount(full=50),
         )
 
         level = self.compressor._determine_detail_level(expert_rule, context, self.session)
@@ -210,7 +189,7 @@ class TestRuleCompressor:
             context="Advanced context",
             metadata=RuleMetadata(pattern_type="validation", complexity="advanced"),
             examples=RuleExamples(full="advanced example"),
-            tokens=TokenCount(full=200)
+            tokens=TokenCount(full=200),
         )
 
         level = self.compressor._determine_detail_level(advanced_rule, context, self.session)
@@ -275,17 +254,19 @@ class TestRuleCompressor:
         rules = []
         for i in range(5):
             # Create large examples that will actually use significant tokens
-            large_example = f"function validateExample{i}() {{\n" + \
-                           "  const result = validateInput(data);\n" * 10 + \
-                           "  return processValidation(result);\n" + \
-                           "}"
+            large_example = (
+                f"function validateExample{i}() {{\n"
+                + "  const result = validateInput(data);\n" * 10
+                + "  return processValidation(result);\n"
+                + "}"
+            )
             rule = EnhancedRule(
                 rule=f"Rule {i}",
                 rule_id=f"rule-{i}",
                 context=f"Context {i}",
                 metadata=RuleMetadata(pattern_type="validation"),
                 examples=RuleExamples(full=large_example),
-                tokens=TokenCount(minimal=30, standard=50, detailed=75, full=100)
+                tokens=TokenCount(minimal=30, standard=50, detailed=75, full=100),
             )
             rules.append(rule)
 
@@ -307,7 +288,7 @@ class TestRuleCompressor:
             context="Must context",
             metadata=RuleMetadata(pattern_type="validation", rule_type="must"),
             examples=RuleExamples(full="Must example"),
-            tokens=TokenCount(full=100)
+            tokens=TokenCount(full=100),
         )
 
         should_rule = EnhancedRule(
@@ -316,7 +297,7 @@ class TestRuleCompressor:
             context="Should context",
             metadata=RuleMetadata(pattern_type="validation", rule_type="should"),
             examples=RuleExamples(full="Should example"),
-            tokens=TokenCount(full=100)
+            tokens=TokenCount(full=100),
         )
 
         may_rule = EnhancedRule(
@@ -325,7 +306,7 @@ class TestRuleCompressor:
             context="May context",
             metadata=RuleMetadata(pattern_type="validation", rule_type="may"),
             examples=RuleExamples(full="May example"),
-            tokens=TokenCount(full=100)
+            tokens=TokenCount(full=100),
         )
 
         rules = [may_rule, should_rule, must_rule]  # Intentionally out of order
@@ -347,7 +328,7 @@ class TestRuleCompressor:
             context="Basic context",
             metadata=RuleMetadata(pattern_type="validation", complexity="basic"),
             examples=RuleExamples(full="Basic example"),
-            tokens=TokenCount(full=100)
+            tokens=TokenCount(full=100),
         )
 
         intermediate_rule = EnhancedRule(
@@ -356,7 +337,7 @@ class TestRuleCompressor:
             context="Intermediate context",
             metadata=RuleMetadata(pattern_type="validation", complexity="intermediate"),
             examples=RuleExamples(full="Intermediate example"),
-            tokens=TokenCount(full=100)
+            tokens=TokenCount(full=100),
         )
 
         rules = [basic_rule, intermediate_rule]
@@ -376,7 +357,7 @@ class TestRuleCompressor:
             context="New context",
             metadata=RuleMetadata(pattern_type="new_pattern"),
             examples=RuleExamples(full="New example"),
-            tokens=TokenCount(full=100)
+            tokens=TokenCount(full=100),
         )
 
         familiar_pattern_rule = EnhancedRule(
@@ -385,14 +366,11 @@ class TestRuleCompressor:
             context="Familiar context",
             metadata=RuleMetadata(pattern_type="familiar_pattern"),
             examples=RuleExamples(full="Familiar example"),
-            tokens=TokenCount(full=100)
+            tokens=TokenCount(full=100),
         )
 
         rules = [familiar_pattern_rule, new_pattern_rule]
-        context = {
-            "pattern_familiarity": {"familiar_pattern": "expert"},
-            "complexity_level": "intermediate"
-        }
+        context = {"pattern_familiarity": {"familiar_pattern": "expert"}, "complexity_level": "intermediate"}
 
         sorted_rules = self.compressor._sort_rules_by_priority(rules, context, self.session)
 
@@ -402,24 +380,9 @@ class TestRuleCompressor:
     def test_get_compression_stats(self):
         """Test getting compression statistics."""
         compressed_rules = [
-            {
-                "rule_id": "rule1",
-                "compression_strategy": "expert",
-                "original_tokens": 100,
-                "tokens": 20
-            },
-            {
-                "rule_id": "rule2",
-                "compression_strategy": "familiar",
-                "original_tokens": 150,
-                "tokens": 50
-            },
-            {
-                "rule_id": "rule3",
-                "compression_strategy": "expert",
-                "original_tokens": 80,
-                "tokens": 15
-            }
+            {"rule_id": "rule1", "compression_strategy": "expert", "original_tokens": 100, "tokens": 20},
+            {"rule_id": "rule2", "compression_strategy": "familiar", "original_tokens": 150, "tokens": 50},
+            {"rule_id": "rule3", "compression_strategy": "expert", "original_tokens": 80, "tokens": 15},
         ]
 
         stats = self.compressor._get_compression_stats(compressed_rules)
@@ -450,4 +413,3 @@ class TestRuleCompressor:
         assert "validation-001" in self.session.loaded_rule_ids
         assert "validation" in self.session.loaded_patterns
         assert self.session.token_count > 0
-

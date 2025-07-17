@@ -39,6 +39,7 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
                 # Check if tsconfig.json has project references
                 try:
                     import json
+
                     with open(project_path / "tsconfig.json") as f:
                         tsconfig = json.load(f)
                         if tsconfig.get("references"):
@@ -58,6 +59,7 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
             if isinstance(files, str):
                 try:
                     import json
+
                     files = json.loads(files)
                 except json.JSONDecodeError:
                     files = [files]  # Treat as single file
@@ -86,11 +88,7 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
         # Run TypeScript compiler
         try:
             result = subprocess.run(  # noqa: S603 # Intentional subprocess call for TypeScript compiler
-                cmd,
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                timeout=120
+                cmd, cwd=project_root, capture_output=True, text=True, timeout=120
             )
         except subprocess.TimeoutExpired as e:
             raise ValueError("TypeScript check timed out") from e
@@ -106,10 +104,7 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
 
         # Build result - only show errors if there are any
         if len(errors) == 0:
-            return {
-                "errors": [],
-                "check_again": False
-            }
+            return {"errors": [], "check_again": False}
         else:
             # Cap errors at first file's errors
             first_file_errors = []
@@ -120,7 +115,7 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
             return {
                 "errors": first_file_errors,
                 "total": len(errors),
-                "check_again": True  # Always suggest checking again after fixing TypeScript errors
+                "check_again": True,  # Always suggest checking again after fixing TypeScript errors
             }
 
     except Exception as e:
@@ -132,9 +127,9 @@ def _parse_tsc_output(output: str) -> list[dict[str, Any]]:
     errors = []
 
     # TypeScript error pattern: file(line,col): error TSxxxx: message
-    pattern = r'^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+TS(\d+):\s+(.+)$'
+    pattern = r"^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+TS(\d+):\s+(.+)$"
 
-    for line in output.split('\n'):
+    for line in output.split("\n"):
         line = line.strip()
         if not line:
             continue
@@ -143,13 +138,15 @@ def _parse_tsc_output(output: str) -> list[dict[str, Any]]:
         if match:
             file_path, line_num, col_num, severity, error_code, message = match.groups()
 
-            errors.append({
-                "file": file_path,
-                "line": int(line_num),
-                "column": int(col_num),
-                "severity": severity,
-                "code": f"TS{error_code}",
-                "message": message.strip()
-            })
+            errors.append(
+                {
+                    "file": file_path,
+                    "line": int(line_num),
+                    "column": int(col_num),
+                    "severity": severity,
+                    "code": f"TS{error_code}",
+                    "message": message.strip(),
+                }
+            )
 
     return errors

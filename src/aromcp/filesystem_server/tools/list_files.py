@@ -48,15 +48,13 @@ def list_files_impl(patterns: str | list[str]) -> list[str]:
         raise ValueError(f"Failed to list files: {str(e)}") from e
 
 
-def _get_file_paths_by_pattern(
-    patterns: list[str], project_path: Path
-) -> list[str]:
+def _get_file_paths_by_pattern(patterns: list[str], project_path: Path) -> list[str]:
     """Get file paths matching glob patterns."""
     files = []
 
     for pattern in patterns:
         # Use pathlib's glob for pattern matching
-        if pattern.startswith('/'):
+        if pattern.startswith("/"):
             # Absolute pattern within project
             matches = list(project_path.glob(pattern[1:]))
         else:
@@ -70,5 +68,3 @@ def _get_file_paths_by_pattern(
 
     # Remove duplicates and sort
     return sorted(set(files))
-
-

@@ -17,12 +17,7 @@ class ForEachProcessor:
     def __init__(self):
         self.expression_evaluator = ExpressionEvaluator()
 
-    def process_foreach(
-        self,
-        step: WorkflowStep,
-        context: ExecutionContext,
-        state: dict[str, Any]
-    ) -> dict[str, Any]:
+    def process_foreach(self, step: WorkflowStep, context: ExecutionContext, state: dict[str, Any]) -> dict[str, Any]:
         """
         Process a foreach step.
 
@@ -55,16 +50,12 @@ class ForEachProcessor:
                     "type": "foreach_skipped",
                     "step_id": step.id,
                     "reason": "Empty array",
-                    "items_expression": items_expression
+                    "items_expression": items_expression,
                 }
 
             # Create loop state
             loop_state = LoopState(
-                loop_type="foreach",
-                loop_id=step.id,
-                max_iterations=len(items),
-                items=items,
-                current_item_index=0
+                loop_type="foreach", loop_id=step.id, max_iterations=len(items), items=items, current_item_index=0
             )
 
             # Store variable names for later use
@@ -79,20 +70,15 @@ class ForEachProcessor:
             workflow_steps = []
             for i, step_def in enumerate(body_steps):
                 step_id = f"{step.id}.body.{i}"
-                workflow_steps.append(WorkflowStep(
-                    id=step_id,
-                    type=step_def.get("type", "unknown"),
-                    definition=step_def
-                ))
+                workflow_steps.append(
+                    WorkflowStep(id=step_id, type=step_def.get("type", "unknown"), definition=step_def)
+                )
 
             # Enter the loop
             context.enter_loop(loop_state)
 
             # Create loop frame
-            loop_frame = context.create_loop_frame(
-                steps=workflow_steps,
-                loop_state=loop_state
-            )
+            loop_frame = context.create_loop_frame(steps=workflow_steps, loop_state=loop_state)
             context.push_frame(loop_frame)
 
             return {
@@ -104,7 +90,7 @@ class ForEachProcessor:
                 "index_name": index_name,
                 "body_steps": len(workflow_steps),
                 "current_item": items[0],
-                "current_index": 0
+                "current_index": 0,
             }
 
         except ExpressionError as e:
@@ -112,11 +98,7 @@ class ForEachProcessor:
         except Exception as e:
             raise ControlFlowError(f"Error processing foreach step: {str(e)}") from e
 
-    def check_foreach_continuation(
-        self,
-        context: ExecutionContext,
-        state: dict[str, Any]
-    ) -> dict[str, Any]:
+    def check_foreach_continuation(self, context: ExecutionContext, state: dict[str, Any]) -> dict[str, Any]:
         """
         Check if a foreach loop should continue to the next iteration.
 
@@ -148,8 +130,8 @@ class ForEachProcessor:
             current_index = current_loop.current_item_index
 
             # Get variable names from loop state
-            variable_name = getattr(current_loop, 'variable_name', 'item')
-            index_name = getattr(current_loop, 'index_name', 'index')
+            variable_name = getattr(current_loop, "variable_name", "item")
+            index_name = getattr(current_loop, "index_name", "index")
 
             current_loop.variable_bindings[variable_name] = current_item
             current_loop.variable_bindings[index_name] = current_index
@@ -164,16 +146,13 @@ class ForEachProcessor:
                 "loop_id": current_loop.loop_id,
                 "current_item": current_item,
                 "current_index": current_index,
-                "iteration": current_loop.current_iteration
+                "iteration": current_loop.current_iteration,
             }
         else:
             return self._exit_foreach(context, "items_exhausted")
 
     def _evaluate_items_expression(
-        self,
-        items_expression: str,
-        state: dict[str, Any],
-        context: ExecutionContext
+        self, items_expression: str, state: dict[str, Any], context: ExecutionContext
     ) -> list[Any]:
         """
         Evaluate the items expression to get the array to iterate over.
@@ -206,7 +185,7 @@ class ForEachProcessor:
         elif isinstance(result, str):
             # Split strings into character array
             return list(result)
-        elif hasattr(result, '__iter__') and not isinstance(result, dict):
+        elif hasattr(result, "__iter__") and not isinstance(result, dict):
             # Convert other iterables to list
             return list(result)
         else:
@@ -241,14 +220,11 @@ class ForEachProcessor:
             "reason": reason,
             "total_iterations": iteration,
             "items_processed": iteration,
-            "total_items": items_count
+            "total_items": items_count,
         }
 
     def expand_foreach_steps(
-        self,
-        step: WorkflowStep,
-        context: ExecutionContext,
-        state: dict[str, Any]
+        self, step: WorkflowStep, context: ExecutionContext, state: dict[str, Any]
     ) -> list[WorkflowStep]:
         """
         Expand a foreach loop into individual steps for each item.
@@ -279,10 +255,7 @@ class ForEachProcessor:
 
             for index, item in enumerate(items):
                 # Create variable bindings for this iteration
-                iteration_variables = {
-                    variable_name: item,
-                    index_name: index
-                }
+                iteration_variables = {variable_name: item, index_name: index}
 
                 # Expand each body step with variable substitution
                 for i, step_def in enumerate(body_steps):
@@ -291,11 +264,9 @@ class ForEachProcessor:
                     # Substitute variables in step definition
                     substituted_def = self._substitute_variables(step_def, iteration_variables)
 
-                    expanded_steps.append(WorkflowStep(
-                        id=step_id,
-                        type=step_def.get("type", "unknown"),
-                        definition=substituted_def
-                    ))
+                    expanded_steps.append(
+                        WorkflowStep(id=step_id, type=step_def.get("type", "unknown"), definition=substituted_def)
+                    )
 
             return expanded_steps
 
@@ -324,7 +295,7 @@ class ForEachProcessor:
         # Substitute variables
         for var_name, var_value in variables.items():
             # Replace {{variable_name}} patterns
-            pattern = r'\{\{\s*' + re.escape(var_name) + r'\s*\}\}'
+            pattern = r"\{\{\s*" + re.escape(var_name) + r"\s*\}\}"
             replacement = json.dumps(var_value) if not isinstance(var_value, str) else var_value
             step_json = re.sub(pattern, replacement, step_json)
 

@@ -1,6 +1,5 @@
 """Tests for scoring utilities."""
 
-
 from aromcp.standards_server._scoring import (
     _estimate_tokens,
     _matches_pattern,
@@ -14,12 +13,7 @@ class TestScoring:
 
     def test_exact_folder_match(self):
         """Test exact folder match scoring."""
-        metadata = {
-            "category": "api",
-            "tags": ["error", "exceptions"],
-            "appliesTo": ["*.py"],
-            "priority": "required"
-        }
+        metadata = {"category": "api", "tags": ["error", "exceptions"], "appliesTo": ["*.py"], "priority": "required"}
 
         # Exact category match
         score = score_relevance(metadata, "api/users.py")
@@ -35,7 +29,7 @@ class TestScoring:
             "category": "widgets",  # Different from folder name to avoid exact match
             "tags": ["ui"],
             "appliesTo": ["components/*.tsx", "*.jsx"],
-            "priority": "important"
+            "priority": "important",
         }
 
         # Pattern match (no exact folder match, so uses glob pattern)
@@ -48,12 +42,7 @@ class TestScoring:
 
     def test_category_in_path(self):
         """Test category substring match scoring."""
-        metadata = {
-            "category": "api",
-            "tags": ["test"],
-            "appliesTo": ["*.other"],
-            "priority": "recommended"
-        }
+        metadata = {"category": "api", "tags": ["test"], "appliesTo": ["*.other"], "priority": "recommended"}
 
         # Category substring in folder
         score = score_relevance(metadata, "src/api-routes/handler.py")
@@ -65,7 +54,7 @@ class TestScoring:
             "category": "other",
             "tags": ["error", "validation"],
             "appliesTo": ["*.other"],
-            "priority": "recommended"
+            "priority": "recommended",
         }
 
         # Tag in path
@@ -78,24 +67,14 @@ class TestScoring:
 
     def test_no_match(self):
         """Test no relevance match."""
-        metadata = {
-            "category": "api",
-            "tags": ["error"],
-            "appliesTo": ["*.js"],
-            "priority": "required"
-        }
+        metadata = {"category": "api", "tags": ["error"], "appliesTo": ["*.js"], "priority": "required"}
 
         score = score_relevance(metadata, "unrelated/file.txt")
         assert score == 0.0
 
     def test_priority_multipliers(self):
         """Test priority multiplier effects."""
-        base_metadata = {
-            "category": "test",
-            "tags": [],
-            "appliesTo": [],
-            "priority": "required"
-        }
+        base_metadata = {"category": "test", "tags": [], "appliesTo": [], "priority": "required"}
 
         # Required priority
         metadata_required = {**base_metadata, "priority": "required"}
@@ -119,12 +98,7 @@ class TestScoring:
 
     def test_case_insensitive_matching(self):
         """Test that matching is case insensitive."""
-        metadata = {
-            "category": "API",
-            "tags": ["Error"],
-            "appliesTo": [],
-            "priority": "required"
-        }
+        metadata = {"category": "API", "tags": ["Error"], "appliesTo": [], "priority": "required"}
 
         # Category match (case insensitive)
         score = score_relevance(metadata, "api/users.py")
@@ -155,7 +129,7 @@ class TestScoring:
             "rule": "Use proper error handling",
             "context": "This helps with debugging",
             "correctExample": "try: ... except: ...",
-            "incorrectExample": "just do it"
+            "incorrectExample": "just do it",
         }
 
         tokens = _estimate_tokens(hint)
@@ -167,7 +141,7 @@ class TestScoring:
             "rule": "A very long rule description that goes on and on with lots of detail",
             "context": "An extensive context explanation with many words and detailed information",
             "correctExample": "def very_detailed_function_example(): pass # with comments",
-            "incorrectExample": "bad_example = lambda: None  # poorly written code"
+            "incorrectExample": "bad_example = lambda: None  # poorly written code",
         }
 
         large_tokens = _estimate_tokens(large_hint)
@@ -176,12 +150,39 @@ class TestScoring:
     def test_select_hints_by_budget_basic(self):
         """Test basic hint selection within budget."""
         hints_with_scores = [
-            ({"rule": "Rule 1", "context": "Context 1", "correctExample": "ex1",
-              "incorrectExample": "bad1", "tokens": 50, "metadata": {"priority": "required"}}, 1.0),
-            ({"rule": "Rule 2", "context": "Context 2", "correctExample": "ex2",
-              "incorrectExample": "bad2", "tokens": 30, "metadata": {"priority": "important"}}, 0.8),
-            ({"rule": "Rule 3", "context": "Context 3", "correctExample": "ex3",
-              "incorrectExample": "bad3", "tokens": 40, "metadata": {"priority": "recommended"}}, 0.6)
+            (
+                {
+                    "rule": "Rule 1",
+                    "context": "Context 1",
+                    "correctExample": "ex1",
+                    "incorrectExample": "bad1",
+                    "tokens": 50,
+                    "metadata": {"priority": "required"},
+                },
+                1.0,
+            ),
+            (
+                {
+                    "rule": "Rule 2",
+                    "context": "Context 2",
+                    "correctExample": "ex2",
+                    "incorrectExample": "bad2",
+                    "tokens": 30,
+                    "metadata": {"priority": "important"},
+                },
+                0.8,
+            ),
+            (
+                {
+                    "rule": "Rule 3",
+                    "context": "Context 3",
+                    "correctExample": "ex3",
+                    "incorrectExample": "bad3",
+                    "tokens": 40,
+                    "metadata": {"priority": "recommended"},
+                },
+                0.6,
+            ),
         ]
 
         selected, total_tokens = select_hints_by_budget(hints_with_scores, 100)
@@ -197,10 +198,28 @@ class TestScoring:
     def test_select_hints_by_budget_tight(self):
         """Test hint selection with tight budget."""
         hints_with_scores = [
-            ({"rule": "Rule 1", "context": "Context 1", "correctExample": "ex1",
-              "incorrectExample": "bad1", "tokens": 80, "metadata": {"priority": "required"}}, 1.0),
-            ({"rule": "Rule 2", "context": "Context 2", "correctExample": "ex2",
-              "incorrectExample": "bad2", "tokens": 70, "metadata": {"priority": "important"}}, 0.8)
+            (
+                {
+                    "rule": "Rule 1",
+                    "context": "Context 1",
+                    "correctExample": "ex1",
+                    "incorrectExample": "bad1",
+                    "tokens": 80,
+                    "metadata": {"priority": "required"},
+                },
+                1.0,
+            ),
+            (
+                {
+                    "rule": "Rule 2",
+                    "context": "Context 2",
+                    "correctExample": "ex2",
+                    "incorrectExample": "bad2",
+                    "tokens": 70,
+                    "metadata": {"priority": "important"},
+                },
+                0.8,
+            ),
         ]
 
         selected, total_tokens = select_hints_by_budget(hints_with_scores, 100)
@@ -220,8 +239,16 @@ class TestScoring:
     def test_select_hints_by_budget_no_tokens_field(self):
         """Test hint selection when hints don't have tokens field."""
         hints_with_scores = [
-            ({"rule": "Rule 1", "context": "Context 1", "correctExample": "ex1",
-              "incorrectExample": "bad1", "metadata": {"priority": "required"}}, 1.0)
+            (
+                {
+                    "rule": "Rule 1",
+                    "context": "Context 1",
+                    "correctExample": "ex1",
+                    "incorrectExample": "bad1",
+                    "metadata": {"priority": "required"},
+                },
+                1.0,
+            )
         ]
 
         selected, total_tokens = select_hints_by_budget(hints_with_scores, 1000)
@@ -234,12 +261,39 @@ class TestScoring:
     def test_priority_sorting(self):
         """Test that hints are sorted by priority when scores are equal."""
         hints_with_scores = [
-            ({"rule": "Rule 1", "context": "Context 1", "correctExample": "ex1",
-              "incorrectExample": "bad1", "tokens": 30, "metadata": {"priority": "recommended"}}, 0.5),
-            ({"rule": "Rule 2", "context": "Context 2", "correctExample": "ex2",
-              "incorrectExample": "bad2", "tokens": 30, "metadata": {"priority": "required"}}, 0.5),
-            ({"rule": "Rule 3", "context": "Context 3", "correctExample": "ex3",
-              "incorrectExample": "bad3", "tokens": 30, "metadata": {"priority": "important"}}, 0.5)
+            (
+                {
+                    "rule": "Rule 1",
+                    "context": "Context 1",
+                    "correctExample": "ex1",
+                    "incorrectExample": "bad1",
+                    "tokens": 30,
+                    "metadata": {"priority": "recommended"},
+                },
+                0.5,
+            ),
+            (
+                {
+                    "rule": "Rule 2",
+                    "context": "Context 2",
+                    "correctExample": "ex2",
+                    "incorrectExample": "bad2",
+                    "tokens": 30,
+                    "metadata": {"priority": "required"},
+                },
+                0.5,
+            ),
+            (
+                {
+                    "rule": "Rule 3",
+                    "context": "Context 3",
+                    "correctExample": "ex3",
+                    "incorrectExample": "bad3",
+                    "tokens": 30,
+                    "metadata": {"priority": "important"},
+                },
+                0.5,
+            ),
         ]
 
         selected, total_tokens = select_hints_by_budget(hints_with_scores, 1000)

@@ -50,7 +50,7 @@ class WorkflowDefinition:
     steps: list[WorkflowStep]
     sub_agent_tasks: dict[str, SubAgentTask] = field(default_factory=dict)
     loaded_from: str = ""  # File path where loaded
-    source: str = ""       # "project" | "global"
+    source: str = ""  # "project" | "global"
 
 
 @dataclass
@@ -83,14 +83,17 @@ class StepExecution:
 
 class WorkflowNotFoundError(Exception):
     """Raised when a workflow cannot be found."""
+
     pass
 
 
 class WorkflowValidationError(Exception):
     """Raised when a workflow fails validation."""
+
     pass
 
 
 class WorkflowExecutionError(Exception):
     """Raised when workflow execution fails."""
+
     pass

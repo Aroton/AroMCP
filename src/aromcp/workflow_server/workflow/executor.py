@@ -37,6 +37,7 @@ class VariableReplacer:
         """
         # Deep copy to avoid modifying original
         import copy
+
         result = copy.deepcopy(step_definition)
 
         # Replace variables recursively
@@ -58,7 +59,7 @@ class VariableReplacer:
     def _replace_string(text: str, state: dict[str, Any]) -> str:
         """Replace variables in a string using {{ variable }} syntax."""
         # Find all {{ variable }} patterns
-        pattern = r'\{\{\s*([^}]+)\s*\}\}'
+        pattern = r"\{\{\s*([^}]+)\s*\}\}"
 
         def replace_match(match):
             var_name = match.group(1).strip()
@@ -112,7 +113,7 @@ class WorkflowExecutor:
                 definition=workflow_def,
                 current_step_index=0,
                 status="running",
-                created_at=datetime.now(UTC).isoformat()
+                created_at=datetime.now(UTC).isoformat(),
             )
 
             # Initialize state with defaults
@@ -120,12 +121,12 @@ class WorkflowExecutor:
 
             # Apply inputs to state
             if inputs:
-                if 'raw' not in initial_state:
-                    initial_state['raw'] = {}
-                initial_state['raw'].update(inputs)
+                if "raw" not in initial_state:
+                    initial_state["raw"] = {}
+                initial_state["raw"].update(inputs)
 
             # Initialize state manager with schema
-            if not hasattr(self.state_manager, '_schema') or self.state_manager._schema != workflow_def.state_schema:
+            if not hasattr(self.state_manager, "_schema") or self.state_manager._schema != workflow_def.state_schema:
                 self.state_manager._schema = workflow_def.state_schema
                 self.state_manager._setup_transformations()
 
@@ -133,7 +134,7 @@ class WorkflowExecutor:
             if initial_state:
                 updates = []
                 for tier_name, tier_data in initial_state.items():
-                    if tier_name in ['raw', 'state'] and isinstance(tier_data, dict):
+                    if tier_name in ["raw", "state"] and isinstance(tier_data, dict):
                         for key, value in tier_data.items():
                             updates.append({"path": f"{tier_name}.{key}", "value": value})
 
@@ -162,7 +163,7 @@ class WorkflowExecutor:
                 "state": current_state,
                 "status": "running",
                 "total_steps": len(workflow_def.steps),
-                "execution_context": context.get_execution_summary()
+                "execution_context": context.get_execution_summary(),
             }
 
         except Exception as e:
@@ -348,10 +349,10 @@ class WorkflowExecutor:
                     "id": step.id,
                     "type": "user_input",
                     "definition": result,
-                    "instructions": result["instructions"]
+                    "instructions": result["instructions"],
                 },
                 "workflow_id": context.workflow_id,
-                "execution_context": context.get_execution_summary()
+                "execution_context": context.get_execution_summary(),
             }
 
         except ControlFlowError as e:
@@ -375,12 +376,7 @@ class WorkflowExecutor:
             sub_agent_contexts = []
             for i, item in enumerate(items[:max_parallel]):  # Limit to max_parallel
                 task_context = context.create_sub_agent_context(
-                    task_name=sub_agent_task,
-                    context_data={
-                        "item": item,
-                        "index": i,
-                        "parent_step_id": step.id
-                    }
+                    task_name=sub_agent_task, context_data={"item": item, "index": i, "parent_step_id": step.id}
                 )
                 sub_agent_contexts.append(task_context)
 
@@ -393,19 +389,15 @@ class WorkflowExecutor:
                     "type": "parallel_foreach",
                     "definition": {
                         "sub_agent_tasks": [
-                            {
-                                "task_id": ctx.task_id,
-                                "task_name": ctx.task_name,
-                                "context": ctx.context_data
-                            }
+                            {"task_id": ctx.task_id, "task_name": ctx.task_name, "context": ctx.context_data}
                             for ctx in sub_agent_contexts
                         ],
                         "total_items": len(items),
-                        "parallel_limit": max_parallel
-                    }
+                        "parallel_limit": max_parallel,
+                    },
                 },
                 "workflow_id": context.workflow_id,
-                "execution_context": context.get_execution_summary()
+                "execution_context": context.get_execution_summary(),
             }
 
         except Exception as e:
@@ -528,19 +520,15 @@ class WorkflowExecutor:
             step_id=step.id,
             step_index=0,  # Context-based execution doesn't use simple indices
             status="pending",
-            started_at=datetime.now(UTC).isoformat()
+            started_at=datetime.now(UTC).isoformat(),
         )
 
         self.step_executions[workflow_id].append(step_execution)
 
         return {
-            "step": {
-                "id": step.id,
-                "type": step.type,
-                "definition": processed_definition
-            },
+            "step": {"id": step.id, "type": step.type, "definition": processed_definition},
             "workflow_id": workflow_id,
-            "execution_context": context_manager.get_context(workflow_id).get_execution_summary()
+            "execution_context": context_manager.get_context(workflow_id).get_execution_summary(),
         }
 
     def _create_error_response(self, step_id, error_message):
@@ -551,10 +539,10 @@ class WorkflowExecutor:
                 "type": "error",
                 "definition": {
                     "error": error_message,
-                    "instructions": f"Error processing step {step_id}: {error_message}"
-                }
+                    "instructions": f"Error processing step {step_id}: {error_message}",
+                },
             },
-            "error": error_message
+            "error": error_message,
         }
 
     def _evaluate_expression(self, expression, state, context):
@@ -618,11 +606,7 @@ class WorkflowExecutor:
             if context:
                 context_manager.remove_context(workflow_id)
 
-            return {
-                "status": "failed",
-                "error": error_message,
-                "completed_at": instance.completed_at
-            }
+            return {"status": "failed", "error": error_message, "completed_at": instance.completed_at}
 
         # For user input steps, validate and store the input
         if result and "user_input" in result:
@@ -634,11 +618,7 @@ class WorkflowExecutor:
 
                 if not validation_result["valid"]:
                     # Input validation failed, retry
-                    return {
-                        "status": "retry",
-                        "error": validation_result["error"],
-                        "retry_step": True
-                    }
+                    return {"status": "retry", "error": validation_result["error"], "retry_step": True}
 
                 # Input was valid, advance step
                 if context:
@@ -653,7 +633,7 @@ class WorkflowExecutor:
         return {
             "status": instance.status,
             "completed_at": instance.completed_at if instance.status == "completed" else None,
-            "execution_context": context.get_execution_summary() if context else None
+            "execution_context": context.get_execution_summary() if context else None,
         }
 
     def get_workflow_status(self, workflow_id: str) -> dict[str, Any]:
@@ -672,7 +652,7 @@ class WorkflowExecutor:
             "created_at": instance.created_at,
             "completed_at": instance.completed_at,
             "error_message": instance.error_message,
-            "state": current_state
+            "state": current_state,
         }
 
         if context:
@@ -702,7 +682,7 @@ class WorkflowExecutor:
                 "workflow_name": instance.workflow_name,
                 "status": instance.status,
                 "created_at": instance.created_at,
-                "completed_at": instance.completed_at
+                "completed_at": instance.completed_at,
             }
 
             if context:

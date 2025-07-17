@@ -25,6 +25,7 @@ def write_files_impl(files: dict[str, str] | str) -> None:
         # Handle JSON string conversion if needed
         if isinstance(files, str):
             import json
+
             try:
                 files = json.loads(files)
             except json.JSONDecodeError as e:
@@ -46,7 +47,7 @@ def write_files_impl(files: dict[str, str] | str) -> None:
             full_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Write content
-            full_path.write_text(content, encoding='utf-8')
+            full_path.write_text(content, encoding="utf-8")
 
     except Exception as e:
         raise ValueError(f"Failed to write files: {str(e)}") from e

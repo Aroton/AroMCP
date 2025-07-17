@@ -20,8 +20,9 @@ class TestReadFiles:
         project_path = Path(temp_dir)
 
         # Create test files with different encodings and sizes
-        (project_path / "small.txt").write_text("Hello World", encoding='utf-8')
-        (project_path / "medium.py").write_text('''def hello():
+        (project_path / "small.txt").write_text("Hello World", encoding="utf-8")
+        (project_path / "medium.py").write_text(
+            '''def hello():
     """A simple greeting function."""
     print("Hello, World!")
     return "greeting"
@@ -30,30 +31,33 @@ def goodbye():
     """A simple farewell function."""
     print("Goodbye!")
     return "farewell"
-''', encoding='utf-8')
+''',
+            encoding="utf-8",
+        )
 
         # Create a larger file for pagination testing
         large_content = "\n".join([f"# Line {i}: " + "x" * 100 for i in range(100)])
-        (project_path / "large.py").write_text(large_content, encoding='utf-8')
+        (project_path / "large.py").write_text(large_content, encoding="utf-8")
 
         # Create JSON config file
         config = {"name": "test", "version": "1.0.0", "features": ["read", "write"]}
-        (project_path / "config.json").write_text(json.dumps(config, indent=2), encoding='utf-8')
+        (project_path / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
 
         # Create subdirectory with file
         (project_path / "src").mkdir()
-        (project_path / "src" / "utils.py").write_text("# Utility functions\npass", encoding='utf-8')
+        (project_path / "src" / "utils.py").write_text("# Utility functions\npass", encoding="utf-8")
 
         # Set environment variable for testing
         import os
-        os.environ['MCP_FILE_ROOT'] = str(project_path)
+
+        os.environ["MCP_FILE_ROOT"] = str(project_path)
 
         yield str(project_path)
 
         # Cleanup
         shutil.rmtree(temp_dir)
-        if 'MCP_FILE_ROOT' in os.environ:
-            del os.environ['MCP_FILE_ROOT']
+        if "MCP_FILE_ROOT" in os.environ:
+            del os.environ["MCP_FILE_ROOT"]
 
     def test_read_single_file(self, temp_project):
         """Test reading a single file."""

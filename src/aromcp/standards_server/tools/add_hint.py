@@ -14,11 +14,7 @@ from .hints_for_file import invalidate_index_cache
 logger = logging.getLogger(__name__)
 
 
-def add_hint_impl(
-    standard_id: str,
-    hint_data: dict[str, Any] | str,
-    project_root: str | None = None
-) -> dict[str, Any]:
+def add_hint_impl(standard_id: str, hint_data: dict[str, Any] | str, project_root: str | None = None) -> dict[str, Any]:
     """
     Add a single hint to a standard.
 
@@ -38,22 +34,12 @@ def add_hint_impl(
             try:
                 hint_data = json.loads(hint_data)
             except json.JSONDecodeError as e:
-                return {
-                    "error": {
-                        "code": "INVALID_INPUT",
-                        "message": f"Invalid JSON in hint_data: {str(e)}"
-                    }
-                }
+                return {"error": {"code": "INVALID_INPUT", "message": f"Invalid JSON in hint_data: {str(e)}"}}
 
         # Validate that the standard exists
         manifest = load_manifest(project_root)
         if standard_id not in manifest.get("standards", {}):
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": f"Standard {standard_id} not found"
-                }
-            }
+            return {"error": {"code": "NOT_FOUND", "message": f"Standard {standard_id} not found"}}
 
         # Create enhanced rule from hint data
         enhanced_rule = _create_enhanced_rule(hint_data)
@@ -68,7 +54,7 @@ def add_hint_impl(
         hint_file = standard_dir / f"hint-{hint_number:03d}.json"
         rule_data = enhanced_rule.model_dump()
 
-        with open(hint_file, 'w', encoding='utf-8') as f:
+        with open(hint_file, "w", encoding="utf-8") as f:
             json.dump(rule_data, f, indent=2, ensure_ascii=False)
 
         logger.info(f"Added hint {hint_number} to standard {standard_id}")
@@ -83,18 +69,13 @@ def add_hint_impl(
                 "hintNumber": hint_number,
                 "hintId": enhanced_rule.rule_id,
                 "hintFile": str(hint_file),
-                "tokens": enhanced_rule.tokens.model_dump()
+                "tokens": enhanced_rule.tokens.model_dump(),
             }
         }
 
     except Exception as e:
         logger.error(f"Error in add_hint_impl: {e}")
-        return {
-            "error": {
-                "code": "OPERATION_FAILED",
-                "message": f"Failed to add hint: {str(e)}"
-            }
-        }
+        return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to add hint: {str(e)}"}}
 
 
 def _get_next_hint_number(standard_dir) -> int:
@@ -113,7 +94,7 @@ def _get_next_hint_number(standard_dir) -> int:
     for hint_file in hint_files:
         try:
             # Extract number from filename like "hint-001.json"
-            number_str = hint_file.stem.split('-')[1]
+            number_str = hint_file.stem.split("-")[1]
             numbers.append(int(number_str))
         except (IndexError, ValueError):
             continue
@@ -136,7 +117,7 @@ def _create_enhanced_rule(rule_data: dict[str, Any]) -> EnhancedRule:
         complexity=metadata_data.get("complexity", "intermediate"),
         rule_type=metadata_data.get("rule_type", "should"),
         nextjs_api=metadata_data.get("nextjs_api", []),
-        client_server=metadata_data.get("client_server", "isomorphic")
+        client_server=metadata_data.get("client_server", "isomorphic"),
     )
 
     # Create compression config
@@ -144,7 +125,7 @@ def _create_enhanced_rule(rule_data: dict[str, Any]) -> EnhancedRule:
     compression = RuleCompression(
         example_sharable=compression_data.get("example_sharable", True),
         pattern_extractable=compression_data.get("pattern_extractable", True),
-        progressive_detail=compression_data.get("progressive_detail", ["minimal", "standard", "detailed", "full"])
+        progressive_detail=compression_data.get("progressive_detail", ["minimal", "standard", "detailed", "full"]),
     )
 
     # Create examples
@@ -157,7 +138,7 @@ def _create_enhanced_rule(rule_data: dict[str, Any]) -> EnhancedRule:
         detailed=examples_data.get("detailed"),
         full=full_example,
         reference=examples_data.get("reference"),
-        context_variants=examples_data.get("context_variants", {})
+        context_variants=examples_data.get("context_variants", {}),
     )
 
     # Create enhanced rule
@@ -171,7 +152,7 @@ def _create_enhanced_rule(rule_data: dict[str, Any]) -> EnhancedRule:
         tokens=TokenCount(full=100, detailed=75, standard=50, minimal=25),  # Placeholder
         import_map=rule_data.get("import_map", []),
         has_eslint_rule=rule_data.get("has_eslint_rule", False),
-        relationships=rule_data.get("relationships", {})
+        relationships=rule_data.get("relationships", {}),
     )
 
     # Auto-generate missing examples

@@ -1,6 +1,5 @@
 """Tests for enhanced workflow executor with control flow support."""
 
-
 from aromcp.workflow_server.state.models import StateSchema
 from aromcp.workflow_server.workflow.context import context_manager
 from aromcp.workflow_server.workflow.executor import WorkflowExecutor
@@ -25,7 +24,7 @@ class TestWorkflowExecutor:
         if steps is None:
             steps = [
                 WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"}),
-                WorkflowStep(id="step2", type="state_update", definition={"path": "raw.counter", "value": 1})
+                WorkflowStep(id="step2", type="state_update", definition={"path": "raw.counter", "value": 1}),
             ]
 
         return WorkflowDefinition(
@@ -33,13 +32,9 @@ class TestWorkflowExecutor:
             description="Test workflow",
             version="1.0.0",
             default_state={"raw": {"counter": 0}},
-            state_schema=StateSchema(
-                raw={"counter": "number"},
-                computed={},
-                state={}
-            ),
+            state_schema=StateSchema(raw={"counter": "number"}, computed={}, state={}),
             inputs={},
-            steps=steps
+            steps=steps,
         )
 
     def test_workflow_start_basic(self):
@@ -98,13 +93,9 @@ class TestWorkflowExecutor:
                 type="conditional",
                 definition={
                     "condition": "counter > 0",
-                    "then_steps": [
-                        {"type": "user_message", "message": "Counter is positive"}
-                    ],
-                    "else_steps": [
-                        {"type": "user_message", "message": "Counter is zero or negative"}
-                    ]
-                }
+                    "then_steps": [{"type": "user_message", "message": "Counter is positive"}],
+                    "else_steps": [{"type": "user_message", "message": "Counter is zero or negative"}],
+                },
             )
         ]
 
@@ -132,10 +123,8 @@ class TestWorkflowExecutor:
                 definition={
                     "condition": "counter < 3",
                     "max_iterations": 5,
-                    "body": [
-                        {"type": "state_update", "path": "raw.counter", "operation": "increment"}
-                    ]
-                }
+                    "body": [{"type": "state_update", "path": "raw.counter", "operation": "increment"}],
+                },
             )
         ]
 
@@ -166,10 +155,8 @@ class TestWorkflowExecutor:
                 definition={
                     "items": "files",
                     "variable_name": "file",
-                    "body": [
-                        {"type": "user_message", "message": "Processing {{ file }}"}
-                    ]
-                }
+                    "body": [{"type": "user_message", "message": "Processing {{ file }}"}],
+                },
             )
         ]
 
@@ -202,8 +189,8 @@ class TestWorkflowExecutor:
                     "prompt": "Enter your name:",
                     "variable_name": "user_name",
                     "input_type": "string",
-                    "required": True
-                }
+                    "required": True,
+                },
             )
         ]
 
@@ -220,12 +207,7 @@ class TestWorkflowExecutor:
         assert step_result["step"]["definition"]["prompt"] == "Enter your name:"
 
         # Complete with user input
-        executor.step_complete(
-            workflow_id,
-            "input1",
-            "success",
-            {"user_input": "Alice"}
-        )
+        executor.step_complete(workflow_id, "input1", "success", {"user_input": "Alice"})
 
         # Check that input was stored
         context = context_manager.get_context(workflow_id)
@@ -240,10 +222,8 @@ class TestWorkflowExecutor:
                 definition={
                     "condition": "true",  # Always true condition
                     "max_iterations": 3,  # Will hit max iterations
-                    "body": [
-                        {"type": "user_message", "message": "Loop iteration"}
-                    ]
-                }
+                    "body": [{"type": "user_message", "message": "Loop iteration"}],
+                },
             )
         ]
 
@@ -279,14 +259,12 @@ class TestWorkflowExecutor:
                                 {
                                     "type": "conditional",
                                     "condition": "item.endsWith('.ts')",
-                                    "then_steps": [
-                                        {"type": "user_message", "message": "TypeScript file: {{ item }}"}
-                                    ]
+                                    "then_steps": [{"type": "user_message", "message": "TypeScript file: {{ item }}"}],
                                 }
-                            ]
+                            ],
                         }
-                    ]
-                }
+                    ],
+                },
             )
         ]
 
@@ -317,8 +295,8 @@ class TestWorkflowExecutor:
                 type="conditional",
                 definition={
                     "condition": "5 +",  # Truly invalid expression
-                    "then_steps": [{"type": "user_message", "message": "Should not reach"}]
-                }
+                    "then_steps": [{"type": "user_message", "message": "Should not reach"}],
+                },
             )
         ]
 
@@ -342,16 +320,10 @@ class TestWorkflowExecutor:
                 type="conditional",
                 definition={
                     "condition": "tasks.length > 0",
-                    "then_steps": [
-                        {"type": "user_message", "message": "Processing tasks"}
-                    ]
-                }
+                    "then_steps": [{"type": "user_message", "message": "Processing tasks"}],
+                },
             ),
-            WorkflowStep(
-                id="final",
-                type="user_message",
-                definition={"message": "All tasks completed"}
-            )
+            WorkflowStep(id="final", type="user_message", definition={"message": "All tasks completed"}),
         ]
 
         executor = WorkflowExecutor()
@@ -380,20 +352,14 @@ class TestWorkflowExecutor:
             WorkflowStep(
                 id="parallel1",
                 type="parallel_foreach",
-                definition={
-                    "items": "batches",
-                    "sub_agent_task": "process_batch",
-                    "max_parallel": 3
-                }
+                definition={"items": "batches", "sub_agent_task": "process_batch", "max_parallel": 3},
             )
         ]
 
         executor = WorkflowExecutor()
         workflow_def = self.create_test_workflow(steps)
 
-        start_result = executor.start(workflow_def, {
-            "batches": ["batch1", "batch2", "batch3", "batch4"]
-        })
+        start_result = executor.start(workflow_def, {"batches": ["batch1", "batch2", "batch3", "batch4"]})
         workflow_id = start_result["workflow_id"]
 
         # Get next step - should create parallel tasks
@@ -412,18 +378,9 @@ class TestWorkflowExecutor:
         """Test variable replacement with execution context variables."""
         steps = [
             WorkflowStep(
-                id="input1",
-                type="user_input",
-                definition={
-                    "prompt": "Enter value:",
-                    "variable_name": "user_value"
-                }
+                id="input1", type="user_input", definition={"prompt": "Enter value:", "variable_name": "user_value"}
             ),
-            WorkflowStep(
-                id="message1",
-                type="user_message",
-                definition={"message": "You entered: {{ user_value }}"}
-            )
+            WorkflowStep(id="message1", type="user_message", definition={"message": "You entered: {{ user_value }}"}),
         ]
 
         executor = WorkflowExecutor()
@@ -444,9 +401,9 @@ class TestWorkflowExecutor:
     def test_execution_context_cleanup(self):
         """Test that execution contexts are properly cleaned up."""
         executor = WorkflowExecutor()
-        workflow_def = self.create_test_workflow([
-            WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"})
-        ])
+        workflow_def = self.create_test_workflow(
+            [WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"})]
+        )
 
         start_result = executor.start(workflow_def)
         workflow_id = start_result["workflow_id"]

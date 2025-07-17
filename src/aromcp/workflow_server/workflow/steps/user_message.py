@@ -18,19 +18,16 @@ class UserMessageProcessor:
         Returns:
             Formatted message for display
         """
-        message = step_definition.get('message')
+        message = step_definition.get("message")
         if not message:
-            return {
-                "status": "failed",
-                "error": "Missing 'message' in user_message step"
-            }
+            return {"status": "failed", "error": "Missing 'message' in user_message step"}
 
         # Note: Variable replacement happens in the executor before this processor
         # So the message should already have variables replaced
 
-        message_type = step_definition.get('type', 'info')  # info, warning, error, success
-        title = step_definition.get('title')
-        format_as = step_definition.get('format', 'text')  # text, markdown, code
+        message_type = step_definition.get("type", "info")  # info, warning, error, success
+        title = step_definition.get("title")
+        format_as = step_definition.get("format", "text")  # text, markdown, code
 
         result = {
             "status": "success",
@@ -38,9 +35,9 @@ class UserMessageProcessor:
                 "type": "user_message",
                 "message": message,
                 "message_type": message_type,
-                "format": format_as
+                "format": format_as,
             },
-            "execution_type": "agent"
+            "execution_type": "agent",
         }
 
         if title:
@@ -64,25 +61,17 @@ class UserInputProcessor:
         Returns:
             Formatted input request for agent
         """
-        prompt = step_definition.get('prompt')
+        prompt = step_definition.get("prompt")
         if not prompt:
-            return {
-                "status": "failed",
-                "error": "Missing 'prompt' in user_input step"
-            }
+            return {"status": "failed", "error": "Missing 'prompt' in user_input step"}
 
-        input_type = step_definition.get('input_type', 'text')  # text, number, boolean, choice
-        choices = step_definition.get('choices')  # For choice type
-        default_value = step_definition.get('default')
-        required = step_definition.get('required', True)
-        state_update = step_definition.get('state_update')
+        input_type = step_definition.get("input_type", "text")  # text, number, boolean, choice
+        choices = step_definition.get("choices")  # For choice type
+        default_value = step_definition.get("default")
+        required = step_definition.get("required", True)
+        state_update = step_definition.get("state_update")
 
-        input_request = {
-            "type": "user_input",
-            "prompt": prompt,
-            "input_type": input_type,
-            "required": required
-        }
+        input_request = {"type": "user_input", "prompt": prompt, "input_type": input_type, "required": required}
 
         if choices:
             input_request["choices"] = choices
@@ -93,11 +82,7 @@ class UserInputProcessor:
         if state_update:
             input_request["state_update"] = state_update
 
-        return {
-            "status": "success",
-            "agent_action": input_request,
-            "execution_type": "agent"
-        }
+        return {"status": "success", "agent_action": input_request, "execution_type": "agent"}
 
 
 class ConditionalMessageProcessor:
@@ -115,20 +100,14 @@ class ConditionalMessageProcessor:
         Returns:
             Conditional message result
         """
-        condition = step_definition.get('condition')
-        message = step_definition.get('message')
+        condition = step_definition.get("condition")
+        message = step_definition.get("message")
 
         if not condition:
-            return {
-                "status": "failed",
-                "error": "Missing 'condition' in conditional_message step"
-            }
+            return {"status": "failed", "error": "Missing 'condition' in conditional_message step"}
 
         if not message:
-            return {
-                "status": "failed",
-                "error": "Missing 'message' in conditional_message step"
-            }
+            return {"status": "failed", "error": "Missing 'message' in conditional_message step"}
 
         try:
             # Get current state
@@ -140,25 +119,22 @@ class ConditionalMessageProcessor:
 
             if condition_result:
                 # Show the message
-                return UserMessageProcessor.process({
-                    "message": message,
-                    "type": step_definition.get('type', 'info'),
-                    "title": step_definition.get('title'),
-                    "format": step_definition.get('format', 'text')
-                }, workflow_id, state_manager)
+                return UserMessageProcessor.process(
+                    {
+                        "message": message,
+                        "type": step_definition.get("type", "info"),
+                        "title": step_definition.get("title"),
+                        "format": step_definition.get("format", "text"),
+                    },
+                    workflow_id,
+                    state_manager,
+                )
             else:
                 # Skip the message
-                return {
-                    "status": "success",
-                    "skipped": True,
-                    "reason": f"Condition '{condition}' evaluated to false"
-                }
+                return {"status": "success", "skipped": True, "reason": f"Condition '{condition}' evaluated to false"}
 
         except Exception as e:
-            return {
-                "status": "failed",
-                "error": f"Failed to evaluate condition: {e}"
-            }
+            return {"status": "failed", "error": f"Failed to evaluate condition: {e}"}
 
     @staticmethod
     def _evaluate_simple_condition(condition: str, state: dict[str, Any]) -> bool:
@@ -179,10 +155,10 @@ class ConditionalMessageProcessor:
         if " == " in condition:
             left, right = condition.split(" == ", 1)
             left_val = state.get(left.strip())
-            right_val = right.strip().strip('"\'')
+            right_val = right.strip().strip("\"'")
             try:
                 # Try to convert to number if possible
-                right_val = float(right_val) if '.' in right_val else int(right_val)
+                right_val = float(right_val) if "." in right_val else int(right_val)
             except ValueError:
                 pass
             return left_val == right_val
@@ -191,11 +167,11 @@ class ConditionalMessageProcessor:
         if " != " in condition:
             left, right = condition.split(" != ", 1)
             left_val = state.get(left.strip())
-            right_val = right.strip().strip('"\'')
+            right_val = right.strip().strip("\"'")
             if right_val == "null":
                 return left_val is not None
             try:
-                right_val = float(right_val) if '.' in right_val else int(right_val)
+                right_val = float(right_val) if "." in right_val else int(right_val)
             except ValueError:
                 pass
             return left_val != right_val

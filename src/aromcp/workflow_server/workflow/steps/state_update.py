@@ -20,20 +20,17 @@ class StateUpdateProcessor:
         """
         try:
             # Extract update information
-            path = step_definition.get('path')
-            value = step_definition.get('value')
-            operation = step_definition.get('operation')
+            path = step_definition.get("path")
+            value = step_definition.get("value")
+            operation = step_definition.get("operation")
 
             if not path:
-                return {
-                    "status": "failed",
-                    "error": "Missing 'path' in state_update step"
-                }
+                return {"status": "failed", "error": "Missing 'path' in state_update step"}
 
             # Handle different operation types
             if operation:
                 current_state = state_manager.read(workflow_id)
-                clean_path = path.replace('raw.', '').replace('state.', '')
+                clean_path = path.replace("raw.", "").replace("state.", "")
                 current_value = StateUpdateProcessor._get_nested_value(current_state, clean_path)
 
                 if operation == "increment":
@@ -48,10 +45,7 @@ class StateUpdateProcessor:
                 elif operation == "multiply":
                     value = (current_value or 0) * (value or 1)
                 else:
-                    return {
-                        "status": "failed",
-                        "error": f"Unknown operation: {operation}"
-                    }
+                    return {"status": "failed", "error": f"Unknown operation: {operation}"}
 
             # Apply the update
             updates = [{"path": path, "value": value}]
@@ -60,22 +54,15 @@ class StateUpdateProcessor:
             # Get updated state
             updated_state = state_manager.read(workflow_id)
 
-            return {
-                "status": "success",
-                "updates_applied": updates,
-                "updated_state": updated_state
-            }
+            return {"status": "success", "updates_applied": updates, "updated_state": updated_state}
 
         except Exception as e:
-            return {
-                "status": "failed",
-                "error": f"State update failed: {e}"
-            }
+            return {"status": "failed", "error": f"State update failed: {e}"}
 
     @staticmethod
     def _get_nested_value(obj: dict[str, Any], path: str) -> Any:
         """Get a nested value from an object using dot notation."""
-        keys = path.split('.')
+        keys = path.split(".")
         current = obj
 
         for key in keys:
@@ -103,30 +90,21 @@ class BatchStateUpdateProcessor:
             Execution result with all updates applied
         """
         try:
-            updates = step_definition.get('updates')
+            updates = step_definition.get("updates")
             if not updates or not isinstance(updates, list):
-                return {
-                    "status": "failed",
-                    "error": "Missing or invalid 'updates' list in batch_state_update step"
-                }
+                return {"status": "failed", "error": "Missing or invalid 'updates' list in batch_state_update step"}
 
             # Validate all updates first
             formatted_updates = []
             for i, update in enumerate(updates):
                 if not isinstance(update, dict):
-                    return {
-                        "status": "failed",
-                        "error": f"Update {i} must be an object with 'path' and 'value'"
-                    }
+                    return {"status": "failed", "error": f"Update {i} must be an object with 'path' and 'value'"}
 
-                path = update.get('path')
-                value = update.get('value')
+                path = update.get("path")
+                value = update.get("value")
 
                 if not path:
-                    return {
-                        "status": "failed",
-                        "error": f"Update {i} missing required 'path' field"
-                    }
+                    return {"status": "failed", "error": f"Update {i} missing required 'path' field"}
 
                 formatted_updates.append({"path": path, "value": value})
 
@@ -136,14 +114,7 @@ class BatchStateUpdateProcessor:
             # Get updated state
             updated_state = state_manager.read(workflow_id)
 
-            return {
-                "status": "success",
-                "updates_applied": formatted_updates,
-                "updated_state": updated_state
-            }
+            return {"status": "success", "updates_applied": formatted_updates, "updated_state": updated_state}
 
         except Exception as e:
-            return {
-                "status": "failed",
-                "error": f"Batch state update failed: {e}"
-            }
+            return {"status": "failed", "error": f"Batch state update failed: {e}"}

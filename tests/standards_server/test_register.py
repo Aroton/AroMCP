@@ -28,7 +28,7 @@ class TestRegister:
                 "appliesTo": ["*.py", "*.js"],
                 "severity": "error",
                 "updated": "2024-01-15T10:30:00Z",
-                "priority": "required"
+                "priority": "required",
             }
 
             result = register_impl("standards/error-handling.md", metadata, temp_dir)
@@ -63,7 +63,7 @@ class TestRegister:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "warning",
-                "priority": "recommended"
+                "priority": "recommended",
             }
 
             # First registration
@@ -81,7 +81,7 @@ class TestRegister:
 
             incomplete_metadata = {
                 "id": "incomplete",
-                "name": "Incomplete Standard"
+                "name": "Incomplete Standard",
                 # Missing required fields
             }
 
@@ -103,7 +103,7 @@ class TestRegister:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "invalid-severity",  # Invalid value
-                "priority": "recommended"
+                "priority": "recommended",
             }
 
             result = register_impl("standards/test.md", metadata, temp_dir)
@@ -124,7 +124,7 @@ class TestRegister:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "invalid-priority"  # Invalid value
+                "priority": "invalid-priority",  # Invalid value
             }
 
             result = register_impl("standards/test.md", metadata, temp_dir)
@@ -145,7 +145,7 @@ class TestRegister:
                 "tags": "not-an-array",  # Should be array
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             result = register_impl("standards/test.md", metadata, temp_dir)
@@ -166,7 +166,7 @@ class TestRegister:
                 "tags": ["test"],
                 "appliesTo": "not-an-array",  # Should be array
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             result = register_impl("standards/test.md", metadata, temp_dir)
@@ -187,7 +187,7 @@ class TestRegister:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             result = register_impl("standards/test.md", metadata, temp_dir)
@@ -199,6 +199,7 @@ class TestRegister:
 
             # Load and verify index content
             import json
+
             with open(index_file) as f:
                 index = json.load(f)
 
@@ -220,7 +221,7 @@ class TestRegister:
                 "appliesTo": ["*.py"],
                 "severity": "error",
                 "updated": "2024-01-15T10:30:00Z",
-                "priority": "required"
+                "priority": "required",
             }
 
             result = register_impl("standards/test-with-updated.md", metadata_with_updated, temp_dir)
@@ -228,6 +229,7 @@ class TestRegister:
 
             # Verify manifest uses updated field
             import json
+
             manifest_file = Path(temp_dir) / ".aromcp" / "manifest.json"
             with open(manifest_file) as f:
                 manifest = json.load(f)
@@ -242,7 +244,7 @@ class TestRegister:
                 "tags": ["test"],
                 "appliesTo": ["*.py"],
                 "severity": "error",
-                "priority": "required"
+                "priority": "required",
             }
 
             result = register_impl("standards/test-without-updated.md", metadata_without_updated, temp_dir)
@@ -256,7 +258,8 @@ class TestRegister:
             assert manifest["standards"]["test-without-updated"]["lastModified"] != ""
             # Should be in ISO format
             from datetime import datetime
+
             timestamp = manifest["standards"]["test-without-updated"]["lastModified"]
             # Should be parseable as ISO timestamp
-            parsed = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             assert parsed is not None

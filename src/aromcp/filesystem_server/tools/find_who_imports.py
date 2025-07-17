@@ -45,10 +45,7 @@ def find_who_imports_impl(file_path: str) -> dict[str, Any]:
 
             imports = _find_imports_in_file(project_path / search_file, file_path, project_path)
             if imports:
-                dependents.append({
-                    "file": search_file,
-                    "imports": imports
-                })
+                dependents.append({"file": search_file, "imports": imports})
 
         # Determine if safe to modify/delete
         safe_to_delete = len(dependents) == 0
@@ -58,7 +55,7 @@ def find_who_imports_impl(file_path: str) -> dict[str, Any]:
             "dependents": dependents,
             "total_dependents": len(dependents),
             "safe_to_delete": safe_to_delete,
-            "risk_level": risk_level
+            "risk_level": risk_level,
         }
 
     except Exception as e:
@@ -68,12 +65,12 @@ def find_who_imports_impl(file_path: str) -> dict[str, Any]:
 def _find_imports_in_file(file_path: Path, target_file: str, project_root: Path) -> list[str]:
     """Find imports of target_file in the given file."""
     try:
-        content = file_path.read_text(encoding='utf-8', errors='ignore')
+        content = file_path.read_text(encoding="utf-8", errors="ignore")
         imports = []
 
-        if file_path.suffix == '.py':
+        if file_path.suffix == ".py":
             imports.extend(_extract_python_imports(content, target_file))
-        elif file_path.suffix in ['.js', '.ts', '.jsx', '.tsx']:
+        elif file_path.suffix in [".js", ".ts", ".jsx", ".tsx"]:
             imports.extend(_extract_js_imports(content, target_file, file_path, project_root))
 
         return imports
@@ -85,7 +82,7 @@ def _find_imports_in_file(file_path: Path, target_file: str, project_root: Path)
 def _extract_python_imports(content: str, target_file: str) -> list[str]:
     """Extract Python imports that reference the target file."""
     imports = []
-    target_module = target_file.replace('.py', '').replace('/', '.')
+    target_module = target_file.replace(".py", "").replace("/", ".")
 
     try:
         tree = ast.parse(content)
@@ -100,10 +97,7 @@ def _extract_python_imports(content: str, target_file: str) -> list[str]:
                         imports.append(f"{node.module}.{alias.name}")
     except (SyntaxError, UnicodeDecodeError, OSError):
         # Fallback to regex for syntax errors
-        import_patterns = [
-            rf'import\s+.*{re.escape(target_module)}',
-            rf'from\s+.*{re.escape(target_module)}'
-        ]
+        import_patterns = [rf"import\s+.*{re.escape(target_module)}", rf"from\s+.*{re.escape(target_module)}"]
         for pattern in import_patterns:
             matches = re.findall(pattern, content)
             imports.extend(matches)
@@ -114,26 +108,26 @@ def _extract_python_imports(content: str, target_file: str) -> list[str]:
 def _extract_js_imports(content: str, target_file: str, current_file: Path, project_root: Path) -> list[str]:
     """Extract JavaScript/TypeScript imports that reference the target file."""
     imports = []
-    target_without_ext = target_file.replace('.js', '').replace('.ts', '').replace('.jsx', '').replace('.tsx', '')
+    target_without_ext = target_file.replace(".js", "").replace(".ts", "").replace(".jsx", "").replace(".tsx", "")
 
     # Common import patterns
     patterns = [
         r'import\s+.*?from\s+[\'"]([^\'\"]+)[\'"]',
         r'require\s*\(\s*[\'"]([^\'\"]+)[\'"]\s*\)',
-        r'import\s*\(\s*[\'"]([^\'\"]+)[\'"]\s*\)'
+        r'import\s*\(\s*[\'"]([^\'\"]+)[\'"]\s*\)',
     ]
 
     for pattern in patterns:
         matches = re.findall(pattern, content)
         for match in matches:
             # Resolve relative imports
-            if match.startswith('./') or match.startswith('../'):
+            if match.startswith("./") or match.startswith("../"):
                 try:
                     resolved = (current_file.parent / match).resolve().relative_to(project_root)
-                    extensions = ['.js', '.ts', '.jsx', '.tsx']
+                    extensions = [".js", ".ts", ".jsx", ".tsx"]
                     resolved_str = str(resolved)
                     for ext in extensions:
-                        resolved_str = resolved_str.replace(ext, '')
+                        resolved_str = resolved_str.replace(ext, "")
                     if resolved_str == target_without_ext:
                         imports.append(match)
                 except (OSError, ValueError):

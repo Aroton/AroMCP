@@ -17,7 +17,7 @@ class RuleCompressor:
             "first_time": self._format_for_first_time,
             "familiar": self._format_for_familiar,
             "expert": self._format_for_expert,
-            "reference": self._format_for_reference
+            "reference": self._format_for_reference,
         }
 
     def _get_example_by_visit_count(self, rule: EnhancedRule, visit_count: int) -> str:
@@ -49,6 +49,7 @@ class RuleCompressor:
     def _estimate_example_tokens(self, example: str) -> int:
         """Estimate token count for an example."""
         from ..utils.token_utils import estimate_tokens
+
         return estimate_tokens(example)
 
     def _get_expert_example_by_visit_count(self, rule: EnhancedRule, visit_count: int) -> str:
@@ -136,11 +137,11 @@ class RuleCompressor:
                 "metadata": {
                     "pattern_type": rule.metadata.pattern_type,
                     "complexity": rule.metadata.complexity,
-                    "rule_type": rule.metadata.rule_type
+                    "rule_type": rule.metadata.rule_type,
                 },
                 "tokens": self._estimate_example_tokens(example),
                 "has_eslint_rule": rule.has_eslint_rule,
-                "visit_count": visit_count
+                "visit_count": visit_count,
             }
         else:
             return {
@@ -152,7 +153,7 @@ class RuleCompressor:
                 "pattern_type": rule.metadata.pattern_type,
                 "tokens": self._estimate_example_tokens(example),
                 "has_eslint_rule": rule.has_eslint_rule,
-                "visit_count": visit_count
+                "visit_count": visit_count,
             }
 
     def _format_for_familiar(
@@ -171,7 +172,7 @@ class RuleCompressor:
             "imports": rule.import_map if rule.import_map else None,
             "tokens": self._estimate_example_tokens(example),
             "has_eslint_rule": rule.has_eslint_rule,
-            "visit_count": visit_count
+            "visit_count": visit_count,
         }
 
     def _format_for_expert(self, rule: EnhancedRule, context: dict[str, Any], session: SessionState) -> dict[str, Any]:
@@ -189,7 +190,7 @@ class RuleCompressor:
             "imports": rule.import_map if rule.import_map else None,
             "tokens": self._estimate_example_tokens(expert_example),
             "has_eslint_rule": rule.has_eslint_rule,
-            "visit_count": visit_count
+            "visit_count": visit_count,
         }
 
     def _format_for_reference(
@@ -201,7 +202,7 @@ class RuleCompressor:
             "reference": f"Previously loaded: {rule.rule[:50]}...",
             "pattern_type": rule.metadata.pattern_type,
             "tokens": 5,  # Minimal token cost for reference
-            "has_eslint_rule": rule.has_eslint_rule
+            "has_eslint_rule": rule.has_eslint_rule,
         }
 
     def _determine_detail_level(self, rule: EnhancedRule, context: dict[str, Any], session: SessionState) -> str:
@@ -245,7 +246,7 @@ class RuleCompressor:
             "example": rule.examples.full,
             "tokens": rule.tokens.full,
             "compression_strategy": "fallback",
-            "has_eslint_rule": rule.has_eslint_rule
+            "has_eslint_rule": rule.has_eslint_rule,
         }
 
     def compress_rule_batch(
@@ -271,11 +272,9 @@ class RuleCompressor:
             if current_tokens + rule_tokens > max_tokens:
                 # Try to fit remaining rules as references
                 if not session.is_rule_loaded(rule.rule_id):
-                    references.append({
-                        "rule_id": rule.rule_id,
-                        "rule": rule.rule[:50] + "...",
-                        "reason": "token_limit"
-                    })
+                    references.append(
+                        {"rule_id": rule.rule_id, "rule": rule.rule[:50] + "...", "reason": "token_limit"}
+                    )
                 continue
 
             compressed_rules.append(compressed)
@@ -288,13 +287,14 @@ class RuleCompressor:
             "rules": compressed_rules,
             "references": references,
             "total_tokens": current_tokens,
-            "compression_stats": self._get_compression_stats(compressed_rules)
+            "compression_stats": self._get_compression_stats(compressed_rules),
         }
 
     def _sort_rules_by_priority(
         self, rules: list[EnhancedRule], context: dict[str, Any], session: SessionState
     ) -> list[EnhancedRule]:
         """Sort rules by priority and relevance."""
+
         def priority_score(rule: EnhancedRule) -> float:
             score = 0.0
 
@@ -319,7 +319,7 @@ class RuleCompressor:
 
             # Task type relevance
             task_type = context.get("task_type", "feature_development")
-            if task_type in getattr(rule.metadata, 'task_types', []):
+            if task_type in getattr(rule.metadata, "task_types", []):
                 score += 4.0
 
             return score
@@ -346,5 +346,5 @@ class RuleCompressor:
             "total_original_tokens": total_original,
             "total_compressed_tokens": total_compressed,
             "compression_ratio": compression_ratio,
-            "rules_processed": len(compressed_rules)
+            "rules_processed": len(compressed_rules),
         }

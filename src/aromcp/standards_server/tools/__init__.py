@@ -54,10 +54,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
         pass
 
     # Enhanced hints_for_file with session support
-    @mcp.tool(
-        name="hints_for_file",
-        description="Gets relevant hints with smart compression and session deduplication"
-    )
+    @mcp.tool(name="hints_for_file", description="Gets relevant hints with smart compression and session deduplication")
     @json_convert
     def hints_for_file(
         file_path: str,
@@ -65,7 +62,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
         project_root: str | None = None,
         session_id: str | None = None,
         compression_enabled: bool = True,
-        grouping_enabled: bool = True
+        grouping_enabled: bool = True,
     ) -> dict:
         """Get intelligent coding hints based on file context and standards.
 
@@ -109,20 +106,14 @@ def register_standards_tools(mcp: FastMCP) -> None:
             project_root=project_root,
             session_id=session_id,
             compression_enabled=compression_enabled,
-            grouping_enabled=grouping_enabled
+            grouping_enabled=grouping_enabled,
         )
 
     # Enhanced register with enhanced metadata support
-    @mcp.tool(
-        name="register",
-        description="Registers a standard with enhanced metadata and rule processing"
-    )
+    @mcp.tool(name="register", description="Registers a standard with enhanced metadata and rule processing")
     @json_convert
     def register(
-        source_path: str,
-        metadata: dict | str,
-        project_root: str | None = None,
-        enhanced_format: bool = True
+        source_path: str, metadata: dict | str, project_root: str | None = None, enhanced_format: bool = True
     ) -> dict:
         """Register a coding standard document for hint generation.
 
@@ -155,17 +146,11 @@ def register_standards_tools(mcp: FastMCP) -> None:
         Use check_updates to update existing standards.
         """
         return register_impl(
-            source_path=source_path,
-            metadata=metadata,
-            project_root=project_root,
-            enhanced_format=enhanced_format
+            source_path=source_path, metadata=metadata, project_root=project_root, enhanced_format=enhanced_format
         )
 
     # Session management tools
-    @mcp.tool(
-        name="get_session_stats",
-        description="Get statistics for AI coding sessions"
-    )
+    @mcp.tool(name="get_session_stats", description="Get statistics for AI coding sessions")
     @json_convert
     def get_session_stats(session_id: str | None = None) -> dict:
         """Get statistics about AI coding sessions and hint usage.
@@ -201,27 +186,14 @@ def register_standards_tools(mcp: FastMCP) -> None:
                 if session:
                     return {"data": session.get_stats()}
                 else:
-                    return {
-                        "error": {
-                            "code": "NOT_FOUND",
-                            "message": f"Session {session_id} not found"
-                        }
-                    }
+                    return {"error": {"code": "NOT_FOUND", "message": f"Session {session_id} not found"}}
             else:
                 return {"data": session_manager.get_all_stats()}
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to get session stats: {str(e)}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to get session stats: {str(e)}"}}
 
-    @mcp.tool(
-        name="clear_session",
-        description="Clear a specific session or all sessions"
-    )
+    @mcp.tool(name="clear_session", description="Clear a specific session or all sessions")
     @json_convert
     def clear_session(session_id: str | None = None) -> dict:
         """Clear session data to reset hint deduplication.
@@ -251,43 +223,21 @@ def register_standards_tools(mcp: FastMCP) -> None:
         try:
             if session_id:
                 success = session_manager.delete_session(session_id)
-                return {
-                    "data": {
-                        "cleared": success,
-                        "session_id": session_id
-                    }
-                }
+                return {"data": {"cleared": success, "session_id": session_id}}
             else:
                 # Clear all sessions
                 active_sessions = session_manager.get_active_sessions()
                 for sid in active_sessions:
                     session_manager.delete_session(sid)
 
-                return {
-                    "data": {
-                        "cleared": True,
-                        "sessions_cleared": len(active_sessions)
-                    }
-                }
+                return {"data": {"cleared": True, "sessions_cleared": len(active_sessions)}}
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to clear session: {str(e)}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to clear session: {str(e)}"}}
 
-    @mcp.tool(
-        name="analyze_context",
-        description="Analyze context for a specific file and session"
-    )
+    @mcp.tool(name="analyze_context", description="Analyze context for a specific file and session")
     @json_convert
-    def analyze_context(
-        file_path: str,
-        session_id: str | None = None,
-        project_root: str | None = None
-    ) -> dict:
+    def analyze_context(file_path: str, session_id: str | None = None, project_root: str | None = None) -> dict:
         """Analyze coding patterns and context for intelligent suggestions.
 
         Use this tool when:
@@ -324,25 +274,14 @@ def register_standards_tools(mcp: FastMCP) -> None:
             session = session_manager.get_or_create_session(session_id or "default")
             context = context_detector.analyze_session_context(session, file_path)
 
-            return {
-                "data": {
-                    "context": context,
-                    "session_stats": session.get_stats()
-                }
-            }
+            return {"data": {"context": context, "session_stats": session.get_stats()}}
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "OPERATION_FAILED",
-                    "message": f"Failed to analyze context: {str(e)}"
-                }
-            }
+            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to analyze context: {str(e)}"}}
 
     # Legacy tools (unchanged but use new implementations)
     @mcp.tool(
-        name="check_updates",
-        description="Scans for new or modified standard files and checks what needs updating"
+        name="check_updates", description="Scans for new or modified standard files and checks what needs updating"
     )
     @json_convert
     def check_updates(standards_path: str, project_root: str | None = None) -> dict:
@@ -378,10 +317,7 @@ def register_standards_tools(mcp: FastMCP) -> None:
         """
         return check_updates_impl(standards_path, project_root)
 
-    @mcp.tool(
-        name="delete",
-        description="Removes all rules and hints for a standard"
-    )
+    @mcp.tool(name="delete", description="Removes all rules and hints for a standard")
     @json_convert
     def delete(standard_id: str, project_root: str | None = None) -> dict:
         """Remove a coding standard and all associated hints/rules.
@@ -414,16 +350,9 @@ def register_standards_tools(mcp: FastMCP) -> None:
         return delete_impl(standard_id, project_root)
 
     # New tools for iterative hint and rule management
-    @mcp.tool(
-        name="add_hint",
-        description="Add a single hint to a standard"
-    )
+    @mcp.tool(name="add_hint", description="Add a single hint to a standard")
     @json_convert
-    def add_hint(
-        standard_id: str,
-        hint_data: dict | str,
-        project_root: str | None = None
-    ) -> dict:
+    def add_hint(standard_id: str, hint_data: dict | str, project_root: str | None = None) -> dict:
         """Add a single coding hint to an existing standard.
 
         Use this tool when:
@@ -456,17 +385,9 @@ def register_standards_tools(mcp: FastMCP) -> None:
         """
         return add_hint_impl(standard_id, hint_data, project_root)
 
-    @mcp.tool(
-        name="add_rule",
-        description="Add a single ESLint rule to a standard"
-    )
+    @mcp.tool(name="add_rule", description="Add a single ESLint rule to a standard")
     @json_convert
-    def add_rule(
-        standard_id: str,
-        rule_name: str,
-        rule_content: str,
-        project_root: str | None = None
-    ) -> dict:
+    def add_rule(standard_id: str, rule_name: str, rule_content: str, project_root: str | None = None) -> dict:
         """Add a single ESLint rule to a standard.
 
         Use this tool when:
@@ -500,15 +421,9 @@ def register_standards_tools(mcp: FastMCP) -> None:
         """
         return add_rule_impl(standard_id, rule_name, rule_content, project_root)
 
-    @mcp.tool(
-        name="list_rules",
-        description="List ESLint rules for a standard"
-    )
+    @mcp.tool(name="list_rules", description="List ESLint rules for a standard")
     @json_convert
-    def list_rules(
-        standard_id: str,
-        project_root: str | None = None
-    ) -> dict:
+    def list_rules(standard_id: str, project_root: str | None = None) -> dict:
         """List all ESLint rules associated with a standard.
 
         Use this tool when:
@@ -541,4 +456,3 @@ def register_standards_tools(mcp: FastMCP) -> None:
         Use add_rule to add new rules to the standard.
         """
         return list_rules_impl(standard_id, project_root)
-

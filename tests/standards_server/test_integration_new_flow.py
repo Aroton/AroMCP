@@ -21,6 +21,7 @@ class TestNewRegistrationFlow:
     def teardown_method(self):
         """Clean up test environment."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_complete_new_flow(self):
@@ -45,7 +46,7 @@ class TestNewRegistrationFlow:
                 "file_patterns": ["**/api/**/*.ts", "**/*.tsx"],
                 "code_patterns": ["z.object", "schema.parse"],
                 "import_indicators": ["zod"],
-                "nextjs_features": ["app-router"]
+                "nextjs_features": ["app-router"],
             },
             "optimization": {
                 "priority": "critical",
@@ -53,17 +54,14 @@ class TestNewRegistrationFlow:
                 "compressible": True,
                 "cacheable": True,
                 "example_reusability": "high",
-                "context_sensitive": True
+                "context_sensitive": True,
             },
             "relationships": {
                 "similar_to": ["error-handling"],
                 "commonly_used_with": ["api-standards"],
-                "conflicts_with": []
+                "conflicts_with": [],
             },
-            "nextjs_config": {
-                "router_preference": "app",
-                "rendering_strategy": "server"
-            }
+            "nextjs_config": {"router_preference": "app", "rendering_strategy": "server"},
         }
 
         register_result = register_impl("standards/validation.md", metadata, self.temp_dir, enhanced_format=True)
@@ -86,31 +84,31 @@ class TestNewRegistrationFlow:
                 "complexity": "intermediate",
                 "rule_type": "must",
                 "nextjs_api": ["app-router", "api-routes"],
-                "client_server": "server-only"
+                "client_server": "server-only",
             },
             "compression": {
                 "example_sharable": True,
                 "pattern_extractable": True,
-                "progressive_detail": ["minimal", "standard", "detailed", "full"]
+                "progressive_detail": ["minimal", "standard", "detailed", "full"],
             },
             "examples": {
                 "minimal": "schema.parse(input)",
                 "standard": "const validated = inputSchema.parse(body);",
                 "detailed": "import { z } from 'zod';\nconst schema = z.object({ email: z.string() });\n"
-                          "const validated = schema.parse(input);",
+                "const validated = schema.parse(input);",
                 "full": "import { z } from 'zod';\nimport { NextRequest } from 'next/server';\n\n"
-                       "const createUserSchema = z.object({\n  email: z.string().email(),\n  "
-                       "name: z.string().min(1).max(100)\n});\n\nexport async function POST(request: NextRequest) {\n  "
-                       "const body = await request.json();\n  const validated = createUserSchema.parse(body);\n  "
-                       "return Response.json({ success: true, data: validated });\n}",
-                "reference": "See src/app/api/users/route.ts"
+                "const createUserSchema = z.object({\n  email: z.string().email(),\n  "
+                "name: z.string().min(1).max(100)\n});\n\nexport async function POST(request: NextRequest) {\n  "
+                "const body = await request.json();\n  const validated = createUserSchema.parse(body);\n  "
+                "return Response.json({ success: true, data: validated });\n}",
+                "reference": "See src/app/api/users/route.ts",
             },
             "has_eslint_rule": True,
             "relationships": {
                 "similar_rules": ["validate-output-zod"],
                 "prerequisite_rules": [],
-                "see_also": ["error-handling"]
-            }
+                "see_also": ["error-handling"],
+            },
         }
 
         hint1_result = add_hint_impl("validation-standard", hint1_data, self.temp_dir)
@@ -128,13 +126,13 @@ class TestNewRegistrationFlow:
                 "complexity": "intermediate",
                 "rule_type": "should",
                 "nextjs_api": ["app-router", "api-routes"],
-                "client_server": "server-only"
+                "client_server": "server-only",
             },
             "examples": {
                 "full": "const responseSchema = z.object({ id: z.string(), email: z.string().email() });\n"
-                       "const response = responseSchema.parse(userData);\nreturn Response.json(response);"
+                "const response = responseSchema.parse(userData);\nreturn Response.json(response);"
             },
-            "has_eslint_rule": False
+            "has_eslint_rule": False,
         }
 
         hint2_result = add_hint_impl("validation-standard", hint2_data, self.temp_dir)
@@ -219,7 +217,7 @@ class TestNewRegistrationFlow:
             "tags": ["test"],
             "appliesTo": ["*.js"],
             "severity": "warning",
-            "priority": "recommended"
+            "priority": "recommended",
         }
 
         # First registration

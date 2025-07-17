@@ -18,10 +18,7 @@ class WhileLoopProcessor:
         self.expression_evaluator = ExpressionEvaluator()
 
     def process_while_loop(
-        self,
-        step: WorkflowStep,
-        context: ExecutionContext,
-        state: dict[str, Any]
+        self, step: WorkflowStep, context: ExecutionContext, state: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Process a while loop step.
@@ -44,11 +41,7 @@ class WhileLoopProcessor:
 
         try:
             # Create loop state
-            loop_state = LoopState(
-                loop_type="while",
-                loop_id=step.id,
-                max_iterations=max_iterations
-            )
+            loop_state = LoopState(loop_type="while", loop_id=step.id, max_iterations=max_iterations)
 
             # Store the condition for later evaluation
             loop_state.condition = condition
@@ -61,20 +54,15 @@ class WhileLoopProcessor:
                 workflow_steps = []
                 for i, step_def in enumerate(body_steps):
                     step_id = f"{step.id}.body.{i}"
-                    workflow_steps.append(WorkflowStep(
-                        id=step_id,
-                        type=step_def.get("type", "unknown"),
-                        definition=step_def
-                    ))
+                    workflow_steps.append(
+                        WorkflowStep(id=step_id, type=step_def.get("type", "unknown"), definition=step_def)
+                    )
 
                 # Enter the loop
                 context.enter_loop(loop_state)
 
                 # Create loop frame
-                loop_frame = context.create_loop_frame(
-                    steps=workflow_steps,
-                    loop_state=loop_state
-                )
+                loop_frame = context.create_loop_frame(steps=workflow_steps, loop_state=loop_state)
                 context.push_frame(loop_frame)
 
                 return {
@@ -84,14 +72,14 @@ class WhileLoopProcessor:
                     "condition": condition,
                     "max_iterations": max_iterations,
                     "body_steps": len(workflow_steps),
-                    "iteration": 0
+                    "iteration": 0,
                 }
             else:
                 return {
                     "type": "while_loop_skipped",
                     "step_id": step.id,
                     "condition": condition,
-                    "reason": "Initial condition was false"
+                    "reason": "Initial condition was false",
                 }
 
         except ExpressionError as e:
@@ -99,11 +87,7 @@ class WhileLoopProcessor:
         except Exception as e:
             raise ControlFlowError(f"Error processing while loop step: {str(e)}") from e
 
-    def check_loop_continuation(
-        self,
-        context: ExecutionContext,
-        state: dict[str, Any]
-    ) -> dict[str, Any]:
+    def check_loop_continuation(self, context: ExecutionContext, state: dict[str, Any]) -> dict[str, Any]:
         """
         Check if a while loop should continue to the next iteration.
 
@@ -127,7 +111,7 @@ class WhileLoopProcessor:
             return self._exit_loop(context, "max_iterations_reached")
 
         # Get the loop condition from the loop state
-        condition = getattr(current_loop, 'condition', None)
+        condition = getattr(current_loop, "condition", None)
         if not condition:
             raise ControlFlowError("Loop condition not found in loop state")
 
@@ -149,7 +133,7 @@ class WhileLoopProcessor:
                     "type": "while_loop_continue",
                     "loop_id": current_loop.loop_id,
                     "iteration": current_loop.current_iteration,
-                    "condition_result": True
+                    "condition_result": True,
                 }
             else:
                 return self._exit_loop(context, "condition_false")
@@ -157,12 +141,7 @@ class WhileLoopProcessor:
         except ExpressionError as e:
             return self._exit_loop(context, f"condition_error: {str(e)}")
 
-    def _evaluate_loop_condition(
-        self,
-        condition: str,
-        state: dict[str, Any],
-        context: ExecutionContext
-    ) -> bool:
+    def _evaluate_loop_condition(self, condition: str, state: dict[str, Any], context: ExecutionContext) -> bool:
         """
         Evaluate the loop condition with current state and context variables.
 
@@ -209,12 +188,7 @@ class WhileLoopProcessor:
         # Pop the loop frame
         context.pop_frame()
 
-        return {
-            "type": "while_loop_exited",
-            "loop_id": loop_id,
-            "reason": reason,
-            "total_iterations": iteration
-        }
+        return {"type": "while_loop_exited", "loop_id": loop_id, "reason": reason, "total_iterations": iteration}
 
     def process_break(self, context: ExecutionContext) -> dict[str, Any]:
         """
@@ -233,10 +207,7 @@ class WhileLoopProcessor:
         if not success:
             raise ControlFlowError("Failed to signal break to current loop")
 
-        return {
-            "type": "break_signaled",
-            "loop_id": context.current_loop().loop_id if context.current_loop() else None
-        }
+        return {"type": "break_signaled", "loop_id": context.current_loop().loop_id if context.current_loop() else None}
 
     def process_continue(self, context: ExecutionContext) -> dict[str, Any]:
         """
@@ -263,5 +234,5 @@ class WhileLoopProcessor:
 
         return {
             "type": "continue_signaled",
-            "loop_id": context.current_loop().loop_id if context.current_loop() else None
+            "loop_id": context.current_loop().loop_id if context.current_loop() else None,
         }

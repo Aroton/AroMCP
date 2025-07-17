@@ -41,11 +41,7 @@ def register_filesystem_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def read_files(
-        files: str | list[str],
-        page: int = 1,
-        max_tokens: int = 20000
-    ) -> dict[str, Any]:
+    def read_files(files: str | list[str], page: int = 1, max_tokens: int = 20000) -> dict[str, Any]:
         """Read multiple files and return their contents.
 
         Use this tool when:
@@ -99,7 +95,7 @@ def register_filesystem_tools(mcp):
         file_paths: str | list[str],
         include_docstrings: bool = True,
         include_decorators: bool = True,
-        expand_patterns: bool = True
+        expand_patterns: bool = True,
     ) -> list[dict[str, Any]]:
         """Parse code files to extract function/method signatures programmatically.
 
@@ -128,9 +124,7 @@ def register_filesystem_tools(mcp):
         Note: For import analysis use find_who_imports. For API endpoints use extract_api_endpoints.
         Supports Python (.py) files with full AST parsing.
         """
-        return extract_method_signatures_impl(
-            file_paths, include_docstrings, include_decorators, expand_patterns
-        )
+        return extract_method_signatures_impl(file_paths, include_docstrings, include_decorators, expand_patterns)
 
     @mcp.tool
     @json_convert
@@ -157,14 +151,11 @@ def register_filesystem_tools(mcp):
         return find_who_imports_impl(file_path)
 
 
-
-
-
 __all__ = [
     "list_files_impl",
     "read_files_impl",
     "write_files_impl",
     "extract_method_signatures_impl",
     "find_who_imports_impl",
-    "register_filesystem_tools"
+    "register_filesystem_tools",
 ]

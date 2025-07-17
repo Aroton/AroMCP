@@ -26,20 +26,14 @@ class TestMainServer:
         tool_names = list(tools)
 
         # Expected tool names from each module (based on actual registrations)
-        filesystem_tools = [
-            "list_files",
-            "read_files",
-            "write_files",
-            "extract_method_signatures",
-            "find_who_imports"
-        ]
+        filesystem_tools = ["list_files", "read_files", "write_files", "extract_method_signatures", "find_who_imports"]
 
         workflow_state_tools = [
             "workflow_state_read",
             "workflow_state_update",
             "workflow_state_dependencies",
             "workflow_state_init",
-            "workflow_state_validate_path"
+            "workflow_state_validate_path",
         ]
 
         workflow_execution_tools = [
@@ -50,20 +44,16 @@ class TestMainServer:
             "workflow_step_complete",
             "workflow_get_status",
             "workflow_update_state",
-            "workflow_list_active"
+            "workflow_list_active",
+            "workflow_checkpoint",
+            "workflow_resume",
+            "workflow_create_sub_agent",
+            "workflow_get_sub_agent_status",
         ]
 
-        build_tools = [
-            "check_typescript",
-            "lint_project",
-            "run_test_suite"
-        ]
+        build_tools = ["check_typescript", "lint_project", "run_test_suite"]
 
-        analysis_tools = [
-            "find_dead_code",
-            "find_import_cycles",
-            "extract_api_endpoints"
-        ]
+        analysis_tools = ["find_dead_code", "find_import_cycles", "extract_api_endpoints"]
 
         standards_tools = [
             "check_updates",
@@ -75,12 +65,16 @@ class TestMainServer:
             "analyze_context",
             "add_hint",
             "add_rule",
-            "list_rules"
+            "list_rules",
         ]
 
         all_expected_tools = (
-            filesystem_tools + workflow_state_tools + workflow_execution_tools +
-            build_tools + analysis_tools + standards_tools
+            filesystem_tools
+            + workflow_state_tools
+            + workflow_execution_tools
+            + build_tools
+            + analysis_tools
+            + standards_tools
         )
 
         # Check that we have the expected number of tools
@@ -97,20 +91,21 @@ class TestMainServer:
         tool_names = list(tools)
 
         # Check each category has tools
-        filesystem_present = any(
-            "files" in name or "imports" in name or "documents" in name
-            for name in tool_names
-        )
+        filesystem_present = any("files" in name or "imports" in name or "documents" in name for name in tool_names)
         workflow_present = any("workflow" in name for name in tool_names)
         build_present = any("typescript" in name or "lint" in name or "test" in name for name in tool_names)
         analysis_present = any(
-            "dead_code" in name or "import_cycles" in name or "api_endpoints" in name
-            for name in tool_names
+            "dead_code" in name or "import_cycles" in name or "api_endpoints" in name for name in tool_names
         )
         standards_present = any(
-            "check_updates" in name or "register" in name or "delete" in name or
-            "hints_for_file" in name or "session" in name or
-            "add_hint" in name or "add_rule" in name or "list_rules" in name
+            "check_updates" in name
+            or "register" in name
+            or "delete" in name
+            or "hints_for_file" in name
+            or "session" in name
+            or "add_hint" in name
+            or "add_rule" in name
+            or "list_rules" in name
             for name in tool_names
         )
 
@@ -125,13 +120,13 @@ class TestMainServer:
         """Test that individual tools can be retrieved and have proper structure."""
         # Test a tool from each implemented category
         test_tools = [
-            "list_files",              # filesystem
-            "workflow_state_read",     # workflow state
-            "workflow_start",          # workflow execution
-            "check_typescript",        # build
-            "find_dead_code",          # analysis
-            "check_updates",           # standards
-            "get_session_stats"        # standards v2
+            "list_files",  # filesystem
+            "workflow_state_read",  # workflow state
+            "workflow_start",  # workflow execution
+            "check_typescript",  # build
+            "find_dead_code",  # analysis
+            "check_updates",  # standards
+            "get_session_stats",  # standards v2
         ]
 
         for tool_name in test_tools:
@@ -144,6 +139,7 @@ class TestMainServer:
 def test_server_can_be_imported():
     """Test that the server can be imported without errors."""
     from aromcp.main_server import mcp
+
     assert mcp is not None
 
 

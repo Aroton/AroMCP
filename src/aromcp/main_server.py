@@ -21,7 +21,7 @@ mcp = FastMCP(
         - list_files, read_files, write_files (instead of *_batch versions)
         - lint_project, check_typescript, run_tests (instead of parse_* versions)
         - find_who_imports (instead of find_imports_for_files)
-    """
+    """,
 )
 
 # Register all tools from different modules

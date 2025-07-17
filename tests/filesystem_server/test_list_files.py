@@ -21,6 +21,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["*.py"])
@@ -42,6 +43,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["**/*.py"])
@@ -54,10 +56,7 @@ class TestListFiles:
         """Test multiple glob patterns."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create diverse file structure
-            files = [
-                "src/main.py", "src/utils.js", "tests/test.py",
-                "docs/readme.md", "config.json", "style.css"
-            ]
+            files = ["src/main.py", "src/utils.js", "tests/test.py", "docs/readme.md", "config.json", "style.css"]
             for file_path in files:
                 full_path = Path(temp_dir) / file_path
                 full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -65,6 +64,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["**/*.py", "**/*.js", "*.json"])
@@ -84,6 +84,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns="*.py")
@@ -102,6 +103,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["*.py"])
@@ -118,6 +120,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Use patterns that would both match the same file

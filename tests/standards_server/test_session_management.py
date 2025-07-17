@@ -307,8 +307,8 @@ class TestSessionManager:
 
         # Wait a bit and access again
         import time
+
         time.sleep(0.01)
 
         session_again = manager.get_or_create_session("test-session")
         assert session_again.last_activity > original_time
-

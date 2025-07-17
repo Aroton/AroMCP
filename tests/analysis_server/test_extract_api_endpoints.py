@@ -45,9 +45,7 @@ module.exports = router;
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/routes/**/*.js"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
             assert "data" in result
@@ -57,25 +55,16 @@ module.exports = router;
             assert len(endpoints) == 5
 
             # Check GET /users
-            get_users = next(
-                ep for ep in endpoints
-                if ep["method"] == "GET" and ep["path"] == "/users"
-            )
+            get_users = next(ep for ep in endpoints if ep["method"] == "GET" and ep["path"] == "/users")
             assert get_users["is_async"]
             assert get_users["parameters"] == []
 
             # Check POST /users with middleware
-            post_users = next(
-                ep for ep in endpoints
-                if ep["method"] == "POST" and ep["path"] == "/users"
-            )
+            post_users = next(ep for ep in endpoints if ep["method"] == "POST" and ep["path"] == "/users")
             assert "validateUser" in post_users["middleware"]
 
             # Check parameterized routes
-            get_user_by_id = next(
-                ep for ep in endpoints
-                if ep["method"] == "GET" and "id" in ep["path"]
-            )
+            get_user_by_id = next(ep for ep in endpoints if ep["method"] == "GET" and "id" in ep["path"])
             assert "id" in get_user_by_id["parameters"]
 
     def test_fastapi_routes_extraction(self):
@@ -114,9 +103,7 @@ async def update_user(user_id: int, user: UserCreate):
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/api/**/*.py"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/api/**/*.py"], include_middleware=True
             )
 
             assert "data" in result
@@ -160,9 +147,7 @@ export async function DELETE(request: Request) {
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/api/**/*.ts"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/api/**/*.ts"], include_middleware=True
             )
 
             assert "data" in result
@@ -217,9 +202,7 @@ export class UserController {
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/controllers/**/*.ts"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/controllers/**/*.ts"], include_middleware=True
             )
 
             assert "data" in result
@@ -261,9 +244,7 @@ module.exports = app;
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/*.js"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/*.js"], include_middleware=True
             )
 
             assert "data" in result
@@ -308,9 +289,7 @@ module.exports = router;
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/routes/**/*.js"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
             assert "data" in result
@@ -340,9 +319,7 @@ router.get('/categories/:category/items/:id/details/:detailId', getDetails);
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/routes/**/*.js"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
             assert "data" in result
@@ -375,9 +352,7 @@ router.delete('/products/:id', deleteProduct);
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/routes/**/*.js"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
             assert "data" in result
@@ -407,9 +382,7 @@ router.delete('/products/:id', deleteProduct);
             readme_file.write_text("# Project README")
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/routes/**/*.js"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
             assert "data" in result
@@ -432,18 +405,14 @@ app.get('/custom-endpoint', customHandler);
 
             # Test with default patterns (should not find it)
             result1 = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/routes/**/*.js"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
             assert result1["data"]["summary"]["total_endpoints"] == 0
 
             # Test with custom patterns (should find it)
             result2 = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/handlers/**/*.js"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/handlers/**/*.js"], include_middleware=True
             )
 
             assert result2["data"]["summary"]["total_endpoints"] >= 1
@@ -459,9 +428,7 @@ router.get('/test', localMiddleware, handler);
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/routes/**/*.js"],
-                include_middleware=False
+                project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=False
             )
 
             assert "data" in result
@@ -474,9 +441,7 @@ router.get('/test', localMiddleware, handler);
         """Test error handling for invalid inputs."""
         # Test with non-existent directory
         result = extract_api_endpoints_impl(
-            project_root="/non/existent/path",
-            route_patterns=["**/*.js"],
-            include_middleware=True
+            project_root="/non/existent/path", route_patterns=["**/*.js"], include_middleware=True
         )
 
         assert "error" in result
@@ -509,9 +474,7 @@ router.post('/bulk', [validateBulk, processBulk, sendResponse]);
             """)
 
             result = extract_api_endpoints_impl(
-                project_root=temp_dir,
-                route_patterns=["**/routes/**/*.js"],
-                include_middleware=True
+                project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
             assert "data" in result

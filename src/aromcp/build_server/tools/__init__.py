@@ -11,7 +11,6 @@ from .run_test_suite import run_test_suite_impl
 def register_build_tools(mcp):
     """Register build tools with the MCP server."""
 
-
     @mcp.tool
     @json_convert
     def check_typescript(files: str | list[str] | None = None) -> dict[str, Any]:  # noqa: F841
@@ -55,9 +54,7 @@ def register_build_tools(mcp):
     @mcp.tool
     @json_convert
     def lint_project(
-        use_standards: bool = True,
-        target_files: str | list[str] | None = None,
-        debug: bool = False
+        use_standards: bool = True, target_files: str | list[str] | None = None, debug: bool = False
     ) -> dict[str, Any]:  # noqa: F841
         """Run ESLint to find code style issues and potential bugs.
 
@@ -107,7 +104,7 @@ def register_build_tools(mcp):
         test_framework: str = "auto",
         pattern: str | None = None,
         coverage: bool = False,
-        timeout: int = 300
+        timeout: int = 300,
     ) -> dict[str, Any]:
         """Execute tests with parsed results.
 
@@ -133,15 +130,7 @@ def register_build_tools(mcp):
         Note: Auto-detects test framework from package.json or project files. For linting use lint_project,
         for TypeScript checking use check_typescript. Supports parallel test execution where available.
         """
-        return run_test_suite_impl(
-            test_command, test_framework, pattern, coverage, timeout
-        )
+        return run_test_suite_impl(test_command, test_framework, pattern, coverage, timeout)
 
 
-
-__all__ = [
-    "check_typescript_impl",
-    "lint_project_impl",
-    "run_test_suite_impl",
-    "register_build_tools"
-]
+__all__ = ["check_typescript_impl", "lint_project_impl", "run_test_suite_impl", "register_build_tools"]

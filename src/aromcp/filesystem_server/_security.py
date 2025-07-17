@@ -16,7 +16,7 @@ def get_project_root(project_root: str | None = None) -> str:
         or current directory as fallback
     """
     if project_root is None or project_root == ".":
-        return os.getenv('MCP_FILE_ROOT', '.')
+        return os.getenv("MCP_FILE_ROOT", ".")
     return project_root
 
 
@@ -46,10 +46,7 @@ def validate_file_path(file_path: str, project_root: str) -> dict[str, Any]:
         try:
             abs_path.relative_to(claude_config_path)
             # Path is within ~/.claude, allow access
-            return {
-                "valid": True,
-                "abs_path": abs_path
-            }
+            return {"valid": True, "abs_path": abs_path}
         except ValueError:
             # Not in ~/.claude, continue with normal validation
             pass
@@ -58,21 +55,12 @@ def validate_file_path(file_path: str, project_root: str) -> dict[str, Any]:
         try:
             abs_path.relative_to(project_path)
         except ValueError:
-            return {
-                "valid": False,
-                "error": f"File path outside project root: {file_path}"
-            }
+            return {"valid": False, "error": f"File path outside project root: {file_path}"}
 
-        return {
-            "valid": True,
-            "abs_path": abs_path
-        }
+        return {"valid": True, "abs_path": abs_path}
 
     except Exception as e:
-        return {
-            "valid": False,
-            "error": f"Invalid file path: {str(e)}"
-        }
+        return {"valid": False, "error": f"Invalid file path: {str(e)}"}
 
 
 def validate_file_path_legacy(file_path: str, project_root: Path) -> Path:
