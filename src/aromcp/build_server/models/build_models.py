@@ -64,6 +64,15 @@ class TestResult:
 
 
 @dataclass
+class TestSuiteInfo:
+    """Test suite summary information."""
+
+    total: int
+    passed: int
+    failed: int
+
+
+@dataclass
 class RunTestSuiteResponse:
     """Response schema for run_test_suite tool."""
 
@@ -76,3 +85,4 @@ class RunTestSuiteResponse:
     success: bool
     coverage: dict[str, Any] | None
     test_results: list[TestResult]
+    test_suites: TestSuiteInfo | None = None

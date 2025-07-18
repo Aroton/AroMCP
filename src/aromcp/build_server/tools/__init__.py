@@ -5,6 +5,7 @@ from ..models.build_models import (
     CheckTypescriptResponse,
     LintProjectResponse,
     RunTestSuiteResponse,
+    TestSuiteInfo,
 )
 from .check_typescript import check_typescript_impl
 from .lint_project import lint_project_impl
@@ -191,15 +192,28 @@ def register_build_tools(mcp):
         test_results = []
         for test_result in result["test_results"]:
             if isinstance(test_result, dict):
-                test_results.append(
-                    TestResult(
-                        name=test_result.get("name", ""),
-                        status=test_result.get("status", "unknown"),
-                        duration=test_result.get("duration", 0.0),
-                        file=test_result.get("file", ""),
-                        error_message=test_result.get("error_message"),
+                status = test_result.get("status", "unknown")
+                # Filter out test results with unknown status
+                if status != "unknown":
+                    test_results.append(
+                        TestResult(
+                            name=test_result.get("name", ""),
+                            status=status,
+                            duration=test_result.get("duration", 0.0),
+                            file=test_result.get("file", ""),
+                            error_message=test_result.get("error_message"),
+                        )
                     )
-                )
+
+        # Handle test_suites if present
+        test_suites = None
+        if "test_suites" in result:
+            test_suites_data = result["test_suites"]
+            test_suites = TestSuiteInfo(
+                total=test_suites_data["total"],
+                passed=test_suites_data["passed"],
+                failed=test_suites_data["failed"],
+            )
 
         return RunTestSuiteResponse(
             tests_passed=result["tests_passed"],
@@ -211,6 +225,7 @@ def register_build_tools(mcp):
             success=result["success"],
             coverage=result["coverage"],
             test_results=test_results,
+            test_suites=test_suites,
         )
 
 

@@ -103,6 +103,10 @@ def run_test_suite_impl(
                 "test_results": parsed_results.get("test_files", []),
             }
 
+            # Add test suite information if available (Jest provides this)
+            if "test_suites" in parsed_results:
+                standardized_result["test_suites"] = parsed_results["test_suites"]
+
             return standardized_result
 
         except subprocess.TimeoutExpired as e:
@@ -132,11 +136,11 @@ def _detect_test_setup(project_root: str) -> tuple[str, str | None]:
             all_deps = {**package_json.get("dependencies", {}), **package_json.get("devDependencies", {})}
 
             if "jest" in all_deps:
-                return "jest", test_script or "npm test"
+                return "jest", "npm run test"
             elif "vitest" in all_deps:
-                return "vitest", test_script or "npm test"
+                return "vitest", "npm run test"
             elif "mocha" in all_deps:
-                return "mocha", test_script or "npm test"
+                return "mocha", "npm run test"
 
             # Fallback to script content analysis
             if test_script:
@@ -156,15 +160,16 @@ def _detect_test_setup(project_root: str) -> tuple[str, str | None]:
 
     # Check for test directories
     if (project_path / "__tests__").exists():
-        return "jest", "npm test"
+        return "jest", "npm run test"
     elif (project_path / "test").exists():
-        return "mocha", "npm test"
+        return "mocha", "npm run test"
 
     return "unknown", None
 
 
 def _add_jest_options(cmd: list[str], pattern: str | None, coverage: bool) -> list[str]:
     """Add Jest-specific options."""
+    cmd.append("--")  # Separator for npm run scripts
     if pattern:
         cmd.extend(["--testPathPattern", pattern])
     if coverage:
@@ -201,41 +206,90 @@ def _add_pytest_options(cmd: list[str], pattern: str | None, coverage: bool) -> 
     return cmd
 
 
+def _extract_json_from_output(output: str) -> str | None:
+    """Extract JSON from Jest output that may contain text + JSON format.
+
+    Jest with --json often outputs human-readable results followed by JSON.
+    This function tries to find and extract just the JSON portion.
+    """
+    lines = output.strip().split("\n")
+
+    # Look for JSON starting from the end of the output
+    for i in range(len(lines) - 1, -1, -1):
+        line = lines[i].strip()
+        if line.startswith("{") and line.endswith("}"):
+            # Found a potential JSON line, try to parse it
+            try:
+                json.loads(line)
+                return line
+            except json.JSONDecodeError:
+                continue
+
+    # Look for multi-line JSON block at the end
+    # Try progressively larger blocks from the end
+    for start_idx in range(len(lines) - 1, -1, -1):
+        potential_json = "\n".join(lines[start_idx:])
+        if potential_json.strip().startswith("{") and potential_json.strip().endswith("}"):
+            try:
+                json.loads(potential_json)
+                return potential_json
+            except json.JSONDecodeError:
+                continue
+
+    return None
+
+
 def _parse_jest_output(stdout: str, stderr: str) -> dict[str, Any]:
     """Parse Jest JSON output."""
     try:
         # Jest outputs JSON to stdout when --json flag is used
+        # Often Jest outputs human-readable results followed by JSON on the last line
         if stdout.strip():
-            jest_result = json.loads(stdout)
+            # Try to extract JSON from the output
+            json_content = _extract_json_from_output(stdout)
+            if json_content:
+                jest_result = json.loads(json_content)
+            else:
+                # Fallback: try parsing entire output as JSON
+                jest_result = json.loads(stdout)
 
-            summary = jest_result.get("testResults", [])
-            total_tests = 0
-            passed_tests = 0
-            failed_tests = 0
-            skipped_tests = 0
+            # Use the top-level summary fields from Jest JSON
+            total_tests = jest_result.get("numTotalTests", 0)
+            passed_tests = jest_result.get("numPassedTests", 0)
+            failed_tests = jest_result.get("numFailedTests", 0)
+            skipped_tests = jest_result.get("numPendingTests", 0)
+
+            # Parse test files for detailed results
             test_files = []
+            test_results = jest_result.get("testResults", [])
 
-            for test_file in summary:
+            # Calculate duration from start/end times
+            start_time = jest_result.get("startTime", 0)
+            duration = 0
+
+            # Try to get duration from various Jest JSON sources
+            if "endTime" in jest_result and start_time > 0:
+                # Top-level timing if available
+                duration = (jest_result["endTime"] - start_time) / 1000
+            elif test_results:
+                # Calculate from test file durations if available
+                total_duration = 0
+                for test_file in test_results:
+                    if test_file.get("endTime") and test_file.get("startTime"):
+                        total_duration += (test_file["endTime"] - test_file["startTime"]) / 1000
+                duration = total_duration
+
+            for test_file in test_results:
                 file_path = test_file.get("name", "")
-                test_results = test_file.get("assertionResults", [])
+                assertion_results = test_file.get("assertionResults", [])
 
-                file_passed = 0
-                file_failed = 0
-                file_skipped = 0
+                file_passed = sum(1 for test in assertion_results if test.get("status") == "passed")
+                file_failed = sum(1 for test in assertion_results if test.get("status") == "failed")
+                file_skipped = sum(1 for test in assertion_results if test.get("status") == "pending")
 
-                for test in test_results:
-                    status = test.get("status")
-                    if status == "passed":
-                        file_passed += 1
-                        passed_tests += 1
-                    elif status == "failed":
-                        file_failed += 1
-                        failed_tests += 1
-                    elif status == "skipped":
-                        file_skipped += 1
-                        skipped_tests += 1
-
-                total_tests += len(test_results)
+                file_duration = 0
+                if test_file.get("endTime") and test_file.get("startTime"):
+                    file_duration = (test_file["endTime"] - test_file["startTime"]) / 1000
 
                 test_files.append(
                     {
@@ -243,9 +297,15 @@ def _parse_jest_output(stdout: str, stderr: str) -> dict[str, Any]:
                         "passed": file_passed,
                         "failed": file_failed,
                         "skipped": file_skipped,
-                        "duration": test_file.get("endTime", 0) - test_file.get("startTime", 0),
+                        "duration": file_duration,
+                        "total": len(assertion_results),
                     }
                 )
+
+            # Include test suite information
+            total_suites = jest_result.get("numTotalTestSuites", 0)
+            passed_suites = jest_result.get("numPassedTestSuites", 0)
+            failed_suites = jest_result.get("numFailedTestSuites", 0)
 
             return {
                 "summary": {
@@ -253,14 +313,52 @@ def _parse_jest_output(stdout: str, stderr: str) -> dict[str, Any]:
                     "passed": passed_tests,
                     "failed": failed_tests,
                     "skipped": skipped_tests,
-                    "duration": jest_result.get("testResults", [{}])[0].get("perfStats", {}).get("runtime", 0),
+                    "duration": duration,
+                },
+                "test_suites": {
+                    "total": total_suites,
+                    "passed": passed_suites,
+                    "failed": failed_suites,
                 },
                 "test_files": test_files,
                 "coverage": jest_result.get("coverageMap", {}),
+                "success": jest_result.get("success", True),
             }
 
     except (json.JSONDecodeError, KeyError, IndexError):
-        pass
+        # If JSON parsing fails, check if we have JSON-like content
+        if stdout.strip().startswith("{"):
+            # We have JSON but parsing failed - this indicates a real JSON structure issue
+            # Let's try to extract basic info differently
+            import re
+
+            tests_match = re.search(r'"numTotalTests":\s*(\d+)', stdout)
+            passed_match = re.search(r'"numPassedTests":\s*(\d+)', stdout)
+            failed_match = re.search(r'"numFailedTests":\s*(\d+)', stdout)
+            suites_match = re.search(r'"numTotalTestSuites":\s*(\d+)', stdout)
+
+            if tests_match and passed_match:
+                total_tests = int(tests_match.group(1))
+                passed_tests = int(passed_match.group(1))
+                failed_tests = int(failed_match.group(1)) if failed_match else 0
+                total_suites = int(suites_match.group(1)) if suites_match else 0
+
+                return {
+                    "summary": {
+                        "total": total_tests,
+                        "passed": passed_tests,
+                        "failed": failed_tests,
+                        "skipped": 0,
+                        "duration": 0,
+                    },
+                    "test_suites": {
+                        "total": total_suites,
+                        "passed": total_suites - failed_tests if total_suites > 0 else 0,
+                        "failed": 0,
+                    },
+                    "test_files": [],
+                    "success": failed_tests == 0,
+                }
 
     # Fallback to text parsing
     return _parse_generic_output(stdout, stderr)
@@ -270,8 +368,15 @@ def _parse_vitest_output(stdout: str, stderr: str) -> dict[str, Any]:
     """Parse Vitest JSON output."""
     try:
         # Vitest outputs JSON when --reporter=json is used
+        # May have mixed text + JSON output
         if stdout.strip():
-            vitest_result = json.loads(stdout)
+            # Try to extract JSON from the output
+            json_content = _extract_json_from_output(stdout)
+            if json_content:
+                vitest_result = json.loads(json_content)
+            else:
+                # Fallback: try parsing entire output as JSON
+                vitest_result = json.loads(stdout)
 
             # Parse Vitest structure (may vary by version)
             test_results = vitest_result.get("testResults", [])
@@ -297,7 +402,13 @@ def _parse_mocha_output(stdout: str, stderr: str) -> dict[str, Any]:
     """Parse Mocha JSON output."""
     try:
         if stdout.strip():
-            mocha_result = json.loads(stdout)
+            # Try to extract JSON from the output
+            json_content = _extract_json_from_output(stdout)
+            if json_content:
+                mocha_result = json.loads(json_content)
+            else:
+                # Fallback: try parsing entire output as JSON
+                mocha_result = json.loads(stdout)
 
             stats = mocha_result.get("stats", {})
 
