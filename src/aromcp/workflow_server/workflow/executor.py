@@ -17,6 +17,7 @@ from .models import StepExecution, WorkflowDefinition, WorkflowExecutionError, W
 from .steps.break_continue import BreakContinueProcessor
 from .steps.conditional import ConditionalProcessor
 from .steps.foreach import ForEachProcessor
+from .steps.shell_command import ShellCommandProcessor
 from .steps.user_input import UserInputProcessor
 from .steps.while_loop import WhileLoopProcessor
 
@@ -88,6 +89,7 @@ class WorkflowExecutor:
         self.foreach_processor = ForEachProcessor()
         self.user_input_processor = UserInputProcessor()
         self.break_continue_processor = BreakContinueProcessor()
+        self.shell_command_processor = ShellCommandProcessor()
 
     def start(self, workflow_def: WorkflowDefinition, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
         """Initialize and start a workflow instance with control flow support.
@@ -131,15 +133,19 @@ class WorkflowExecutor:
                 self.state_manager._setup_transformations()
 
             # Set initial state by applying updates
+            updates = []
             if initial_state:
-                updates = []
                 for tier_name, tier_data in initial_state.items():
                     if tier_name in ["raw", "state"] and isinstance(tier_data, dict):
                         for key, value in tier_data.items():
                             updates.append({"path": f"{tier_name}.{key}", "value": value})
 
-                if updates:
-                    self.state_manager.update(workflow_id, updates)
+            # Always create the state, even if no initial updates
+            if updates:
+                self.state_manager.update(workflow_id, updates)
+            else:
+                # Create empty state by doing a dummy update
+                self.state_manager.update(workflow_id, [])
 
             # Create execution context
             context = context_manager.create_context(workflow_id)
@@ -256,6 +262,11 @@ class WorkflowExecutor:
             return self._process_user_input_step(step, context, current_state)
         elif step.type == "parallel_foreach":
             return self._process_parallel_foreach_step(step, context, current_state)
+        elif step.type == "shell_command":
+            return self._process_shell_command_step(step, context, current_state, workflow_id, _recursion_depth)
+        elif step.type == "user_message":
+            # Collect consecutive user messages and the next actionable step
+            return self._collect_batched_steps(step, context, workflow_id, current_state, _recursion_depth)
         else:
             # Regular step - advance context and return to agent
             context.advance_step()
@@ -495,11 +506,119 @@ class WorkflowExecutor:
             context.advance_step()
             return self._prepare_step_for_agent(step, workflow_id, current_state)
 
-    def _process_completed_sub_agent_tasks(self, workflow_id, context, completed_tasks):
+    def _process_completed_sub_agent_tasks(self, workflow_id, context, completed_tasks):  # noqa: ARG002
         """Process results from completed sub-agent tasks."""
         # For now, just continue to next step
         # In a full implementation, this would collect results and update state
         return self.get_next_step(workflow_id, 0)  # Reset recursion depth for sub-agent processing
+
+    def _collect_batched_steps(self, initial_step, context, workflow_id, state, recursion_depth):
+        """Collect consecutive user_message steps and the next actionable step.
+
+        Args:
+            initial_step: The first user_message step
+            context: Execution context
+            workflow_id: Workflow ID
+            state: Current workflow state
+            recursion_depth: Current recursion depth
+
+        Returns:
+            Batched response with all user messages and the next actionable step
+        """
+        user_messages = []
+        current_step = initial_step
+
+        # Collect all consecutive user_message steps
+        while current_step and current_step.type == "user_message":
+            # Process the user message step
+            replacement_context = dict(state)
+            replacement_context.update(context.get_all_variables())
+            processed_definition = VariableReplacer.replace(current_step.definition, replacement_context)
+
+            user_messages.append({
+                "id": current_step.id,
+                "type": "user_message",
+                "definition": processed_definition
+            })
+
+            # Advance to next step
+            context.advance_step()
+
+            # Check if there's a next step
+            if not context.has_next_step():
+                # Handle frame completion
+                if len(context.execution_stack) > 1:
+                    completed_frame = context.pop_frame()
+                    if completed_frame and completed_frame.frame_type in ("conditional", "loop"):
+                        parent_frame = context.current_frame()
+                        if parent_frame:
+                            parent_frame.advance_step()
+                    # Continue looking for steps
+                    if context.has_next_step():
+                        current_step = context.get_next_step()
+                    else:
+                        current_step = None
+                else:
+                    # Workflow complete
+                    current_step = None
+                    break
+            else:
+                current_step = context.get_next_step()
+
+        # Now we have either an actionable step or workflow completion
+        if current_step:
+            # Process the actionable step
+            actionable_step_result = self._process_single_step(
+                current_step, context, workflow_id, state, recursion_depth
+            )
+
+            # Return batched result
+            return {
+                "batch": True,
+                "user_messages": user_messages,
+                "actionable_step": actionable_step_result,
+                "workflow_id": workflow_id,
+                "execution_context": context.get_execution_summary(),
+            }
+        else:
+            # Only user messages at the end of workflow
+            if not context.has_next_step() and len(context.execution_stack) == 1:
+                instance = self.workflows[workflow_id]
+                instance.status = "completed"
+                instance.completed_at = datetime.now(UTC).isoformat()
+                context_manager.remove_context(workflow_id)
+
+            return {
+                "batch": True,
+                "user_messages": user_messages,
+                "actionable_step": None,
+                "workflow_id": workflow_id,
+                "execution_context": context.get_execution_summary() if context else None,
+            }
+
+    def _process_single_step(self, step, context, workflow_id, state, recursion_depth):
+        """Process a single step and return its result without advancing context."""
+        # Process control flow steps internally
+        if step.type == "conditional":
+            return self._process_conditional_step(step, context, state, workflow_id, recursion_depth)
+        elif step.type == "while_loop":
+            return self._process_while_loop_step(step, context, state, workflow_id, recursion_depth)
+        elif step.type == "foreach":
+            return self._process_foreach_step(step, context, state, workflow_id, recursion_depth)
+        elif step.type == "break":
+            return self._process_break_step(step, context, state, workflow_id, recursion_depth)
+        elif step.type == "continue":
+            return self._process_continue_step(step, context, state, workflow_id, recursion_depth)
+        elif step.type == "user_input":
+            return self._process_user_input_step(step, context, state)
+        elif step.type == "parallel_foreach":
+            return self._process_parallel_foreach_step(step, context, state)
+        elif step.type == "shell_command":
+            return self._process_shell_command_step(step, context, state, workflow_id, recursion_depth)
+        else:
+            # Regular step - advance context and return to agent
+            context.advance_step()
+            return self._prepare_step_for_agent(step, workflow_id, state)
 
     def _prepare_step_for_agent(self, step, workflow_id, state):
         """Prepare a regular step for agent execution."""
@@ -528,7 +647,7 @@ class WorkflowExecutor:
         return {
             "step": {"id": step.id, "type": step.type, "definition": processed_definition},
             "workflow_id": workflow_id,
-            "execution_context": context_manager.get_context(workflow_id).get_execution_summary(),
+            "execution_context": context.get_execution_summary() if context else None,
         }
 
     def _create_error_response(self, step_id, error_message):
@@ -544,6 +663,32 @@ class WorkflowExecutor:
             },
             "error": error_message,
         }
+
+    def _process_shell_command_step(self, step, context, state, workflow_id, recursion_depth):
+        """Process a shell command step internally on the server."""
+        try:
+            # Replace variables in the step definition first
+            replacement_context = dict(state)
+            replacement_context.update(context.get_all_variables())
+            processed_definition = VariableReplacer.replace(step.definition, replacement_context)
+
+            # Process the shell command using the ShellCommandProcessor
+            # Note: ShellCommandProcessor handles state updates internally
+            result = self.shell_command_processor.process(processed_definition, workflow_id, self.state_manager)
+
+            if result.get("status") == "failed":
+                # Return error for agent to handle
+                return self._create_error_response(step.id, result.get("error", "Shell command failed"))
+
+            # Advance to next step after successful execution
+            context.advance_step()
+
+            # Continue to the next step
+            return self._get_simple_next_step(workflow_id, context, recursion_depth + 1)
+
+        except Exception as e:
+            # Return error for agent to handle
+            return self._create_error_response(step.id, f"Shell command failed: {str(e)}")
 
     def _evaluate_expression(self, expression, state, context):
         """Evaluate an expression with current state and context."""
@@ -609,8 +754,8 @@ class WorkflowExecutor:
             return {"status": "failed", "error": error_message, "completed_at": instance.completed_at}
 
         # For user input steps, validate and store the input
-        if result and "user_input" in result:
-            current_step = context.get_next_step() if context else None
+        if result and "user_input" in result and context:
+            current_step = context.get_next_step()
             if current_step and current_step.type == "user_input":
                 validation_result = self.user_input_processor.validate_and_store_input(
                     current_step, result["user_input"], context

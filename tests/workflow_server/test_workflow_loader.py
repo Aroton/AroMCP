@@ -30,11 +30,19 @@ class TestWorkflowLoader:
 name: "test:workflow"
 description: "Project workflow"
 version: "1.0.0"
+
+steps:
+  - type: "user_message"
+    message: "Project workflow step"
 """
             global_content = """
 name: "test:workflow"
 description: "Global workflow"
 version: "1.0.0"
+
+steps:
+  - type: "user_message"
+    message: "Global workflow step"
 """
 
             project_file.write_text(project_content)
@@ -62,6 +70,10 @@ version: "1.0.0"
 name: "test:workflow"
 description: "Global workflow"
 version: "1.0.0"
+
+steps:
+  - type: "user_message"
+    message: "Global workflow step"
 """
             global_file.write_text(global_content)
 
@@ -152,6 +164,10 @@ state_schema:
       transform: "input[0] + input[1]"
       on_error: "use_fallback"
       fallback: 0
+
+steps:
+  - type: "user_message"
+    message: "Test computed fields step"
 """
 
         workflow = WorkflowParser.parse(yaml_content)
@@ -175,7 +191,7 @@ version: "1.0.0"
 """
         with pytest.raises(WorkflowValidationError) as exc:
             WorkflowParser.parse(invalid_yaml)
-        assert "Missing required field: name" in str(exc.value)
+        assert "Missing required fields" in str(exc.value)
 
         # Invalid YAML syntax
         invalid_yaml = """
@@ -234,6 +250,10 @@ steps:
 name: "project:workflow"
 description: "Project workflow"
 version: "1.0.0"
+
+steps:
+  - type: "user_message"
+    message: "Project workflow step"
 """
             project_file.write_text(project_content)
 
@@ -243,6 +263,10 @@ version: "1.0.0"
 name: "global:workflow"
 description: "Global workflow"
 version: "2.0.0"
+
+steps:
+  - type: "user_message"
+    message: "Global workflow step"
 """
             global_file.write_text(global_content)
 
@@ -253,11 +277,19 @@ version: "2.0.0"
 name: "both:workflow"
 description: "Project version"
 version: "1.0.0"
+
+steps:
+  - type: "user_message"
+    message: "Both workflow project step"
 """)
             both_global.write_text("""
 name: "both:workflow"
 description: "Global version"
 version: "2.0.0"
+
+steps:
+  - type: "user_message"
+    message: "Both workflow global step"
 """)
 
             with patch("os.path.expanduser") as mock_expanduser:
@@ -295,11 +327,19 @@ version: "2.0.0"
 name: "project:workflow"
 description: "Project workflow"
 version: "1.0.0"
+
+steps:
+  - type: "user_message"
+    message: "Project workflow step"
 """)
             global_file.write_text("""
 name: "global:workflow"
 description: "Global workflow"
 version: "1.0.0"
+
+steps:
+  - type: "user_message"
+    message: "Global workflow step"
 """)
 
             with patch("os.path.expanduser") as mock_expanduser:
@@ -312,3 +352,63 @@ version: "1.0.0"
                 assert len(workflows) == 1
                 assert workflows[0]["name"] == "project:workflow"
                 assert workflows[0]["source"] == "project"
+
+    def test_validation_called_during_load(self):
+        """Test that validation is performed when loading workflows."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_workflows = Path(temp_dir) / ".aromcp" / "workflows"
+            project_workflows.mkdir(parents=True)
+            
+            # Create workflow with invalid step type
+            invalid_workflow_file = project_workflows / "invalid:workflow.yaml"
+            invalid_workflow_file.write_text("""
+name: "invalid:workflow"
+description: "Workflow with invalid step"
+version: "1.0.0"
+steps:
+  - type: "invalid_step_type"
+    message: "This should fail validation"
+""")
+            
+            loader = WorkflowLoader(project_root=temp_dir)
+            
+            with pytest.raises(WorkflowValidationError) as exc:
+                loader.load("invalid:workflow")
+            
+            assert "Workflow validation failed" in str(exc.value)
+            assert "invalid type: invalid_step_type" in str(exc.value)
+    
+    def test_validation_with_complex_errors(self):
+        """Test that multiple validation errors are reported."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_workflows = Path(temp_dir) / ".aromcp" / "workflows"
+            project_workflows.mkdir(parents=True)
+            
+            # Create workflow with multiple errors
+            workflow_file = project_workflows / "multi-error:workflow.yaml"
+            workflow_file.write_text("""
+name: "multi-error"  # Missing namespace
+description: "Workflow with multiple errors"
+version: "not.semantic"  # Bad version
+steps:
+  - type: "state_update"
+    # Missing required fields: path and value
+  - type: "user_message"
+    # Missing required field: message
+  - type: "invalid_step_type"
+    message: "Invalid step"
+""")
+            
+            loader = WorkflowLoader(project_root=temp_dir)
+            
+            with pytest.raises(WorkflowValidationError) as exc:
+                loader.load("multi-error:workflow")
+            
+            error_msg = str(exc.value)
+            assert "Workflow validation failed" in error_msg
+            assert "missing 'path' field" in error_msg
+            assert "missing 'message' field" in error_msg
+            assert "invalid type: invalid_step_type" in error_msg
+            # Should also have warnings
+            assert "namespace:name" in error_msg
+            assert "semantic versioning" in error_msg

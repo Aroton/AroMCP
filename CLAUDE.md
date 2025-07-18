@@ -388,6 +388,39 @@ All list-returning tools support pagination to stay under 20k token limits:
 - **Line length is 120 characters**
 - **Ignore linting errors that are intentional**
 
+## Workflow System
+
+### Workflow Schema Update Locations
+When updating the MCP workflow schema, ensure all of the following locations are updated:
+
+1. **Command Documentation**: `.claude/commands/workflow:generate.md`
+   - Update the "Workflow YAML Schema Reference" section
+   - Add new step types or modify existing ones
+   - Update examples and patterns
+
+2. **Validation Script**: `scripts/validate_workflow.py`
+   - Add new step types to `VALID_STEP_TYPES`
+   - Add validation methods for new step types (e.g., `_validate_new_step_type()`)
+   - Update any validation logic for schema changes
+
+3. **Validation Tests**: `tests/test_workflow_validation.py`
+   - Add tests for new step types
+   - Update existing tests if schema changes affect them
+   - Add edge cases for new features
+
+4. **Example Workflows**: `.aromcp/workflows/*.yaml`
+   - Update existing workflows to use new features if beneficial
+   - Create example workflows demonstrating new capabilities
+
+5. **Workflow Documentation**: `.aromcp/workflows/*.README.md`
+   - Update documentation for workflows using new features
+   - Add examples of new step types or parameters
+
+### Workflow Validation
+- **Validate workflows**: `uv run python scripts/validate_workflow.py <workflow.yaml>`
+- **Run validation tests**: `uv run pytest tests/test_workflow_validation.py -v`
+- Always validate generated workflows before committing
+
 ## Tool Discovery and Agent Guidance (Added 2025-07-09)
 
 ### Primary Tool Recommendations

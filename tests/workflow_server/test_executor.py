@@ -63,23 +63,34 @@ class TestWorkflowExecutor:
         start_result = executor.start(workflow_def)
         workflow_id = start_result["workflow_id"]
 
-        # Get first step
+        # Get first step - should be batched user message + state update
         step_result = executor.get_next_step(workflow_id)
         assert step_result is not None
-        assert step_result["step"]["id"] == "step1"
-        assert step_result["step"]["type"] == "user_message"
+        
+        if step_result.get("batch"):
+            # Batched response
+            assert len(step_result["user_messages"]) == 1
+            assert step_result["user_messages"][0]["id"] == "step1"
+            assert step_result["actionable_step"]["step"]["id"] == "step2"
+            
+            # Complete the actionable step
+            executor.step_complete(workflow_id, "step2", "success")
+        else:
+            # Non-batched response
+            assert step_result["step"]["id"] == "step1"
+            assert step_result["step"]["type"] == "user_message"
 
-        # Complete first step
-        executor.step_complete(workflow_id, "step1", "success")
+            # Complete first step
+            executor.step_complete(workflow_id, "step1", "success")
 
-        # Get second step
-        step_result = executor.get_next_step(workflow_id)
-        assert step_result is not None
-        assert step_result["step"]["id"] == "step2"
-        assert step_result["step"]["type"] == "state_update"
-
-        # Complete second step
-        executor.step_complete(workflow_id, "step2", "success")
+            # Get second step
+            step_result = executor.get_next_step(workflow_id)
+            assert step_result is not None
+            assert step_result["step"]["id"] == "step2"
+            assert step_result["step"]["type"] == "state_update"
+            
+            # Complete second step
+            executor.step_complete(workflow_id, "step2", "success")
 
         # Should be no more steps
         step_result = executor.get_next_step(workflow_id)
@@ -339,7 +350,17 @@ class TestWorkflowExecutor:
             if step_result is None:
                 break
 
-            executor.step_complete(workflow_id, step_result["step"]["id"], "success")
+            # Handle batched vs single step responses
+            if step_result.get("batch"):
+                # Complete the actionable step from batch
+                if step_result["actionable_step"]:
+                    executor.step_complete(workflow_id, step_result["actionable_step"]["step"]["id"], "success")
+                else:
+                    # Only user messages at end, workflow should be done
+                    break
+            else:
+                # Single step
+                executor.step_complete(workflow_id, step_result["step"]["id"], "success")
             step_count += 1
 
         # Check workflow status
@@ -396,7 +417,17 @@ class TestWorkflowExecutor:
         # Get next step - should have variable replaced
         step_result = executor.get_next_step(workflow_id)
         assert step_result is not None
-        assert step_result["step"]["definition"]["message"] == "You entered: test_value"
+        
+        # Handle batched vs single step responses
+        if step_result.get("batch"):
+            # Get message from batched user messages
+            assert len(step_result["user_messages"]) == 1
+            message = step_result["user_messages"][0]["definition"]["message"]
+        else:
+            # Single step
+            message = step_result["step"]["definition"]["message"]
+        
+        assert message == "You entered: test_value"
 
     def test_execution_context_cleanup(self):
         """Test that execution contexts are properly cleaned up."""

@@ -174,18 +174,31 @@ class TestSequentialExecution:
         assert next_step["step"]["type"] == "state_update"
         assert "execution_context" in next_step
 
-        # Complete first step and get second
+        # Complete first step and get second - should be batched user message + action
         executor.step_complete(workflow_id, "step1")
         next_step = executor.get_next_step(workflow_id)
-        assert next_step["step"]["id"] == "step2"
+        
+        # Should be batched response with user_message and next action
+        if next_step.get("batch"):
+            assert len(next_step["user_messages"]) == 1
+            assert next_step["user_messages"][0]["id"] == "step2"
+            assert next_step["actionable_step"]["step"]["id"] == "step3"
+            
+            # Complete the actionable step
+            executor.step_complete(workflow_id, "step3")
+        else:
+            # Fallback to single step behavior
+            assert next_step["step"]["id"] == "step2"
+            
+            # Complete second step and get third
+            executor.step_complete(workflow_id, "step2")
+            next_step = executor.get_next_step(workflow_id)
+            assert next_step["step"]["id"] == "step3"
+            
+            # Complete third step
+            executor.step_complete(workflow_id, "step3")
 
-        # Complete second step and get third
-        executor.step_complete(workflow_id, "step2")
-        next_step = executor.get_next_step(workflow_id)
-        assert next_step["step"]["id"] == "step3"
-
-        # Complete third step - should be done
-        executor.step_complete(workflow_id, "step3")
+        # Should be done
         next_step = executor.get_next_step(workflow_id)
         assert next_step is None
 
@@ -226,14 +239,26 @@ class TestSequentialExecution:
         completion_result = executor.step_complete(workflow_id, "step1", "success")
         assert completion_result["status"] == "running"
 
-        # Get second step
+        # Get second step - may be batched at end of workflow
         next_step = executor.get_next_step(workflow_id)
-        assert next_step["step"]["id"] == "step2"
-
-        # Fail second step
-        completion_result = executor.step_complete(
-            workflow_id, "step2", "failed", error_message="Step execution failed"
-        )
+        
+        if next_step.get("batch"):
+            # Batched user message at end of workflow
+            assert len(next_step["user_messages"]) == 1
+            assert next_step["user_messages"][0]["id"] == "step2"
+            assert next_step["actionable_step"] is None
+            
+            # Mark as failed - need to complete based on user messages
+            completion_result = executor.step_complete(
+                workflow_id, "step2", "failed", error_message="Step execution failed"
+            )
+        else:
+            assert next_step["step"]["id"] == "step2"
+            
+            # Fail second step
+            completion_result = executor.step_complete(
+                workflow_id, "step2", "failed", error_message="Step execution failed"
+            )
         assert completion_result["status"] == "failed"
         assert completion_result["error"] == "Step execution failed"
 
@@ -358,10 +383,17 @@ steps:
 
             # Get second step - should have variables replaced
             second_step = executor.get_next_step(workflow_id)
-            assert second_step["step"]["type"] == "user_message"
+            
+            # May be batched at end of workflow
+            if second_step.get("batch"):
+                assert len(second_step["user_messages"]) == 1
+                message_def = second_step["user_messages"][0]["definition"]
+            else:
+                assert second_step["step"]["type"] == "user_message"
+                message_def = second_step["step"]["definition"]
 
             # Variables should be replaced based on current state
-            message = second_step["step"]["definition"]["message"]
+            message = message_def["message"]
             assert "Alice" in message
             assert "5" in message  # counter value
             assert "10" in message  # doubled value

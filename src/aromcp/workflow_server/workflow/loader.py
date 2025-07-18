@@ -16,6 +16,7 @@ from .models import (
     WorkflowStep,
     WorkflowValidationError,
 )
+from .validator import WorkflowValidator
 
 logger = logging.getLogger(__name__)
 
@@ -102,11 +103,10 @@ class WorkflowLoader:
         if not isinstance(data, dict):
             raise WorkflowValidationError("Workflow must be a YAML object")
 
-        # Validate required fields
-        required_fields = ["name", "description", "version"]
-        for field in required_fields:
-            if field not in data:
-                raise WorkflowValidationError(f"Missing required field: {field}")
+        # Validate workflow structure using the validator
+        validator = WorkflowValidator()
+        if not validator.validate(data):
+            raise WorkflowValidationError(validator.get_validation_error())
 
         # Parse components
         try:
