@@ -63,34 +63,26 @@ class TestWorkflowExecutor:
         start_result = executor.start(workflow_def)
         workflow_id = start_result["workflow_id"]
 
-        # Get first step - should be batched user message + state update
+        # Get first step - should be batched with new format
         step_result = executor.get_next_step(workflow_id)
         assert step_result is not None
-        
-        if step_result.get("batch"):
-            # Batched response
-            assert len(step_result["user_messages"]) == 1
-            assert step_result["user_messages"][0]["id"] == "step1"
-            assert step_result["actionable_step"]["step"]["id"] == "step2"
-            
-            # Complete the actionable step
-            executor.step_complete(workflow_id, "step2", "success")
-        else:
-            # Non-batched response
-            assert step_result["step"]["id"] == "step1"
-            assert step_result["step"]["type"] == "user_message"
 
-            # Complete first step
-            executor.step_complete(workflow_id, "step1", "success")
+        # Should use new batched format
+        assert "steps" in step_result
+        assert "server_completed_steps" in step_result
 
-            # Get second step
-            step_result = executor.get_next_step(workflow_id)
-            assert step_result is not None
-            assert step_result["step"]["id"] == "step2"
-            assert step_result["step"]["type"] == "state_update"
-            
-            # Complete second step
-            executor.step_complete(workflow_id, "step2", "success")
+        # User message should be in steps
+        assert len(step_result["steps"]) == 1
+        assert step_result["steps"][0]["id"] == "step1"
+        assert step_result["steps"][0]["type"] == "user_message"
+
+        # State update should be in server_completed_steps
+        assert len(step_result["server_completed_steps"]) == 1
+        assert step_result["server_completed_steps"][0]["id"] == "step2"
+        assert step_result["server_completed_steps"][0]["type"] == "state_update"
+
+        # Complete the user message step
+        executor.step_complete(workflow_id, "step1", "success")
 
         # Should be no more steps
         step_result = executor.get_next_step(workflow_id)
@@ -350,17 +342,22 @@ class TestWorkflowExecutor:
             if step_result is None:
                 break
 
-            # Handle batched vs single step responses
-            if step_result.get("batch"):
-                # Complete the actionable step from batch
-                if step_result["actionable_step"]:
-                    executor.step_complete(workflow_id, step_result["actionable_step"]["step"]["id"], "success")
+            # Handle different response formats
+            if "steps" in step_result:
+                # New batched format
+                if len(step_result["steps"]) > 0:
+                    # Complete the last step in the batch
+                    last_step = step_result["steps"][-1]
+                    executor.step_complete(workflow_id, last_step["id"], "success")
                 else:
-                    # Only user messages at end, workflow should be done
+                    # No agent-visible steps, workflow might be done
                     break
-            else:
-                # Single step
+            elif "step" in step_result:
+                # Single step format (from control flow)
                 executor.step_complete(workflow_id, step_result["step"]["id"], "success")
+            else:
+                # Unknown format
+                break
             step_count += 1
 
         # Check workflow status
@@ -417,16 +414,18 @@ class TestWorkflowExecutor:
         # Get next step - should have variable replaced
         step_result = executor.get_next_step(workflow_id)
         assert step_result is not None
-        
-        # Handle batched vs single step responses
-        if step_result.get("batch"):
-            # Get message from batched user messages
-            assert len(step_result["user_messages"]) == 1
-            message = step_result["user_messages"][0]["definition"]["message"]
-        else:
-            # Single step
+
+        # Handle different response formats
+        if "steps" in step_result:
+            # New batched format
+            assert len(step_result["steps"]) == 1
+            message = step_result["steps"][0]["definition"]["message"]
+        elif "step" in step_result:
+            # Single step format
             message = step_result["step"]["definition"]["message"]
-        
+        else:
+            raise AssertionError(f"Unexpected response format: {step_result}")
+
         assert message == "You entered: test_value"
 
     def test_execution_context_cleanup(self):

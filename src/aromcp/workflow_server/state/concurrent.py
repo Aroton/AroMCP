@@ -343,6 +343,7 @@ class ConcurrentStateManager:
 
                 # Store the three-tier structure (deep copy to avoid reference issues)
                 import copy
+
                 state_data = {
                     "raw": copy.deepcopy(workflow_state.raw),
                     "computed": copy.deepcopy(workflow_state.computed),

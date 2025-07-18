@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 from ...utils.json_parameter_middleware import json_convert
+from ..models.workflow_models import WorkflowStartResponse
 from ..state.concurrent import ConcurrentStateManager
 from ..state.manager import StateManager
 from ..workflow.executor import WorkflowExecutor
@@ -133,7 +134,7 @@ def register_workflow_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def workflow_start(workflow: str, inputs: dict[str, Any] | str | None = None) -> dict[str, Any]:
+    def workflow_start(workflow: str, inputs: dict[str, Any] | str | None = None) -> WorkflowStartResponse:
         """Initialize and start a workflow instance.
 
         Use this tool when:
@@ -160,26 +161,29 @@ def register_workflow_tools(mcp):
             # Load workflow definition
             workflow_def = loader.load(workflow)
 
-            # Parse inputs if provided as string
-            if isinstance(inputs, str):
-                try:
-                    inputs = json.loads(inputs)
-                except json.JSONDecodeError:
-                    return {
-                        "error": {"code": "INVALID_INPUT", "message": "Inputs must be valid JSON if provided as string"}
-                    }
+            # @json_convert will have already converted string inputs to dict
+            # Type cast since we know @json_convert ensures proper conversion
+            parsed_inputs: dict[str, Any] | None = inputs  # type: ignore[assignment]
 
             # Start workflow
-            result = executor.start(workflow_def, inputs)
+            result = executor.start(workflow_def, parsed_inputs)
 
-            return {"data": result}
+            # Create response using dataclass
+            response = WorkflowStartResponse(
+                workflow_id=result["workflow_id"],
+                status=result["status"],
+                state=result["state"],
+                total_steps=result["total_steps"],
+                execution_context=result["execution_context"],
+            )
+            return response
 
-        except WorkflowNotFoundError as e:
-            return {"error": {"code": "NOT_FOUND", "message": str(e)}}
-        except WorkflowExecutionError as e:
-            return {"error": {"code": "OPERATION_FAILED", "message": str(e)}}
+        except WorkflowNotFoundError:
+            raise
+        except WorkflowExecutionError:
+            raise
         except Exception as e:
-            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to start workflow: {e}"}}
+            raise ValueError(f"Failed to start workflow: {e}") from e
 
     @mcp.tool
     @json_convert

@@ -4,11 +4,14 @@ Transformation engine for MCP Workflow System
 Implements JavaScript expression evaluation, dependency resolution, and cascading updates.
 """
 
+import logging
 import re
 from collections import defaultdict, deque
 from typing import Any
 
 from .models import CircularDependencyError, ComputedFieldError
+
+logger = logging.getLogger(__name__)
 
 
 class TransformationEngine:
@@ -25,15 +28,17 @@ class TransformationEngine:
         self._init_engine()
 
     def _init_engine(self):
-        """Initialize JavaScript engine using DukPy"""
+        """Initialize JavaScript engine - try PythonMonkey first, then Python fallback"""
         try:
-            # Use DukPy for reliable JavaScript execution
-            import dukpy
+            # Try PythonMonkey for modern JavaScript support
+            import pythonmonkey as pm
 
-            self._js_engine = dukpy
+            self._js_engine = pm
+            self._engine_type = "pythonmonkey"
         except ImportError:
             # Fall back to Python-based evaluation for basic expressions
             self._js_engine = None
+            self._engine_type = "python"
 
     def execute(self, transform: str, input_value: Any) -> Any:
         """
@@ -67,25 +72,67 @@ class TransformationEngine:
                 raise ComputedFieldError(f"Transformation failed: {transform}") from e
 
     def _execute_js(self, transform: str, input_value: Any) -> Any:
-        """Execute transformation using DukPy"""
-        # Pre-process transform to handle ES6 features
-        processed_transform = self._preprocess_js(transform)
+        """Execute transformation using JavaScript engine"""
+        if self._engine_type == "pythonmonkey":
+            # PythonMonkey supports modern JavaScript directly
+            # Set the input value in the global context
+            self._js_engine.globalThis.input = input_value
 
-        # Create JavaScript context with input value
-        js_code = f"""
-            var input = {self._py_to_js(input_value)};
-            var result = ({processed_transform});
-            result;
+            # Execute the transform expression and return result directly
+            # Wrap in parentheses to ensure it's treated as an expression
+            js_code = f"({transform})"
+            result = self._js_engine.eval(js_code)
+
+            # Clean up global context
+            delattr(self._js_engine.globalThis, "input")
+
+            # Convert PythonMonkey objects to native Python objects to avoid deepcopy issues
+            native_result = self._convert_to_native_python(result)
+            return native_result
+
+    def _convert_to_native_python(self, obj: Any) -> Any:
         """
+        Convert PythonMonkey objects to native Python objects to avoid deepcopy issues.
 
-        # Debug output for complex transformations (commented out for production)
-        # if 'split' in transform or 'filter' in transform:
-        #     print(f"DEBUG: Original: {transform}")
-        #     print(f"DEBUG: Processed: {processed_transform}")
+        PythonMonkey automatically coerces types, but some proxy objects may remain
+        that cannot be deep copied. This method ensures full native Python conversion.
+        """
+        import json
 
-        # Execute JavaScript and return result
-        result = self._js_engine.evaljs(js_code)
-        return result
+        try:
+            # Check if it's a PythonMonkey proxy object by looking for common proxy indicators
+            obj_type_str = str(type(obj))
+            is_pm_proxy = any(
+                indicator in obj_type_str.lower()
+                for indicator in ["pythonmonkey", "jsobject", "jsarray", "jsstring", "proxy"]
+            )
+
+            if is_pm_proxy:
+                # For PythonMonkey proxies, use JSON round-trip to get native Python object
+                try:
+                    # Try direct JSON conversion first
+                    json_str = json.dumps(obj)
+                    return json.loads(json_str)
+                except TypeError:
+                    # If direct conversion fails, use default=str fallback
+                    json_str = json.dumps(obj, default=str)
+                    return json.loads(json_str)
+
+            # For containers, recursively convert contents
+            elif isinstance(obj, dict):
+                return {k: self._convert_to_native_python(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [self._convert_to_native_python(item) for item in obj]
+            elif isinstance(obj, tuple):
+                return tuple(self._convert_to_native_python(item) for item in obj)
+            else:
+                # For basic Python types, return as-is
+                return obj
+
+        except Exception as e:
+            # If conversion fails, convert to string as fallback
+            logger.warning(f"Failed to convert PythonMonkey object to native Python: {e}, type: {type(obj)}")
+            return str(obj)
 
     def _execute_python_fallback(self, transform: str, input_value: Any) -> Any:
         """
@@ -260,53 +307,6 @@ class TransformationEngine:
         import json
 
         return json.dumps(obj)
-
-    def _preprocess_js(self, transform: str) -> str:
-        """Preprocess JavaScript to handle ES6 features and compatibility issues"""
-        processed = transform
-
-        # Handle complex template literals first to avoid conflicts
-        if processed.startswith("`") and processed.endswith("`"):
-            template = processed[1:-1]  # Remove backticks
-            # Handle complex ${} expressions - these can contain method chains with arrow functions
-            template = re.sub(r"\$\{([^}]+)\}", r'" + (\1) + "', template)
-            # Clean up extra spaces and concatenations
-            template = re.sub(r'"\s*\+\s*""', "", template)  # Remove empty strings
-            template = re.sub(r'""\s*\+\s*', "", template)  # Remove leading empty strings
-            template = re.sub(r'\+\s*""$', "", template)  # Remove trailing empty strings
-            processed = f'"{template}"'
-
-        # Now handle arrow functions anywhere in the expression
-        # Handle array.filter(x => condition) patterns first (most specific)
-        processed = re.sub(
-            r"(\w+)\.filter\(\s*(\w+)\s*=>\s*([^)]+)\)", r"\1.filter(function(\2) { return \3; })", processed
-        )
-
-        # Handle array.map(x => expr) patterns - with nested function support
-        processed = re.sub(r"(\w+)\.map\(\s*(\w+)\s*=>\s*([^)]+)\)", r"\1.map(function(\2) { return \3; })", processed)
-
-        # Handle simple arrow functions with method calls: u => u.method()
-        processed = re.sub(r"(\w+)\s*=>\s*(\w+)\.(\w+)\(\)", r"function(\1) { return \2.\3(); }", processed)
-
-        # Handle simple arrow functions: u => u.name (property access)
-        processed = re.sub(r"(\w+)\s*=>\s*(\w+)\.(\w+)", r"function(\1) { return \2.\3; }", processed)
-
-        # Handle array.reduce((a, b) => a + b, 0) patterns
-        processed = re.sub(
-            r"(\w+)\.reduce\(\s*\((\w+),\s*(\w+)\)\s*=>\s*([^,)]+),?\s*([^)]*)\)",
-            r"\1.reduce(function(\2, \3) { return \4; }, \5)",
-            processed,
-        )
-
-        return processed
-
-    def _py_to_js(self, value: Any) -> str:
-        """Convert Python value to JavaScript literal"""
-        import json
-
-        if callable(value):
-            return "null"  # Can't serialize functions
-        return json.dumps(value)
 
 
 class DependencyResolver:

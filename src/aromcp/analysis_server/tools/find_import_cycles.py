@@ -55,24 +55,15 @@ def find_import_cycles_impl(
         # Analyze cycle severity and impact
         cycle_analysis = _analyze_cycles(cycles, dependency_graph)
 
-        # Generate recommendations
-        recommendations = _generate_cycle_recommendations(cycle_analysis)
-
         # Calculate summary statistics
         summary = _calculate_cycle_summary(cycles, dependency_graph, project_files)
 
         return {
-            "data": {
-                "cycles": cycle_analysis,
-                "dependency_graph": _simplify_graph_for_output(dependency_graph),
-                "recommendations": recommendations,
-                "summary": summary,
-                "analysis_settings": {
-                    "max_depth": max_depth,
-                    "include_node_modules": include_node_modules,
-                    "files_analyzed": len(project_files),
-                },
-            }
+            "cycles": cycle_analysis,
+            "total_cycles": len(cycle_analysis),
+            "files_affected": len({file for cycle in cycles for file in cycle}),
+            "max_depth_searched": max_depth,
+            "summary": summary,
         }
 
     except Exception as e:
@@ -731,16 +722,20 @@ def _simplify_graph_for_output(graph: dict[str, list[str]]) -> dict[str, Any]:
         "total_files": len(graph),
         "total_dependencies": sum(len(deps) for deps in graph.values()),
         "avg_dependencies_per_file": round(sum(len(deps) for deps in graph.values()) / max(len(graph), 1), 2),
-        "file_with_most_dependencies": {
-            "file": most_dependencies,
-            "dependency_count": len(graph.get(most_dependencies, [])),
-        }
-        if most_dependencies
-        else None,
-        "most_depended_on_file": {
-            "file": most_depended_on,
-            "dependent_count": sum(1 for deps in graph.values() if most_depended_on in deps),
-        }
-        if most_depended_on
-        else None,
+        "file_with_most_dependencies": (
+            {
+                "file": most_dependencies,
+                "dependency_count": len(graph.get(most_dependencies, [])),
+            }
+            if most_dependencies
+            else None
+        ),
+        "most_depended_on_file": (
+            {
+                "file": most_depended_on,
+                "dependent_count": sum(1 for deps in graph.values() if most_depended_on in deps),
+            }
+            if most_depended_on
+            else None
+        ),
     }

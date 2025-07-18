@@ -1,8 +1,11 @@
 """Build server tools implementations."""
 
-from typing import Any
-
 from ...utils.json_parameter_middleware import json_convert
+from ..models.build_models import (
+    CheckTypescriptResponse,
+    LintProjectResponse,
+    RunTestSuiteResponse,
+)
 from .check_typescript import check_typescript_impl
 from .lint_project import lint_project_impl
 from .run_test_suite import run_test_suite_impl
@@ -13,7 +16,7 @@ def register_build_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def check_typescript(files: str | list[str] | None = None) -> dict[str, Any]:  # noqa: F841
+    def check_typescript(files: str | list[str] | None = None) -> CheckTypescriptResponse:  # noqa: F841
         """Run TypeScript compiler to find type errors.
 
         Use this tool when:
@@ -49,13 +52,37 @@ def register_build_tools(mcp):
         Shows only first file's errors with total count. When check_again=true, fix errors and run again.
         Code should NOT be considered complete until this returns check_again=false.
         """
-        return check_typescript_impl(files)
+        from ..models.build_models import TypescriptError
+
+        result = check_typescript_impl(files)
+
+        # Convert dict errors to TypescriptError dataclasses
+        errors = []
+        for error in result["errors"]:
+            errors.append(
+                TypescriptError(
+                    file=error["file"],
+                    line=error["line"],
+                    column=error["column"],
+                    message=error["message"],
+                    code=error["code"],
+                    severity=error["severity"],
+                )
+            )
+
+        return CheckTypescriptResponse(
+            errors=errors,
+            total_errors=result["total_errors"],
+            files_checked=result["files_checked"],
+            check_again=result["check_again"],
+            success=result["success"],
+        )
 
     @mcp.tool
     @json_convert
     def lint_project(
         use_standards: bool = True, target_files: str | list[str] | None = None, debug: bool = False
-    ) -> dict[str, Any]:  # noqa: F841
+    ) -> LintProjectResponse:  # noqa: F841
         """Run ESLint to find code style issues and potential bugs.
 
         Use this tool when:
@@ -96,7 +123,33 @@ def register_build_tools(mcp):
         Shows only first file's issues with total count. When check_again=true, fix issues and run again.
         Code should NOT be considered complete until this returns check_again=false.
         """
-        return lint_project_impl(use_standards, target_files, debug)
+        from ..models.build_models import LintIssue
+
+        result = lint_project_impl(use_standards, target_files, debug)
+
+        # Convert dict issues to LintIssue dataclasses
+        issues = []
+        for issue in result["issues"]:
+            issues.append(
+                LintIssue(
+                    file=issue["file"],
+                    line=issue["line"],
+                    column=issue["column"],
+                    rule=issue["rule"],
+                    message=issue["message"],
+                    severity=issue["severity"],
+                    fixable=issue["fixable"],
+                )
+            )
+
+        return LintProjectResponse(
+            issues=issues,
+            total_issues=result["total_issues"],
+            fixable_issues=result["fixable_issues"],
+            files_checked=result["files_checked"],
+            check_again=result["check_again"],
+            success=result["success"],
+        )
 
     @mcp.tool
     def run_test_suite(  # noqa: F841
@@ -105,7 +158,7 @@ def register_build_tools(mcp):
         pattern: str | None = None,
         coverage: bool = False,
         timeout: int = 300,
-    ) -> dict[str, Any]:
+    ) -> RunTestSuiteResponse:
         """Execute tests with parsed results.
 
         Use this tool when:
@@ -130,7 +183,35 @@ def register_build_tools(mcp):
         Note: Auto-detects test framework from package.json or project files. For linting use lint_project,
         for TypeScript checking use check_typescript. Supports parallel test execution where available.
         """
-        return run_test_suite_impl(test_command, test_framework, pattern, coverage, timeout)
+        from ..models.build_models import TestResult
+
+        result = run_test_suite_impl(test_command, test_framework, pattern, coverage, timeout)
+
+        # Convert test_results to TestResult dataclasses
+        test_results = []
+        for test_result in result["test_results"]:
+            if isinstance(test_result, dict):
+                test_results.append(
+                    TestResult(
+                        name=test_result.get("name", ""),
+                        status=test_result.get("status", "unknown"),
+                        duration=test_result.get("duration", 0.0),
+                        file=test_result.get("file", ""),
+                        error_message=test_result.get("error_message"),
+                    )
+                )
+
+        return RunTestSuiteResponse(
+            tests_passed=result["tests_passed"],
+            tests_failed=result["tests_failed"],
+            tests_skipped=result["tests_skipped"],
+            total_tests=result["total_tests"],
+            framework=result["framework"],
+            duration=result["duration"],
+            success=result["success"],
+            coverage=result["coverage"],
+            test_results=test_results,
+        )
 
 
 __all__ = ["check_typescript_impl", "lint_project_impl", "run_test_suite_impl", "register_build_tools"]

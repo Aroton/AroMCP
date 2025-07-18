@@ -16,7 +16,8 @@ class TestExtractApiEndpoints:
         with tempfile.TemporaryDirectory() as temp_dir:
             routes_file = Path(temp_dir) / "routes" / "users.js"
             routes_file.parent.mkdir(parents=True)
-            routes_file.write_text("""
+            routes_file.write_text(
+                """
 const express = require('express');
 const router = express.Router();
 
@@ -42,16 +43,15 @@ router.put('/users/:id', updateUser);
 router.delete('/users/:id', deleteUser);
 
 module.exports = router;
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
-            assert "data" in result
-            data = result["data"]
-
-            endpoints = data["endpoints"]
+            assert "endpoints" in result
+            endpoints = result["endpoints"]
             assert len(endpoints) == 5
 
             # Check GET /users
@@ -72,7 +72,8 @@ module.exports = router;
         with tempfile.TemporaryDirectory() as temp_dir:
             api_file = Path(temp_dir) / "api" / "main.py"
             api_file.parent.mkdir(parents=True)
-            api_file.write_text("""
+            api_file.write_text(
+                """
 from fastapi import FastAPI, Depends
 from pydantic import BaseModel
 
@@ -100,16 +101,15 @@ async def create_user(user: UserCreate):
 @app.put("/users/{user_id}")
 async def update_user(user_id: int, user: UserCreate):
     return {"user_id": user_id, "user": user}
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/api/**/*.py"], include_middleware=True
             )
 
-            assert "data" in result
-            data = result["data"]
-
-            endpoints = data["endpoints"]
+            assert "endpoints" in result
+            endpoints = result["endpoints"]
             # May find more due to regex patterns, so check we find at least the expected ones
             assert len(endpoints) >= 4
 
@@ -127,7 +127,8 @@ async def update_user(user_id: int, user: UserCreate):
         with tempfile.TemporaryDirectory() as temp_dir:
             api_file = Path(temp_dir) / "pages" / "api" / "users" / "[id].ts"
             api_file.parent.mkdir(parents=True)
-            api_file.write_text("""
+            api_file.write_text(
+                """
 import { NextApiRequest, NextApiResponse } from 'next';
 
 export async function GET(request: Request) {
@@ -144,16 +145,15 @@ export async function DELETE(request: Request) {
   // Delete user
   return Response.json({ deleted: true });
 }
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/api/**/*.ts"], include_middleware=True
             )
 
-            assert "data" in result
-            data = result["data"]
-
-            endpoints = data["endpoints"]
+            assert "endpoints" in result
+            endpoints = result["endpoints"]
             # May find more due to regex patterns, so check we find at least the expected ones
             assert len(endpoints) >= 3
 
@@ -168,7 +168,8 @@ export async function DELETE(request: Request) {
         with tempfile.TemporaryDirectory() as temp_dir:
             controller_file = Path(temp_dir) / "controllers" / "user.controller.ts"
             controller_file.parent.mkdir(parents=True)
-            controller_file.write_text("""
+            controller_file.write_text(
+                """
 import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
 
 @Controller('users')
@@ -199,16 +200,15 @@ export class UserController {
     return `User #${id} deleted`;
   }
 }
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/controllers/**/*.ts"], include_middleware=True
             )
 
-            assert "data" in result
-            data = result["data"]
-
-            endpoints = data["endpoints"]
+            assert "endpoints" in result
+            endpoints = result["endpoints"]
             # May find more due to regex patterns, so check we find at least the expected ones
             assert len(endpoints) >= 5
 
@@ -223,7 +223,8 @@ export class UserController {
         """Test middleware extraction."""
         with tempfile.TemporaryDirectory() as temp_dir:
             app_file = Path(temp_dir) / "app.js"
-            app_file.write_text("""
+            app_file.write_text(
+                """
 const express = require('express');
 const app = express();
 
@@ -241,16 +242,16 @@ app.get('/protected', authenticateToken, (req, res) => {
 });
 
 module.exports = app;
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/*.js"], include_middleware=True
             )
 
-            assert "data" in result
-            data = result["data"]
+            assert "endpoints" in result
 
-            middleware = data["middleware"]
+            middleware = result["middleware"]
             assert len(middleware) >= 2  # Should find global and path-specific middleware
 
             # Check for global middleware
@@ -266,7 +267,8 @@ module.exports = app;
         with tempfile.TemporaryDirectory() as temp_dir:
             routes_file = Path(temp_dir) / "routes" / "api.js"
             routes_file.parent.mkdir(parents=True)
-            routes_file.write_text("""
+            routes_file.write_text(
+                """
 const router = require('express').Router();
 
 /**
@@ -286,14 +288,15 @@ router.post('/products', createProduct);
 router.put('/products/:id', updateProduct);
 
 module.exports = router;
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
-            assert "data" in result
-            endpoints = result["data"]["endpoints"]
+            assert "endpoints" in result
+            endpoints = result["endpoints"]
 
             # Check that descriptions are extracted
             get_products = next(ep for ep in endpoints if ep["method"] == "GET")
@@ -307,7 +310,8 @@ module.exports = router;
         with tempfile.TemporaryDirectory() as temp_dir:
             routes_file = Path(temp_dir) / "routes" / "complex.js"
             routes_file.parent.mkdir(parents=True)
-            routes_file.write_text("""
+            routes_file.write_text(
+                """
 // Express.js style parameters
 router.get('/users/:userId/posts/:postId', getPost);
 
@@ -316,14 +320,15 @@ router.get('/categories/:category/items/:id/details/:detailId', getDetails);
 
 // FastAPI style parameters (in a .py file, but testing regex)
 // app.get("/items/{item_id}/users/{user_id}")
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
-            assert "data" in result
-            endpoints = result["data"]["endpoints"]
+            assert "endpoints" in result
+            endpoints = result["endpoints"]
 
             # Check parameter extraction
             post_endpoint = next(ep for ep in endpoints if "posts" in ep["path"])
@@ -339,26 +344,29 @@ router.get('/categories/:category/items/:id/details/:detailId', getDetails);
             # Create multiple route files
             users_file = Path(temp_dir) / "routes" / "users.js"
             users_file.parent.mkdir(parents=True)
-            users_file.write_text("""
+            users_file.write_text(
+                """
 router.get('/users', getUsers);
 router.post('/users', createUser);
-            """)
+            """
+            )
 
             products_file = Path(temp_dir) / "routes" / "products.js"
-            products_file.write_text("""
+            products_file.write_text(
+                """
 router.get('/products', getProducts);
 router.put('/products/:id', updateProduct);
 router.delete('/products/:id', deleteProduct);
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
-            assert "data" in result
-            data = result["data"]
+            assert "endpoints" in result
 
-            summary = data["summary"]
+            summary = result["summary"]
             assert summary["total_endpoints"] == 5
             assert summary["files_analyzed"] == 2
 
@@ -385,13 +393,12 @@ router.delete('/products/:id', deleteProduct);
                 project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
-            assert "data" in result
-            data = result["data"]
+            assert "endpoints" in result
 
-            assert data["endpoints"] == []
-            assert data["middleware"] == []
-            assert data["summary"]["total_endpoints"] == 0
-            assert data["summary"]["files_analyzed"] == 0
+            assert result["endpoints"] == []
+            assert result["middleware"] == []
+            assert result["summary"]["total_endpoints"] == 0
+            assert result["summary"]["files_analyzed"] == 0
 
     def test_custom_route_patterns(self):
         """Test custom route patterns."""
@@ -399,43 +406,46 @@ router.delete('/products/:id', deleteProduct);
             # Create route in non-standard location
             custom_file = Path(temp_dir) / "custom" / "handlers" / "api.js"
             custom_file.parent.mkdir(parents=True)
-            custom_file.write_text("""
+            custom_file.write_text(
+                """
 app.get('/custom-endpoint', customHandler);
-            """)
+            """
+            )
 
             # Test with default patterns (should not find it)
             result1 = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
-            assert result1["data"]["summary"]["total_endpoints"] == 0
+            assert result1["summary"]["total_endpoints"] == 0
 
             # Test with custom patterns (should find it)
             result2 = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/handlers/**/*.js"], include_middleware=True
             )
 
-            assert result2["data"]["summary"]["total_endpoints"] >= 1
+            assert result2["summary"]["total_endpoints"] >= 1
 
     def test_middleware_disabled(self):
         """Test when middleware extraction is disabled."""
         with tempfile.TemporaryDirectory() as temp_dir:
             routes_file = Path(temp_dir) / "routes" / "api.js"
             routes_file.parent.mkdir(parents=True)
-            routes_file.write_text("""
+            routes_file.write_text(
+                """
 app.use(globalMiddleware);
 router.get('/test', localMiddleware, handler);
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=False
             )
 
-            assert "data" in result
-            data = result["data"]
+            assert "endpoints" in result
 
             # Middleware should be empty when disabled
-            assert data["middleware"] == []
+            assert result["middleware"] == []
 
     def test_error_handling(self):
         """Test error handling for invalid inputs."""
@@ -452,7 +462,8 @@ router.get('/test', localMiddleware, handler);
         with tempfile.TemporaryDirectory() as temp_dir:
             complex_file = Path(temp_dir) / "routes" / "complex.js"
             complex_file.parent.mkdir(parents=True)
-            complex_file.write_text("""
+            complex_file.write_text(
+                """
 // Nested routers
 const userRouter = express.Router();
 userRouter.get('/:id', getUserById);
@@ -471,12 +482,13 @@ router.get(/.*fly$/, flyHandler);
 
 // Route with array of handlers
 router.post('/bulk', [validateBulk, processBulk, sendResponse]);
-            """)
+            """
+            )
 
             result = extract_api_endpoints_impl(
                 project_root=temp_dir, route_patterns=["**/routes/**/*.js"], include_middleware=True
             )
 
-            assert "data" in result
+            assert "endpoints" in result
             # Should handle complex patterns gracefully without errors
-            assert len(result["data"]["endpoints"]) >= 1
+            assert len(result["endpoints"]) >= 1

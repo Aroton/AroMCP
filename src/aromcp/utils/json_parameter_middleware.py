@@ -133,7 +133,9 @@ class JSONParameterMiddleware:
                 parsed = json.loads(value)
 
                 if self.debug:
-                    print(f"[JSONMiddleware] Converted {param_name} from JSON string to {type(parsed).__name__}")  # noqa: T201
+                    # Debug logging for parameter conversion
+                    # print(f"[JSONMiddleware] Converted {param_name} from JSON string to {type(parsed).__name__}")
+                    pass
 
                 # Validate the parsed type matches expected type
                 if origin:

@@ -42,17 +42,11 @@ class ErrorHistory:
 
     def get_errors_by_step(self, workflow_id: str, step_id: str) -> list[WorkflowError]:
         """Get all errors for a specific step."""
-        return [
-            error for error in self._errors[workflow_id]
-            if error.step_id == step_id
-        ]
+        return [error for error in self._errors[workflow_id] if error.step_id == step_id]
 
     def get_error_summary(self, workflow_id: str | None = None) -> dict[str, Any]:
         """Get error summary statistics."""
-        errors = (
-            list(self._errors[workflow_id]) if workflow_id
-            else list(self._global_errors)
-        )
+        errors = list(self._errors[workflow_id]) if workflow_id else list(self._global_errors)
 
         if not errors:
             return {
@@ -130,14 +124,16 @@ class ErrorTracker:
 
             if len(recent_timestamps) >= 3:  # Pattern threshold
                 error_type, step_id = pattern_key.split(":", 1)
-                patterns.append({
-                    "error_type": error_type,
-                    "step_id": step_id,
-                    "occurrences": len(recent_timestamps),
-                    "first_occurrence": min(recent_timestamps).isoformat(),
-                    "last_occurrence": max(recent_timestamps).isoformat(),
-                    "frequency": len(recent_timestamps) / 24,  # per hour
-                })
+                patterns.append(
+                    {
+                        "error_type": error_type,
+                        "step_id": step_id,
+                        "occurrences": len(recent_timestamps),
+                        "first_occurrence": min(recent_timestamps).isoformat(),
+                        "last_occurrence": max(recent_timestamps).isoformat(),
+                        "frequency": len(recent_timestamps) / 24,  # per hour
+                    }
+                )
 
         return sorted(patterns, key=lambda p: p["occurrences"], reverse=True)
 
@@ -157,20 +153,14 @@ class ErrorTracker:
 
     def get_mttr(self, workflow_id: str | None = None) -> float | None:
         """Calculate Mean Time To Recovery (MTTR) in minutes."""
-        errors = (
-            self.history.get_workflow_errors(workflow_id) if workflow_id
-            else list(self.history._global_errors)
-        )
+        errors = self.history.get_workflow_errors(workflow_id) if workflow_id else list(self.history._global_errors)
 
         recovered_errors = [error for error in errors if error.recovered]
         if not recovered_errors:
             return None
 
         # This is simplified - in practice you'd track recovery times
-        total_recovery_time = sum(
-            (datetime.now() - error.timestamp).total_seconds() / 60
-            for error in recovered_errors
-        )
+        total_recovery_time = sum((datetime.now() - error.timestamp).total_seconds() / 60 for error in recovered_errors)
 
         return total_recovery_time / len(recovered_errors)
 
@@ -188,13 +178,9 @@ class ErrorTracker:
             severity_trends[hour_key][error.severity.value] += 1
 
         return {
-            "hourly_counts": {
-                hour.isoformat(): count
-                for hour, count in sorted(hourly_counts.items())
-            },
+            "hourly_counts": {hour.isoformat(): count for hour, count in sorted(hourly_counts.items())},
             "severity_trends": {
-                hour.isoformat(): dict(severities)
-                for hour, severities in sorted(severity_trends.items())
+                hour.isoformat(): dict(severities) for hour, severities in sorted(severity_trends.items())
             },
             "total_recent": len(recent_errors),
         }
@@ -226,16 +212,9 @@ class ErrorTracker:
             "total_recoveries": sum(self._recovery_stats.values()),
         }
 
-    def export_error_data(
-        self,
-        workflow_id: str | None = None,
-        export_format: str = "json"
-    ) -> str:
+    def export_error_data(self, workflow_id: str | None = None, export_format: str = "json") -> str:
         """Export error data for analysis."""
-        errors = (
-            self.history.get_workflow_errors(workflow_id) if workflow_id
-            else list(self.history._global_errors)
-        )
+        errors = self.history.get_workflow_errors(workflow_id) if workflow_id else list(self.history._global_errors)
 
         if export_format == "json":
             return json.dumps([error.to_dict() for error in errors], indent=2)
@@ -245,7 +224,7 @@ class ErrorTracker:
             for error in errors:
                 lines.append(
                     f"{error.id},{error.workflow_id},{error.step_id or ''},"
-                    f"{error.error_type},\"{error.message}\","
+                    f'{error.error_type},"{error.message}",'
                     f"{error.timestamp.isoformat()},{error.severity.value}"
                 )
             return "\n".join(lines)
@@ -258,9 +237,7 @@ class ErrorTracker:
 
         # Clean workflow errors
         for workflow_id, errors in self._error_patterns.items():
-            self._error_patterns[workflow_id] = [
-                ts for ts in errors if ts >= cutoff
-            ]
+            self._error_patterns[workflow_id] = [ts for ts in errors if ts >= cutoff]
 
         # Clean global errors (done automatically by deque maxlen)
         logger.info(f"Cleaned up errors older than {days} days")

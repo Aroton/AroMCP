@@ -26,12 +26,7 @@ class MockStateManager:
         self.read_delay = 0.0
         self.update_delay = 0.0
 
-    def initialize_workflow(
-        self,
-        workflow_id: str,
-        schema: StateSchema,
-        initial_state: dict[str, Any] | None = None
-    ):
+    def initialize_workflow(self, workflow_id: str, schema: StateSchema, initial_state: dict[str, Any] | None = None):
         """Initialize a workflow with schema and initial state."""
         with self._lock:
             self._schemas[workflow_id] = schema
@@ -63,11 +58,13 @@ class MockStateManager:
     def update(self, workflow_id: str, updates: list[dict[str, Any]]) -> dict[str, Any]:
         """Update workflow state."""
         with self._lock:
-            self._update_history.append({
-                "workflow_id": workflow_id,
-                "updates": updates,
-                "timestamp": datetime.now(),
-            })
+            self._update_history.append(
+                {
+                    "workflow_id": workflow_id,
+                    "updates": updates,
+                    "timestamp": datetime.now(),
+                }
+            )
 
             if self.should_fail_update:
                 raise Exception("Mock update failure")
@@ -191,22 +188,19 @@ class MockWorkflowExecutor:
             "context": context or {},
         }
 
-    def step_complete(
-        self,
-        workflow_id: str,
-        step_id: str,
-        result: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    def step_complete(self, workflow_id: str, step_id: str, result: dict[str, Any] | None = None) -> dict[str, Any]:
         """Mark step as complete."""
         if self.should_fail_step_complete:
             raise Exception("Mock step_complete failure")
 
-        self._step_history.append({
-            "workflow_id": workflow_id,
-            "step_id": step_id,
-            "result": result,
-            "timestamp": datetime.now(),
-        })
+        self._step_history.append(
+            {
+                "workflow_id": workflow_id,
+                "step_id": step_id,
+                "result": result,
+                "timestamp": datetime.now(),
+            }
+        )
 
         if workflow_id in self._execution_states:
             self._execution_states[workflow_id]["current_step_index"] += 1
@@ -393,13 +387,16 @@ def create_mock_workflow_definition(
 
     # Convert steps to WorkflowStep objects
     from ..workflow.models import WorkflowStep
+
     workflow_steps = []
     for i, step in enumerate(steps):
-        workflow_steps.append(WorkflowStep(
-            id=step.get("id", f"step_{i}"),
-            type=step.get("type", "unknown"),
-            definition=step,
-        ))
+        workflow_steps.append(
+            WorkflowStep(
+                id=step.get("id", f"step_{i}"),
+                type=step.get("type", "unknown"),
+                definition=step,
+            )
+        )
 
     return WorkflowDefinition(
         name=name,

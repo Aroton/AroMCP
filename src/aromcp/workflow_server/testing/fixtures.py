@@ -31,16 +31,11 @@ class WorkflowTestFixtures:
 
         return str(workflows_dir)
 
-    def create_workflow_file(
-        self,
-        workflows_dir: str,
-        name: str,
-        workflow_def: dict[str, Any]
-    ) -> str:
+    def create_workflow_file(self, workflows_dir: str, name: str, workflow_def: dict[str, Any]) -> str:
         """Create a workflow YAML file."""
         file_path = Path(workflows_dir) / f"{name}.yaml"
 
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             yaml.dump(workflow_def, f, default_flow_style=False)
 
         self.temp_files.append(str(file_path))
@@ -77,62 +72,31 @@ def create_test_workflow(
 
     if steps is None:
         steps = [
-            {
-                "id": "init",
-                "type": "state_update",
-                "path": "raw.initialized",
-                "value": True
-            },
-            {
-                "id": "greet",
-                "type": "user_message",
-                "message": "Hello {{ name | default('World') }}!"
-            },
-            {
-                "id": "count",
-                "type": "state_update",
-                "path": "raw.counter",
-                "operation": "increment"
-            }
+            {"id": "init", "type": "state_update", "path": "raw.initialized", "value": True},
+            {"id": "greet", "type": "user_message", "message": "Hello {{ name | default('World') }}!"},
+            {"id": "count", "type": "state_update", "path": "raw.counter", "operation": "increment"},
         ]
 
     if state_schema is None:
         state_schema = {
-            "raw": {
-                "name": "string",
-                "counter": "number",
-                "initialized": "boolean"
-            },
-            "computed": {
-                "greeting": {
-                    "from": ["raw.name"],
-                    "transform": "`Hello ${input[0] || 'World'}!`"
-                }
-            },
-            "state": {
-                "version": "string"
-            }
+            "raw": {"name": "string", "counter": "number", "initialized": "boolean"},
+            "computed": {"greeting": {"from": ["raw.name"], "transform": "`Hello ${input[0] || 'World'}!`"}},
+            "state": {"version": "string"},
         }
 
     if default_state is None:
-        default_state = {
-            "raw": {
-                "counter": 0,
-                "initialized": False
-            },
-            "state": {
-                "version": "1.0"
-            }
-        }
+        default_state = {"raw": {"counter": 0, "initialized": False}, "state": {"version": "1.0"}}
 
     # Convert steps to WorkflowStep objects
     workflow_steps = []
     for i, step in enumerate(steps):
-        workflow_steps.append(WorkflowStep(
-            id=step.get("id", f"step_{i}"),
-            type=step.get("type", "unknown"),
-            definition=step,
-        ))
+        workflow_steps.append(
+            WorkflowStep(
+                id=step.get("id", f"step_{i}"),
+                type=step.get("type", "unknown"),
+                definition=step,
+            )
+        )
 
     return WorkflowDefinition(
         name=name,
@@ -153,25 +117,13 @@ def create_test_state(
     """Create a test workflow state."""
 
     if raw is None:
-        raw = {
-            "counter": 5,
-            "name": "TestUser",
-            "items": ["a", "b", "c"],
-            "flag": True
-        }
+        raw = {"counter": 5, "name": "TestUser", "items": ["a", "b", "c"], "flag": True}
 
     if computed is None:
-        computed = {
-            "doubled_counter": 10,
-            "item_count": 3,
-            "greeting": "Hello TestUser!"
-        }
+        computed = {"doubled_counter": 10, "item_count": 3, "greeting": "Hello TestUser!"}
 
     if state is None:
-        state = {
-            "version": "1.0",
-            "created_at": "2024-01-01T00:00:00Z"
-        }
+        state = {"version": "1.0", "created_at": "2024-01-01T00:00:00Z"}
 
     return WorkflowState(raw=raw, computed=computed, state=state)
 
@@ -184,21 +136,8 @@ def create_complex_workflow() -> WorkflowDefinition:
             "id": "validate_input",
             "type": "conditional",
             "condition": "{{ input_count > 0 }}",
-            "then": [
-                {
-                    "id": "process_input",
-                    "type": "state_update",
-                    "path": "raw.status",
-                    "value": "processing"
-                }
-            ],
-            "else": [
-                {
-                    "id": "no_input_error",
-                    "type": "error",
-                    "message": "No input provided"
-                }
-            ]
+            "then": [{"id": "process_input", "type": "state_update", "path": "raw.status", "value": "processing"}],
+            "else": [{"id": "no_input_error", "type": "error", "message": "No input provided"}],
         },
         {
             "id": "process_items",
@@ -209,19 +148,16 @@ def create_complex_workflow() -> WorkflowDefinition:
                     "id": "process_item",
                     "type": "mcp_call",
                     "method": "process_item",
-                    "params": {
-                        "item": "{{ item }}",
-                        "index": "{{ index }}"
-                    }
+                    "params": {"item": "{{ item }}", "index": "{{ index }}"},
                 }
-            ]
+            ],
         },
         {
             "id": "parallel_work",
             "type": "parallel_foreach",
             "items": "{{ ready_batches }}",
             "max_parallel": 5,
-            "sub_agent_task": "process_batch"
+            "sub_agent_task": "process_batch",
         },
         {
             "id": "retry_loop",
@@ -229,51 +165,24 @@ def create_complex_workflow() -> WorkflowDefinition:
             "condition": "{{ !success && attempts < 3 }}",
             "max_iterations": 3,
             "body": [
-                {
-                    "id": "attempt_operation",
-                    "type": "shell_command",
-                    "command": "echo 'Attempt {{ attempts }}'"
-                },
-                {
-                    "id": "increment_attempts",
-                    "type": "state_update",
-                    "path": "raw.attempts",
-                    "operation": "increment"
-                }
-            ]
+                {"id": "attempt_operation", "type": "shell_command", "command": "echo 'Attempt {{ attempts }}'"},
+                {"id": "increment_attempts", "type": "state_update", "path": "raw.attempts", "operation": "increment"},
+            ],
         },
         {
             "id": "user_confirmation",
             "type": "user_input",
             "prompt": "Confirm processing {{ processed_count }} items?",
-            "validation": {
-                "type": "regex",
-                "pattern": "^(yes|no)$",
-                "flags": "i"
-            },
-            "store_path": "raw.user_confirmed"
+            "validation": {"type": "regex", "pattern": "^(yes|no)$", "flags": "i"},
+            "store_path": "raw.user_confirmed",
         },
         {
             "id": "finalize",
             "type": "conditional",
             "condition": "{{ user_confirmed == 'yes' }}",
-            "then": [
-                {
-                    "id": "complete",
-                    "type": "state_update",
-                    "path": "raw.status",
-                    "value": "completed"
-                }
-            ],
-            "else": [
-                {
-                    "id": "cancel",
-                    "type": "state_update",
-                    "path": "raw.status",
-                    "value": "cancelled"
-                }
-            ]
-        }
+            "then": [{"id": "complete", "type": "state_update", "path": "raw.status", "value": "completed"}],
+            "else": [{"id": "cancel", "type": "state_update", "path": "raw.status", "value": "cancelled"}],
+        },
     ]
 
     state_schema = {
@@ -282,53 +191,35 @@ def create_complex_workflow() -> WorkflowDefinition:
             "status": "string",
             "attempts": "number",
             "user_confirmed": "string",
-            "processed_items": "array"
+            "processed_items": "array",
         },
         "computed": {
-            "input_count": {
-                "from": ["raw.items"],
-                "transform": "input[0] ? input[0].length : 0"
-            },
+            "input_count": {"from": ["raw.items"], "transform": "input[0] ? input[0].length : 0"},
             "ready_batches": {
                 "from": ["raw.items"],
-                "transform": "input[0] ? input[0].map((item, i) => ({id: i, item})) : []"
+                "transform": "input[0] ? input[0].map((item, i) => ({id: i, item})) : []",
             },
-            "processed_count": {
-                "from": ["raw.processed_items"],
-                "transform": "input[0] ? input[0].length : 0"
-            },
-            "success": {
-                "from": ["raw.status"],
-                "transform": "input[0] === 'completed'"
-            }
+            "processed_count": {"from": ["raw.processed_items"], "transform": "input[0] ? input[0].length : 0"},
+            "success": {"from": ["raw.status"], "transform": "input[0] === 'completed'"},
         },
-        "state": {
-            "version": "string",
-            "workflow_type": "string"
-        }
+        "state": {"version": "string", "workflow_type": "string"},
     }
 
     default_state = {
-        "raw": {
-            "items": [],
-            "status": "pending",
-            "attempts": 0,
-            "processed_items": []
-        },
-        "state": {
-            "version": "1.0",
-            "workflow_type": "complex_test"
-        }
+        "raw": {"items": [], "status": "pending", "attempts": 0, "processed_items": []},
+        "state": {"version": "1.0", "workflow_type": "complex_test"},
     }
 
     # Convert steps to WorkflowStep objects
     workflow_steps = []
     for i, step in enumerate(steps):
-        workflow_steps.append(WorkflowStep(
-            id=step.get("id", f"step_{i}"),
-            type=step.get("type", "unknown"),
-            definition=step,
-        ))
+        workflow_steps.append(
+            WorkflowStep(
+                id=step.get("id", f"step_{i}"),
+                type=step.get("type", "unknown"),
+                definition=step,
+            )
+        )
 
     return WorkflowDefinition(
         name="test:complex",
@@ -351,13 +242,13 @@ def create_error_prone_workflow() -> WorkflowDefinition:
             "command": "exit {{ failure_rate > 50 ? 1 : 0 }}",
             "on_error": "retry",
             "retry_count": 3,
-            "retry_delay": 1000
+            "retry_delay": 1000,
         },
         {
             "id": "transformation_error",
             "type": "state_update",
             "path": "computed.risky_calc",
-            "value": "{{ 1 / zero_value }}"  # Division by zero
+            "value": "{{ 1 / zero_value }}",  # Division by zero
         },
         {
             "id": "external_service",
@@ -366,69 +257,49 @@ def create_error_prone_workflow() -> WorkflowDefinition:
             "params": {},
             "on_error": "circuit_breaker",
             "failure_threshold": 3,
-            "circuit_timeout": 30000
+            "circuit_timeout": 30000,
         },
         {
             "id": "validation_check",
             "type": "conditional",
             "condition": "{{ required_field }}",
-            "then": [
-                {
-                    "id": "continue_processing",
-                    "type": "state_update",
-                    "path": "raw.validated",
-                    "value": True
-                }
-            ],
-            "else": [
-                {
-                    "id": "validation_error",
-                    "type": "error",
-                    "message": "Required field missing"
-                }
-            ]
-        }
+            "then": [{"id": "continue_processing", "type": "state_update", "path": "raw.validated", "value": True}],
+            "else": [{"id": "validation_error", "type": "error", "message": "Required field missing"}],
+        },
     ]
 
     state_schema = {
-        "raw": {
-            "failure_rate": "number",
-            "zero_value": "number",
-            "required_field": "string",
-            "validated": "boolean"
-        },
+        "raw": {"failure_rate": "number", "zero_value": "number", "required_field": "string", "validated": "boolean"},
         "computed": {
             "risky_calc": {
                 "from": ["raw.zero_value"],
                 "transform": "1 / input[0]",
                 "on_error": "use_fallback",
-                "fallback": 0
+                "fallback": 0,
             }
         },
-        "state": {
-            "version": "string"
-        }
+        "state": {"version": "string"},
     }
 
     default_state = {
         "raw": {
             "failure_rate": 75,  # High failure rate for testing
-            "zero_value": 0,     # Will cause division by zero
-            "validated": False
+            "zero_value": 0,  # Will cause division by zero
+            "validated": False,
         },
-        "state": {
-            "version": "1.0"
-        }
+        "state": {"version": "1.0"},
     }
 
     # Convert steps to WorkflowStep objects
     workflow_steps = []
     for i, step in enumerate(steps):
-        workflow_steps.append(WorkflowStep(
-            id=step.get("id", f"step_{i}"),
-            type=step.get("type", "unknown"),
-            definition=step,
-        ))
+        workflow_steps.append(
+            WorkflowStep(
+                id=step.get("id", f"step_{i}"),
+                type=step.get("type", "unknown"),
+                definition=step,
+            )
+        )
 
     return WorkflowDefinition(
         name="test:error_prone",
@@ -445,12 +316,7 @@ def create_performance_test_workflow(item_count: int = 1000) -> WorkflowDefiniti
     """Create a workflow for performance testing."""
 
     steps = [
-        {
-            "id": "generate_items",
-            "type": "state_update",
-            "path": "raw.items",
-            "value": list(range(item_count))
-        },
+        {"id": "generate_items", "type": "state_update", "path": "raw.items", "value": list(range(item_count))},
         {
             "id": "process_all_items",
             "type": "foreach",
@@ -461,24 +327,21 @@ def create_performance_test_workflow(item_count: int = 1000) -> WorkflowDefiniti
                     "type": "state_update",
                     "path": "raw.processed_items",
                     "operation": "append",
-                    "value": "{{ item * 2 }}"
+                    "value": "{{ item * 2 }}",
                 }
-            ]
+            ],
         },
         {
             "id": "parallel_batch_processing",
             "type": "parallel_foreach",
             "items": "{{ batches }}",
             "max_parallel": 10,
-            "sub_agent_task": "process_batch"
-        }
+            "sub_agent_task": "process_batch",
+        },
     ]
 
     state_schema = {
-        "raw": {
-            "items": "array",
-            "processed_items": "array"
-        },
+        "raw": {"items": "array", "processed_items": "array"},
         "computed": {
             "batches": {
                 "from": ["raw.items"],
@@ -493,36 +356,25 @@ def create_performance_test_workflow(item_count: int = 1000) -> WorkflowDefiniti
                         });
                     }
                     return batches;
-                """
+                """,
             },
-            "total_processed": {
-                "from": ["raw.processed_items"],
-                "transform": "input[0] ? input[0].length : 0"
-            }
+            "total_processed": {"from": ["raw.processed_items"], "transform": "input[0] ? input[0].length : 0"},
         },
-        "state": {
-            "version": "string"
-        }
+        "state": {"version": "string"},
     }
 
-    default_state = {
-        "raw": {
-            "items": [],
-            "processed_items": []
-        },
-        "state": {
-            "version": "1.0"
-        }
-    }
+    default_state = {"raw": {"items": [], "processed_items": []}, "state": {"version": "1.0"}}
 
     # Convert steps to WorkflowStep objects
     workflow_steps = []
     for i, step in enumerate(steps):
-        workflow_steps.append(WorkflowStep(
-            id=step.get("id", f"step_{i}"),
-            type=step.get("type", "unknown"),
-            definition=step,
-        ))
+        workflow_steps.append(
+            WorkflowStep(
+                id=step.get("id", f"step_{i}"),
+                type=step.get("type", "unknown"),
+                definition=step,
+            )
+        )
 
     return WorkflowDefinition(
         name="test:performance",
@@ -543,41 +395,15 @@ def create_test_workflow_yaml_dict(name: str = "test:simple") -> dict[str, Any]:
         "description": "Simple test workflow",
         "version": "1.0.0",
         "state_schema": {
-            "raw": {
-                "counter": "number",
-                "name": "string"
-            },
-            "computed": {
-                "greeting": {
-                    "from": ["raw.name"],
-                    "transform": "`Hello ${input[0] || 'World'}!`"
-                }
-            },
-            "state": {
-                "version": "string"
-            }
+            "raw": {"counter": "number", "name": "string"},
+            "computed": {"greeting": {"from": ["raw.name"], "transform": "`Hello ${input[0] || 'World'}!`"}},
+            "state": {"version": "string"},
         },
-        "default_state": {
-            "raw": {
-                "counter": 0
-            },
-            "state": {
-                "version": "1.0"
-            }
-        },
+        "default_state": {"raw": {"counter": 0}, "state": {"version": "1.0"}},
         "steps": [
-            {
-                "id": "increment",
-                "type": "state_update",
-                "path": "raw.counter",
-                "operation": "increment"
-            },
-            {
-                "id": "show_greeting",
-                "type": "user_message",
-                "message": "{{ greeting }}"
-            }
-        ]
+            {"id": "increment", "type": "state_update", "path": "raw.counter", "operation": "increment"},
+            {"id": "show_greeting", "type": "user_message", "message": "{{ greeting }}"},
+        ],
     }
 
 

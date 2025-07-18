@@ -295,10 +295,7 @@ class MetricsCollector:
                     logger.error(f"Error in resource monitoring: {e}")
                     time.sleep(interval_seconds)
 
-        self._resource_monitor_thread = threading.Thread(
-            target=monitor_resources,
-            daemon=True
-        )
+        self._resource_monitor_thread = threading.Thread(target=monitor_resources, daemon=True)
         self._resource_monitor_thread.start()
 
     def stop_resource_monitoring(self):
@@ -320,7 +317,7 @@ class MetricsCollector:
                 "failed_operations": 0,
                 "total_duration_ms": 0,
                 "max_duration_ms": 0,
-                "min_duration_ms": float('inf'),
+                "min_duration_ms": float("inf"),
             }
 
         hourly = self._hourly_aggregates[hour_key]
@@ -342,7 +339,7 @@ class MetricsCollector:
                 "failed_operations": 0,
                 "total_duration_ms": 0,
                 "max_duration_ms": 0,
-                "min_duration_ms": float('inf'),
+                "min_duration_ms": float("inf"),
             }
 
         daily = self._daily_aggregates[day_key]
@@ -371,8 +368,7 @@ class MetricsCollector:
 
             # Performance statistics
             recent_performance = [
-                m for m in self._performance_metrics
-                if (now - m.timestamp).total_seconds() < 3600  # Last hour
+                m for m in self._performance_metrics if (now - m.timestamp).total_seconds() < 3600  # Last hour
             ]
 
             perf_stats = {
@@ -383,11 +379,13 @@ class MetricsCollector:
 
             if recent_performance:
                 durations = [m.duration_ms for m in recent_performance]
-                perf_stats.update({
-                    "avg_duration_ms": sum(durations) / len(durations),
-                    "max_duration_ms": max(durations),
-                    "min_duration_ms": min(durations),
-                })
+                perf_stats.update(
+                    {
+                        "avg_duration_ms": sum(durations) / len(durations),
+                        "max_duration_ms": max(durations),
+                        "min_duration_ms": min(durations),
+                    }
+                )
 
             # Current resource usage
             current_resources = self.get_current_resource_usage()
@@ -411,23 +409,18 @@ class MetricsCollector:
         with self._lock:
             # Clean workflow metrics
             old_workflows = [
-                wf_id for wf_id, metrics in self._workflow_metrics.items()
+                wf_id
+                for wf_id, metrics in self._workflow_metrics.items()
                 if metrics.end_time and metrics.end_time < cutoff
             ]
             for wf_id in old_workflows:
                 del self._workflow_metrics[wf_id]
 
             # Clean aggregates
-            old_hours = [
-                hour for hour in self._hourly_aggregates.keys()
-                if datetime.fromisoformat(hour) < cutoff
-            ]
+            old_hours = [hour for hour in self._hourly_aggregates.keys() if datetime.fromisoformat(hour) < cutoff]
             for hour in old_hours:
                 del self._hourly_aggregates[hour]
 
-            old_days = [
-                day for day in self._daily_aggregates.keys()
-                if datetime.fromisoformat(day) < cutoff
-            ]
+            old_days = [day for day in self._daily_aggregates.keys() if datetime.fromisoformat(day) < cutoff]
             for day in old_days:
                 del self._daily_aggregates[day]

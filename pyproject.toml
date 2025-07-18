@@ -5,10 +5,10 @@ description = "A suite of MCP servers for AI-driven development workflows"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp>=2.9.2",
+    "fastmcp>=2.10.5",
     "chardet>=5.0.0",
     "pyyaml>=6.0.0",
-    "dukpy>=0.5.0",
+    "pythonmonkey>=1.1.1",
     "psutil>=5.9.0",
 ]
 
@@ -26,11 +26,8 @@ keywords = [
 [project.optional-dependencies]
 dev = [
     "black>=25.1.0",
-    "pytest>=8.4.1", 
+    "pytest>=8.4.1",
     "ruff>=0.12.1",
-]
-javascript = [
-    "dukpy>=0.5.0",
 ]
 
 [build-system]
@@ -57,6 +54,7 @@ python_functions = "test_*"
 
 [dependency-groups]
 dev = [
+    "black>=25.1.0",
     "pytest-asyncio>=1.0.0",
     "ruff>=0.12.1",
 ]
@@ -65,7 +63,7 @@ dev = [
 # Tool categories for AI agent discovery
 categories = [
     "code_exploration",
-    "code_quality", 
+    "code_quality",
     "code_modification",
     "dependency_analysis",
     "build_and_test",

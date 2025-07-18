@@ -13,7 +13,7 @@ def extract_method_signatures_impl(
     include_docstrings: bool = True,
     include_decorators: bool = True,
     expand_patterns: bool = True,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Parse code files to extract function/method signatures programmatically.
 
     Args:
@@ -114,8 +114,14 @@ def extract_method_signatures_impl(
             except Exception as e:
                 errors.append({"file": file_path, "error": str(e)})
 
-        # Return simple list of signatures
-        return all_signatures
+        # Return structured data with metadata
+        return {
+            "signatures": all_signatures,
+            "total_signatures": len(all_signatures),
+            "files_processed": files_processed,
+            "patterns_used": file_paths,
+            "errors": errors,
+        }
 
     except Exception as e:
         raise ValueError(f"Failed to extract signatures: {str(e)}") from e

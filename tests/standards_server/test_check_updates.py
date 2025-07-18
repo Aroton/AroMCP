@@ -23,7 +23,8 @@ class TestCheckUpdates:
 
             # Create a sample markdown file with valid YAML header
             sample_md = standards_dir / "error-handling.md"
-            sample_md.write_text("""---
+            sample_md.write_text(
+                """---
 id: error-handling
 name: Error Handling
 category: general
@@ -36,7 +37,8 @@ priority: required
 
 # Error Handling
 
-Sample standard content.""")
+Sample standard content."""
+            )
 
             # Test with no existing manifest
             result = check_updates_impl("standards", temp_dir)
@@ -86,7 +88,8 @@ Sample standard content.""")
 
             # Create a file with valid YAML header
             valid_md = standards_dir / "valid-standard.md"
-            valid_md.write_text("""---
+            valid_md.write_text(
+                """---
 id: valid-standard
 name: Valid Standard
 category: general
@@ -94,7 +97,8 @@ updated: 2024-01-01T00:00:00Z
 ---
 
 # Valid Standard
-This has a valid YAML header with id and updated fields.""")
+This has a valid YAML header with id and updated fields."""
+            )
 
             # Create a file without YAML header
             invalid_md = standards_dir / "invalid-standard.md"
@@ -102,24 +106,28 @@ This has a valid YAML header with id and updated fields.""")
 
             # Create a file with YAML header but missing required fields
             no_id_md = standards_dir / "no-id-standard.md"
-            no_id_md.write_text("""---
+            no_id_md.write_text(
+                """---
 name: No ID Standard
 category: general
 ---
 
 # No ID Standard
-This has YAML header but no id field.""")
+This has YAML header but no id field."""
+            )
 
             # Create a file with id but no updated field
             no_updated_md = standards_dir / "no-updated-standard.md"
-            no_updated_md.write_text("""---
+            no_updated_md.write_text(
+                """---
 id: no-updated-standard
 name: No Updated Standard
 category: general
 ---
 
 # No Updated Standard
-This has id but no updated field.""")
+This has id but no updated field."""
+            )
 
             result = check_updates_impl("standards", temp_dir)
 
@@ -138,7 +146,8 @@ This has id but no updated field.""")
 
             # Create file with updated field
             updated_md = standards_dir / "field-updated.md"
-            updated_md.write_text("""---
+            updated_md.write_text(
+                """---
 id: field-updated
 name: Field Updated
 category: general
@@ -149,11 +158,13 @@ updated: 2024-02-01T12:00:00Z
 priority: required
 ---
 
-# Field Updated Standard""")
+# Field Updated Standard"""
+            )
 
             # Create file with different template updated field format
             different_format_md = standards_dir / "different-format-updated.md"
-            different_format_md.write_text("""---
+            different_format_md.write_text(
+                """---
 id: different-format-updated
 name: Different Format Updated
 category: general
@@ -164,7 +175,8 @@ updated: 2024-01-01
 priority: required
 ---
 
-# Different Format Updated Standard""")
+# Different Format Updated Standard"""
+            )
 
             result = check_updates_impl("standards", temp_dir)
 
@@ -213,7 +225,8 @@ priority: required
 
             # Create file with newer template updated field
             test_md = standards_dir / "test-standard.md"
-            test_md.write_text("""---
+            test_md.write_text(
+                """---
 id: test-standard
 name: Test Standard
 category: general
@@ -224,7 +237,8 @@ updated: 2024-01-15T10:30:00Z
 priority: required
 ---
 
-# Test Standard""")
+# Test Standard"""
+            )
 
             result = check_updates_impl("standards", temp_dir)
 
@@ -244,7 +258,8 @@ priority: required
 
             # Create file with date-only updated field
             date_only_md = standards_dir / "date-only.md"
-            date_only_md.write_text("""---
+            date_only_md.write_text(
+                """---
 id: date-only
 name: Date Only Standard
 category: general
@@ -255,7 +270,8 @@ updated: 2024-01-15
 priority: required
 ---
 
-# Date Only Standard""")
+# Date Only Standard"""
+            )
 
             result = check_updates_impl("standards", temp_dir)
 
@@ -275,7 +291,8 @@ priority: required
 
             # Create file with real-world header format
             frontend_md = standards_dir / "frontend-standards.md"
-            frontend_md.write_text("""---
+            frontend_md.write_text(
+                """---
 id: frontend-standards
 name: Frontend Standards
 category: frontend
@@ -290,7 +307,8 @@ description: Standards for React components, hooks, SSR/CSR patterns, and fronte
 
 # Frontend Standards
 
-Real world content here.""")
+Real world content here."""
+            )
 
             result = check_updates_impl("standards", temp_dir)
 
@@ -313,7 +331,8 @@ Real world content here.""")
 
             # Create file with non-standard updated field (dict/object)
             invalid_md = standards_dir / "invalid-updated.md"
-            invalid_md.write_text("""---
+            invalid_md.write_text(
+                """---
 id: invalid-updated
 name: Invalid Updated Field
 category: general
@@ -324,7 +343,8 @@ updated: {year: 2024, month: 1, day: 15}
 priority: required
 ---
 
-# Invalid Updated Field Standard""")
+# Invalid Updated Field Standard"""
+            )
 
             result = check_updates_impl("standards", temp_dir)
 
@@ -347,7 +367,8 @@ priority: required
 
             # Create file without updated field at all
             no_updated_md = standards_dir / "no-updated.md"
-            no_updated_md.write_text("""---
+            no_updated_md.write_text(
+                """---
 id: no-updated
 name: No Updated Field
 category: general
@@ -357,11 +378,13 @@ severity: error
 priority: required
 ---
 
-# No Updated Field Standard""")
+# No Updated Field Standard"""
+            )
 
             # Create file with both id and updated (should be processed)
             valid_md = standards_dir / "valid-standard.md"
-            valid_md.write_text("""---
+            valid_md.write_text(
+                """---
 id: valid-standard
 name: Valid Standard
 category: general
@@ -372,7 +395,8 @@ updated: 2024-01-15T10:00:00Z
 priority: required
 ---
 
-# Valid Standard""")
+# Valid Standard"""
+            )
 
             result = check_updates_impl("standards", temp_dir)
 
@@ -392,7 +416,8 @@ priority: required
 
             # Create template files with valid YAML headers (should be filtered out)
             template_md = standards_dir / "standard-template.md"
-            template_md.write_text("""---
+            template_md.write_text(
+                """---
 id: standard-template
 name: Standard Template
 category: template
@@ -403,11 +428,13 @@ updated: 2024-01-15T10:00:00Z
 priority: required
 ---
 
-# Standard Template""")
+# Standard Template"""
+            )
 
             # Create another template file
             another_template_md = standards_dir / "TEMPLATE-example.md"
-            another_template_md.write_text("""---
+            another_template_md.write_text(
+                """---
 id: template-example
 name: Template Example
 category: template
@@ -418,11 +445,13 @@ updated: 2024-01-15T10:00:00Z
 priority: required
 ---
 
-# Template Example""")
+# Template Example"""
+            )
 
             # Create a regular file (should be processed)
             regular_md = standards_dir / "regular-standard.md"
-            regular_md.write_text("""---
+            regular_md.write_text(
+                """---
 id: regular-standard
 name: Regular Standard
 category: general
@@ -433,7 +462,8 @@ updated: 2024-01-15T10:00:00Z
 priority: required
 ---
 
-# Regular Standard""")
+# Regular Standard"""
+            )
 
             result = check_updates_impl("standards", temp_dir)
 

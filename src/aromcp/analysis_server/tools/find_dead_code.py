@@ -74,21 +74,16 @@ def find_dead_code_impl(
         # Find potentially dead code
         dead_code_candidates = _find_dead_code_candidates(usage_analysis, confidence_threshold)
 
-        # Generate recommendations
-        recommendations = _generate_dead_code_recommendations(dead_code_candidates)
-
         # Calculate statistics
         summary = _calculate_dead_code_summary(dead_code_candidates, project_files, usage_analysis, project_root)
 
         return {
-            "data": {
-                "dead_code_candidates": dead_code_candidates,
-                "entry_points": entry_points,
-                "usage_analysis": usage_analysis,
-                "recommendations": recommendations,
-                "summary": summary,
-                "confidence_threshold": confidence_threshold,
-            }
+            "unused_items": dead_code_candidates,
+            "total_unused": len(dead_code_candidates),
+            "estimated_lines": sum(candidate.get("estimated_lines", 10) for candidate in dead_code_candidates),
+            "confidence_threshold": confidence_threshold,
+            "entry_points_used": entry_points,
+            "summary": summary,
         }
 
     except Exception as e:

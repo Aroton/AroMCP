@@ -82,11 +82,13 @@ def register_debug_tools(mcp: FastMCP):
             if include_timing and traces:
                 durations = [trace.get("duration_ms", 0) for trace in traces if "duration_ms" in trace]
                 if durations:
-                    summary.update({
-                        "avg_duration_ms": sum(durations) / len(durations),
-                        "max_duration_ms": max(durations),
-                        "min_duration_ms": min(durations),
-                    })
+                    summary.update(
+                        {
+                            "avg_duration_ms": sum(durations) / len(durations),
+                            "max_duration_ms": max(durations),
+                            "min_duration_ms": min(durations),
+                        }
+                    )
 
             return {
                 "data": {
@@ -210,6 +212,7 @@ def register_debug_tools(mcp: FastMCP):
             if not _transformation_engine:
                 # Create a temporary transformation engine for testing
                 from ..state.transformer import TransformationEngine
+
                 engine = TransformationEngine()
             else:
                 engine = _transformation_engine
@@ -218,6 +221,7 @@ def register_debug_tools(mcp: FastMCP):
             parsed_context = {}
             if isinstance(context, str):
                 import json
+
                 try:
                     parsed_context = json.loads(context)
                 except json.JSONDecodeError:
@@ -298,6 +302,7 @@ def register_debug_tools(mcp: FastMCP):
             parsed_inputs = {}
             if isinstance(inputs, str):
                 import json
+
                 try:
                     parsed_inputs = json.loads(inputs)
                 except json.JSONDecodeError:
@@ -349,7 +354,7 @@ def register_debug_tools(mcp: FastMCP):
                 plan["steps"].append(step_info)
 
             # Analyze state schema
-            if hasattr(workflow_def, 'state_schema') and workflow_def.state_schema:
+            if hasattr(workflow_def, "state_schema") and workflow_def.state_schema:
                 schema = workflow_def.state_schema
                 plan["state_schema"] = {
                     "raw_fields": len(schema.get("raw", {})),
@@ -539,6 +544,7 @@ def get_debug_stats() -> dict[str, Any]:
 
 # Standalone functions for testing (these mirror the @mcp.tool functions above)
 
+
 def workflow_trace_transformations(
     workflow_id: str,
     field: str | None = None,
@@ -570,11 +576,13 @@ def workflow_trace_transformations(
         if include_timing and traces:
             durations = [trace.get("duration_ms", 0) for trace in traces if "duration_ms" in trace]
             if durations:
-                summary.update({
-                    "avg_duration_ms": sum(durations) / len(durations),
-                    "max_duration_ms": max(durations),
-                    "min_duration_ms": min(durations),
-                })
+                summary.update(
+                    {
+                        "avg_duration_ms": sum(durations) / len(durations),
+                        "max_duration_ms": max(durations),
+                        "min_duration_ms": min(durations),
+                    }
+                )
 
         return {
             "data": {
@@ -660,6 +668,7 @@ def workflow_test_transformation(
         if not _transformation_engine:
             # Create a temporary transformation engine for testing
             from ..state.transformer import TransformationEngine
+
             engine = TransformationEngine()
         else:
             engine = _transformation_engine
@@ -668,6 +677,7 @@ def workflow_test_transformation(
         parsed_context = {}
         if isinstance(context, str):
             import json
+
             try:
                 parsed_context = json.loads(context)
             except json.JSONDecodeError:
@@ -729,6 +739,7 @@ def workflow_explain_plan(
         parsed_inputs = {}
         if isinstance(inputs, str):
             import json
+
             try:
                 parsed_inputs = json.loads(inputs)
             except json.JSONDecodeError:

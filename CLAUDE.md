@@ -30,6 +30,7 @@ Six main tool categories:
 - **Security**: Implement input validation, path security, command whitelisting
 - **Error Handling**: Use structured error responses with consistent format
 - **Testing**: Each tool should have comprehensive unit tests
+- **Code Formatting**: Always use `black` for consistent Python code formatting
 
 ## Development Commands
 
@@ -42,6 +43,16 @@ Six main tool categories:
 - **Fix linting**: `uv run ruff check --fix src/ tests/`
 
 **Note**: Always use `uv run` prefix for all Python commands to ensure proper virtual environment and dependency resolution.
+
+## JavaScript Engine
+
+The project uses **PythonMonkey** as the JavaScript engine for workflow transformations. PythonMonkey provides:
+- Full ES6+ support including arrow functions, const/let, template literals, destructuring
+- Modern JavaScript array methods (filter, map, reduce, etc.)
+- Native Python-JavaScript interoperability
+- Better performance than legacy engines
+
+Falls back to Python-based evaluation for basic expressions when PythonMonkey is not available.
 
 ## Project Structure
 
@@ -90,27 +101,6 @@ Six main tool categories:
 
 ## Key Architectural Components
 
-### JSON Parameter Middleware (`src/aromcp/utils/json_parameter_middleware.py`)
-
-**Critical for MCP integration**: This middleware automatically converts JSON string parameters from MCP clients (like Claude Code) to proper Python types. This solves the common issue where list/dict parameters are passed as JSON strings instead of native types.
-
-**Usage in tools**:
-```python
-from ...utils.json_parameter_middleware import json_convert
-
-@mcp.tool
-@json_convert  # Automatically converts JSON strings to Python types
-def my_tool(patterns: list[str]) -> dict[str, Any]:
-    # patterns will be a proper list, even if passed as JSON string
-    return {"result": patterns}
-```
-
-**Key benefits**:
-- Automatic type conversion based on function signatures
-- Handles Union types (e.g., `str | list[str]`, `list[str] | None`)
-- Structured error responses for invalid JSON
-- Debug mode available for troubleshooting
-
 ### Security Module (`src/aromcp/filesystem_server/_security.py`)
 
 **Path validation and project root management**:
@@ -137,22 +127,21 @@ def my_tool(patterns: list[str]) -> dict[str, Any]:
 - **Helper Functions**: Private functions prefixed with `_` (e.g., `_validate_file_path()`)
 
 ### Parameter Handling Patterns
-**All tools that return lists follow this pattern**:
+**All tools follow the FastMCP Standards above** and use this pattern for list-returning tools:
+
 ```python
 @mcp.tool
-@json_convert  # Always use for list/dict parameters
+@json_convert  # Required per FastMCP Standards
 def tool_name(
-    # Core parameters first
+    # Core parameters with union types per FastMCP Standards
     file_paths: str | list[str],  # Support both single and multiple
     project_root: str | None = None,  # Auto-resolve to MCP_FILE_ROOT if None
     # Feature flags
     expand_patterns: bool = True,  # Enable glob pattern expansion
-    # Tool-specific parameters
-    ...
     # Pagination parameters (for tools returning lists)
     page: int = 1,  # Page number (1-based)
     max_tokens: int = 20000  # Maximum tokens per page
-) -> dict[str, Any]:
+) -> MyToolResponseModel:  # Use typed dataclass per FastMCP Standards
     # Resolve project root using new pattern
     project_root = get_project_root(project_root)
 
@@ -162,61 +151,27 @@ def tool_name(
     # For list-returning tools, use pagination
     from ...utils.pagination import paginate_list
     metadata = {"summary": summary_data}
-    return paginate_list(
+    paginated_result = paginate_list(
         items=items,
         page=page,
         max_tokens=max_tokens,
         sort_key=lambda x: x.get("sort_field"),  # Deterministic sorting
         metadata=metadata
     )
+    
+    # Return typed response
+    return MyToolResponseModel(**paginated_result)
 ```
 
 **Key patterns**:
+- **Follow FastMCP Standards** - Use `@json_convert`, union types, and typed responses
 - **ALWAYS use MCP_FILE_ROOT** - Do not include `project_root` parameters in new tools
 - Support both single strings and lists for file paths where appropriate
 - Use `expand_patterns=True` for glob pattern support
-- Apply `@json_convert` decorator for all tools accepting lists/dicts
 - **Add pagination parameters** (`page`, `max_tokens`) for tools returning lists
 - **Use `paginate_list()`** with appropriate sort key for deterministic ordering
-- **Preserve metadata** in pagination response
+- **Return typed dataclass models** instead of raw dictionaries
 
-### FastMCP Parameter Type Requirements
-**Critical for FastMCP compatibility**: All `@mcp.tool` parameters that accept complex types (lists, dicts) must be declared with union types to support both native types and JSON strings from MCP clients.
-
-**Required parameter patterns**:
-```python
-@mcp.tool
-@json_convert  # Required for all tools with complex type parameters
-def my_tool(
-    # For list parameters - MUST include str option for FastMCP validation
-    file_paths: str | list[str],  # NOT just list[str]
-    patterns: list[str] | None = None,  # Optional lists need str support too
-
-    # For dict parameters - MUST include str option for FastMCP validation
-    metadata: dict[str, Any] | str,  # NOT just dict[str, Any]
-    updates: dict[str, Any] | str | None = None,  # Optional dicts need str support too
-
-    # For complex nested types - MUST include str option
-    diffs: list[dict[str, Any]] | str,  # NOT just list[dict[str, Any]]
-
-    # Simple types don't need union types
-    project_root: str | None = None,  # str types are fine as-is
-    count: int = 1,  # primitive types don't need str unions
-) -> dict[str, Any]:
-```
-
-**Why this is required**:
-- FastMCP validates parameter types before passing to tools
-- MCP clients (like Claude Code) pass complex parameters as JSON strings
-- `@json_convert` middleware converts JSON strings to native types after FastMCP validation
-- Without `str` in the union type, FastMCP rejects the JSON string before conversion
-
-**Key rules**:
-- **ALWAYS** use `str | list[str]` instead of `list[str]` for list parameters
-- **ALWAYS** use `dict[str, Any] | str` instead of `dict[str, Any]` for dict parameters
-- **ALWAYS** use `list[dict[...]] | str` instead of `list[dict[...]]` for complex list parameters
-- **ALWAYS** apply `@json_convert` decorator when using union types with complex types
-- Simple types (`str`, `int`, `bool`) don't need `str` unions
 
 ### Project Root Resolution Pattern
 The updated `get_project_root()` function now accepts an optional parameter:
@@ -373,10 +328,126 @@ All list-returning tools support pagination to stay under 20k token limits:
 
 **Parameters**: All paginated tools accept `page` (default: 1) and `max_tokens` (default: 20000)
 
+## FastMCP Standards (Updated 2025-07-18)
+
+FastMCP 2.10+ requires adherence to these four critical standards for proper MCP integration:
+
+### 1. Use @json_convert for Complex Parameters
+**Always apply `@json_convert` decorator** for tools accepting lists or dictionaries:
+
+```python
+from ...utils.json_parameter_middleware import json_convert
+
+@mcp.tool
+@json_convert  # Required for all tools with complex type parameters
+def my_tool(patterns: str | list[str]) -> dict[str, Any]:
+    # patterns will be proper list, even if passed as JSON string
+    return {"result": patterns}
+```
+
+### 2. Use str Union Types for Complex Inputs
+**All complex parameters must include `str` in union types** for FastMCP validation:
+
+```python
+@mcp.tool
+@json_convert
+def my_tool(
+    # For list parameters - MUST include str option
+    file_paths: str | list[str],  # NOT just list[str]
+    
+    # For dict parameters - MUST include str option  
+    metadata: dict[str, Any] | str,  # NOT just dict[str, Any]
+    
+    # For complex nested types - MUST include str option
+    diffs: list[dict[str, Any]] | str,  # NOT just list[dict[str, Any]]
+    
+    # Simple types don't need str unions
+    project_root: str | None = None,  # str types are fine as-is
+) -> dict[str, Any]:
+```
+
+**Why this is required**:
+- FastMCP validates parameter types before passing to tools
+- MCP clients pass complex parameters as JSON strings
+- `@json_convert` converts JSON strings to native types after FastMCP validation
+- Without `str` in union type, FastMCP rejects JSON strings before conversion
+
+### 3. Use Type Casting Instead of Manual Parsing
+**Use simple type casting instead of manual serialize_for_json() calls**:
+
+```python
+# PREFERRED: Simple type casting
+@mcp.tool
+def workflow_start(workflow: str, inputs: dict[str, Any] | str | None = None) -> WorkflowStartResponse:
+    result = executor.start(workflow_def, inputs)
+    
+    # Simple type casting - let FastMCP handle serialization
+    return WorkflowStartResponse(
+        workflow_id=str(result.workflow_id),
+        status=result.status,
+        state=dict(result.state),
+        total_steps=int(result.total_steps),
+        execution_context=dict(result.execution_context)
+    )
+
+# AVOID: Manual serialization complexity  
+def old_pattern():
+    serialized_result = serialize_for_json(result)  # Don't do this
+    return WorkflowStartResponse(**serialized_result)
+```
+
+### 4. Use Typed Responses from Model Files
+**Define output schemas using dataclasses** in `models/` directories:
+
+```python
+# In src/aromcp/workflow_server/models/workflow_models.py
+@dataclass
+class WorkflowStartResponse:
+    workflow_id: str
+    status: str
+    state: dict[str, Any]
+    total_steps: int
+    execution_context: dict[str, Any]
+
+# In tool files - import and use typed responses
+from ..models.workflow_models import WorkflowStartResponse
+
+@mcp.tool
+def workflow_start(...) -> WorkflowStartResponse:
+    # Implementation returns typed dataclass
+    return WorkflowStartResponse(...)
+```
+
+### Directory Structure for Output Models
+```
+src/aromcp/
+├── filesystem_server/
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── filesystem_models.py
+│   └── tools/
+├── workflow_server/
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── workflow_models.py
+│   └── tools/
+└── build_server/
+    ├── models/
+    │   ├── __init__.py
+    │   └── build_models.py
+    └── tools/
+```
+
+### Quick Type Conversion Reference
+- **DateTime objects**: Use `.isoformat()` → strings
+- **DataClass objects**: Use `asdict()` → dictionaries  
+- **Enum objects**: Use `.value` → underlying values
+- **Complex objects**: Convert to basic types (str, int, dict, list)
+
 ## Development Memories
 
 - Always use `uv run` prefix for all Python commands to ensure proper virtual environment
-- Apply `@json_convert` decorator to all tools that accept list/dict parameters
+- **Follow FastMCP Standards** - Use `@json_convert`, union types with `str`, type casting, and typed responses (see FastMCP Standards section above)
 - **ALWAYS use MCP_FILE_ROOT** - Do not include `project_root` parameters in new tools
 - Use `validate_file_path_legacy()` for consistent path security validation
 - Implement comprehensive error handling with structured error responses
@@ -387,6 +458,8 @@ All list-returning tools support pagination to stay under 20k token limits:
 - Token estimation uses conservative 4:1 character ratio to stay under 20k token limit
 - **Line length is 120 characters**
 - **Ignore linting errors that are intentional**
+- **Remember fastmcp LLM friendly documentation can be found here: https://gofastmcp.com/llms.txt This is a sitemap of places to get docs. Always load this into memory if you are working on fastmcp specific logic. It will require reading and then loading as neccessary. Always prioritize loading fastmcp documentation when working on fastmcp**
+
 
 ## Workflow System
 

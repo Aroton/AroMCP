@@ -9,6 +9,7 @@ from typing import Any
 
 class ErrorStrategyType(Enum):
     """Error handling strategies."""
+
     FAIL = "fail"
     CONTINUE = "continue"
     RETRY = "retry"
@@ -18,6 +19,7 @@ class ErrorStrategyType(Enum):
 
 class ErrorSeverity(Enum):
     """Error severity levels."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -148,10 +150,7 @@ class CircuitBreakerState:
         elif self.state == "half-open":
             return True
         elif self.state == "open":
-            return (
-                self.next_attempt_time is not None and
-                datetime.now() >= self.next_attempt_time
-            )
+            return self.next_attempt_time is not None and datetime.now() >= self.next_attempt_time
         return False
 
 

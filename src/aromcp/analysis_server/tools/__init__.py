@@ -2,10 +2,13 @@
 
 Provides production-ready code analysis tools for code quality analysis."""
 
-from typing import Any
-
 from ...utils.json_parameter_middleware import json_convert
 from .._security import get_project_root
+from ..models.analysis_models import (
+    ExtractApiEndpointsResponse,
+    FindDeadCodeResponse,
+    FindImportCyclesResponse,
+)
 from .extract_api_endpoints import extract_api_endpoints_impl
 from .find_dead_code import find_dead_code_impl
 from .find_import_cycles import find_import_cycles_impl
@@ -23,7 +26,7 @@ def register_analysis_tools(mcp):
         entry_points: str | list[str] | None = None,
         include_tests: bool = False,
         confidence_threshold: float = 0.8,
-    ) -> dict[str, Any]:
+    ) -> FindDeadCodeResponse:
         """Identify potentially unused code that can be safely removed.
 
         Use this tool when:
@@ -60,19 +63,45 @@ def register_analysis_tools(mcp):
         access patterns may not be detected. Higher confidence = safer to remove.
         Use find_who_imports to verify specific files before deletion.
         """
+        from ..models.analysis_models import UnusedCodeItem
+
         project_root = get_project_root(project_root)
 
         # Convert string to list if needed
         if isinstance(entry_points, str):
             entry_points = [entry_points]
 
-        return find_dead_code_impl(project_root, entry_points, include_tests, confidence_threshold)
+        result = find_dead_code_impl(project_root, entry_points, include_tests, confidence_threshold)
+
+        # Convert dict items to UnusedCodeItem dataclasses
+        unused_items = []
+        for item in result.get("unused_items", []):
+            unused_items.append(
+                UnusedCodeItem(
+                    file=item.get("file", ""),
+                    item=item.get("item", ""),
+                    type=item.get("type", ""),
+                    line=item.get("line", 0),
+                    confidence=item.get("confidence", 0.0),
+                    reason=item.get("reason", ""),
+                    estimated_lines=item.get("estimated_lines", 1),
+                )
+            )
+
+        return FindDeadCodeResponse(
+            unused_items=unused_items,
+            total_unused=result.get("total_unused", 0),
+            estimated_lines=result.get("estimated_lines", 0),
+            confidence_threshold=result.get("confidence_threshold", confidence_threshold),
+            entry_points_used=result.get("entry_points_used", []),
+            summary=result.get("summary", {}),
+        )
 
     @mcp.tool
     @json_convert
     def find_import_cycles(
         project_root: str | None = None, max_depth: int = 10, include_node_modules: bool = False
-    ) -> dict[str, Any]:
+    ) -> FindImportCyclesResponse:
         """Detect circular import dependencies that can cause runtime errors.
 
         Use this tool when:
@@ -104,14 +133,36 @@ def register_analysis_tools(mcp):
         Note: To understand specific import relationships, use find_who_imports.
         Consider using dependency injection or lazy imports to break cycles.
         """
+        from ..models.analysis_models import ImportCycle
+
         project_root = get_project_root(project_root)
-        return find_import_cycles_impl(project_root, max_depth, include_node_modules)
+        result = find_import_cycles_impl(project_root, max_depth, include_node_modules)
+
+        # Convert dict cycles to ImportCycle dataclasses
+        cycles = []
+        for cycle in result.get("cycles", []):
+            cycles.append(
+                ImportCycle(
+                    cycle=cycle.get("cycle", []),
+                    type=cycle.get("type", "unknown"),
+                    severity=cycle.get("severity", "medium"),
+                    length=cycle.get("length", len(cycle.get("cycle", []))),
+                )
+            )
+
+        return FindImportCyclesResponse(
+            cycles=cycles,
+            total_cycles=result.get("total_cycles", 0),
+            files_affected=result.get("files_affected", 0),
+            max_depth_searched=result.get("max_depth_searched", max_depth),
+            summary=result.get("summary", {}),
+        )
 
     @mcp.tool
     @json_convert
     def extract_api_endpoints(
         project_root: str | None = None, route_patterns: str | list[str] | None = None, include_middleware: bool = True
-    ) -> dict[str, Any]:
+    ) -> ExtractApiEndpointsResponse:
         """Extract and document all API endpoints from route definitions.
 
         Use this tool when:
@@ -145,13 +196,40 @@ def register_analysis_tools(mcp):
         Note: Supports Express, Next.js API routes, FastAPI, and similar frameworks.
         For detailed function analysis, use extract_method_signatures.
         """
+        from ..models.analysis_models import ApiEndpoint
+
         project_root = get_project_root(project_root)
 
         # Convert string to list if needed
         if isinstance(route_patterns, str):
             route_patterns = [route_patterns]
 
-        return extract_api_endpoints_impl(project_root, route_patterns, include_middleware)
+        result = extract_api_endpoints_impl(project_root, route_patterns, include_middleware)
+
+        # Convert dict endpoints to ApiEndpoint dataclasses
+        endpoints = []
+        for endpoint in result.get("endpoints", []):
+            endpoints.append(
+                ApiEndpoint(
+                    method=endpoint.get("method", ""),
+                    path=endpoint.get("path", ""),
+                    file=endpoint.get("file_path", ""),
+                    line=endpoint.get("line_number", 0),
+                    middleware=endpoint.get("middleware", []),
+                    description=endpoint.get("description"),
+                    parameters=endpoint.get("parameters", []),
+                    framework=endpoint.get("framework", "unknown"),
+                )
+            )
+
+        return ExtractApiEndpointsResponse(
+            endpoints=endpoints,
+            total_endpoints=result.get("total_endpoints", 0),
+            by_method=result.get("by_method", {}),
+            by_framework=result.get("by_framework", {}),
+            files_processed=result.get("files_processed", 0),
+            summary=result.get("summary", {}),
+        )
 
 
 __all__ = ["register_analysis_tools"]

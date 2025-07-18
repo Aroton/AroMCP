@@ -31,17 +31,27 @@ class TestPhase4ConcurrentExecution:
 
         # Large-scale workflow state with 15 files (will create 5 batches of 3 files each)
         files = [
-            "src/index.ts", "src/utils.ts", "src/config.ts",
-            "src/components/Button.tsx", "src/components/Card.tsx", "src/components/Form.tsx",
-            "src/api/users.ts", "src/api/auth.ts", "src/api/files.ts",
-            "src/services/logger.ts", "src/services/cache.ts", "src/services/validator.ts",
-            "tests/utils.test.ts", "tests/api.test.ts", "tests/components.test.ts"
+            "src/index.ts",
+            "src/utils.ts",
+            "src/config.ts",
+            "src/components/Button.tsx",
+            "src/components/Card.tsx",
+            "src/components/Form.tsx",
+            "src/api/users.ts",
+            "src/api/auth.ts",
+            "src/api/files.ts",
+            "src/services/logger.ts",
+            "src/services/cache.ts",
+            "src/services/validator.ts",
+            "tests/utils.test.ts",
+            "tests/api.test.ts",
+            "tests/components.test.ts",
         ]
 
         # Create 5 batches of 3 files each
         batches = []
         for i in range(0, len(files), 3):
-            batch_files = files[i:i+3]
+            batch_files = files[i : i + 3]
             batches.append({"id": f"batch_{i//3}", "files": batch_files})
 
         concurrent_manager._base_manager._states["wf_perf_test"] = WorkflowState(
@@ -51,13 +61,10 @@ class TestPhase4ConcurrentExecution:
                 "file_results": {},
                 "git_files": files,
                 "user_target_input": "HEAD",
-                "processed_count": 0
+                "processed_count": 0,
             },
-            computed={
-                "valid_files": files,
-                "file_batches": batches
-            },
-            state={}
+            computed={"valid_files": files, "file_batches": batches},
+            state={},
         )
 
         # Register realistic sub-agent task
@@ -65,22 +72,26 @@ class TestPhase4ConcurrentExecution:
             "process_standards_batch",
             steps=[
                 {"type": "state_update", "path": "raw.batch_status.{{ task_id }}", "value": "processing"},
-                {"type": "foreach", "items": "{{ files }}", "steps": [
-                    {
-                        "type": "state_update",
-                        "path": "raw.file_results.{{ item }}",
-                        "value": {"status": "processing", "fixes": 0}
-                    },
-                    {"type": "mcp_call", "method": "lint_project", "params": {"target_files": "{{ item }}"}},
-                    {"type": "mcp_call", "method": "check_typescript", "params": {"files": ["{{ item }}"]}},
-                    {
-                        "type": "state_update",
-                        "path": "raw.file_results.{{ item }}",
-                        "value": {"status": "complete", "fixes": 3}
-                    }
-                ]},
-                {"type": "state_update", "path": "raw.batch_status.{{ task_id }}", "value": "complete"}
-            ]
+                {
+                    "type": "foreach",
+                    "items": "{{ files }}",
+                    "steps": [
+                        {
+                            "type": "state_update",
+                            "path": "raw.file_results.{{ item }}",
+                            "value": {"status": "processing", "fixes": 0},
+                        },
+                        {"type": "mcp_call", "method": "lint_project", "params": {"target_files": "{{ item }}"}},
+                        {"type": "mcp_call", "method": "check_typescript", "params": {"files": ["{{ item }}"]}},
+                        {
+                            "type": "state_update",
+                            "path": "raw.file_results.{{ item }}",
+                            "value": {"status": "complete", "fixes": 3},
+                        },
+                    ],
+                },
+                {"type": "state_update", "path": "raw.batch_status.{{ task_id }}", "value": "complete"},
+            ],
         )
 
         # When - Process with 10+ parallel agents (max_parallel=15 to test scaling)
@@ -88,7 +99,7 @@ class TestPhase4ConcurrentExecution:
             items="file_batches",
             max_parallel=15,  # Allow all batches to run in parallel
             wait_for_all=True,
-            sub_agent_task="process_standards_batch"
+            sub_agent_task="process_standards_batch",
         )
 
         state = concurrent_manager.read("wf_perf_test")
@@ -109,7 +120,7 @@ class TestPhase4ConcurrentExecution:
                 task_id=task["task_id"],
                 task_name="process_standards_batch",
                 context=task["context"],
-                parent_step_id="process_batches"
+                parent_step_id="process_batches",
             )
             created_agents.append(registration)
 
@@ -134,18 +145,18 @@ class TestPhase4ConcurrentExecution:
                 concurrent_manager.update(
                     "wf_perf_test",
                     [{"path": f"raw.batch_status.{task_id}", "value": "processing"}],
-                    agent_id=agent_registration.agent_id
+                    agent_id=agent_registration.agent_id,
                 )
 
                 # Process each file with state updates
                 for file_path in files:
-                    file_key = file_path.replace('/', '_').replace('.', '_')
+                    file_key = file_path.replace("/", "_").replace(".", "_")
 
                     # Start processing
                     concurrent_manager.update(
                         "wf_perf_test",
                         [{"path": f"raw.file_results.{file_key}", "value": {"status": "processing", "fixes": 0}}],
-                        agent_id=agent_registration.agent_id
+                        agent_id=agent_registration.agent_id,
                     )
 
                     # Small processing delay
@@ -155,14 +166,14 @@ class TestPhase4ConcurrentExecution:
                     concurrent_manager.update(
                         "wf_perf_test",
                         [{"path": f"raw.file_results.{file_key}", "value": {"status": "complete", "fixes": 3}}],
-                        agent_id=agent_registration.agent_id
+                        agent_id=agent_registration.agent_id,
                     )
 
                 # Mark batch complete
                 concurrent_manager.update(
                     "wf_perf_test",
                     [{"path": f"raw.batch_status.{task_id}", "value": "complete"}],
-                    agent_id=agent_registration.agent_id
+                    agent_id=agent_registration.agent_id,
                 )
 
                 # Increment processed count
@@ -171,7 +182,7 @@ class TestPhase4ConcurrentExecution:
                 concurrent_manager.update(
                     "wf_perf_test",
                     [{"path": "raw.processed_count", "value": new_count}],
-                    agent_id=agent_registration.agent_id
+                    agent_id=agent_registration.agent_id,
                 )
 
                 # Mark agent complete
@@ -179,12 +190,14 @@ class TestPhase4ConcurrentExecution:
                 parallel_processor.update_task_status(execution_id, task_id, "completed")
 
                 agent_end = time.time()
-                agent_timings.append({
-                    "agent_id": agent_registration.agent_id,
-                    "task_id": task_id,
-                    "duration": agent_end - agent_start,
-                    "files_processed": len(files)
-                })
+                agent_timings.append(
+                    {
+                        "agent_id": agent_registration.agent_id,
+                        "task_id": task_id,
+                        "duration": agent_end - agent_start,
+                        "files_processed": len(files),
+                    }
+                )
                 execution_results.append({"agent_id": agent_registration.agent_id, "status": "success"})
 
             except Exception as e:
@@ -194,10 +207,7 @@ class TestPhase4ConcurrentExecution:
 
         # Execute all agents concurrently
         agent_threads = [
-            threading.Thread(
-                target=simulate_realistic_agent_execution,
-                args=(agent, task["task_id"])
-            )
+            threading.Thread(target=simulate_realistic_agent_execution, args=(agent, task["task_id"]))
             for agent, task in zip(created_agents, tasks, strict=False)
         ]
 
@@ -257,8 +267,7 @@ class TestPhase4ConcurrentExecution:
         manager = ConcurrentStateManager()
 
         manager._base_manager._states["race_test"] = WorkflowState(
-            raw={"counters": {}, "totals": {"sum": 0, "count": 0}},
-            computed={}, state={}
+            raw={"counters": {}, "totals": {"sum": 0, "count": 0}}, computed={}, state={}
         )
 
         # When - 20 agents updating different counters and shared totals
@@ -271,7 +280,7 @@ class TestPhase4ConcurrentExecution:
                 manager.update(
                     "race_test",
                     [{"path": f"raw.counters.agent_{agent_id}", "value": i + 1}],
-                    agent_id=f"agent_{agent_id}"
+                    agent_id=f"agent_{agent_id}",
                 )
 
                 # Update shared totals (potential race condition)
@@ -281,18 +290,12 @@ class TestPhase4ConcurrentExecution:
 
                 manager.update(
                     "race_test",
-                    [
-                        {"path": "raw.totals.sum", "value": new_sum},
-                        {"path": "raw.totals.count", "value": new_count}
-                    ],
-                    agent_id=f"agent_{agent_id}"
+                    [{"path": "raw.totals.sum", "value": new_sum}, {"path": "raw.totals.count", "value": new_count}],
+                    agent_id=f"agent_{agent_id}",
                 )
 
         # Execute concurrent updates
-        threads = [
-            threading.Thread(target=concurrent_agent_updates, args=(i,))
-            for i in range(num_agents)
-        ]
+        threads = [threading.Thread(target=concurrent_agent_updates, args=(i,)) for i in range(num_agents)]
 
         start_time = time.time()
         for thread in threads:
@@ -350,7 +353,7 @@ class TestPhase4ConcurrentExecution:
                     task_id=f"task_{i}",
                     task_name="memory_test",
                     context={"data": f"large_data_{'x' * 100}"},  # Some data per agent
-                    parent_step_id="step_1"
+                    parent_step_id="step_1",
                 )
                 created_agents.append(agent)
 
@@ -361,8 +364,7 @@ class TestPhase4ConcurrentExecution:
         # Create some state data
         for wf_id in workflow_ids:
             concurrent_manager._base_manager._states[wf_id] = WorkflowState(
-                raw={"large_data": {"key": "value" * 1000}},  # Large data per workflow
-                computed={}, state={}
+                raw={"large_data": {"key": "value" * 1000}}, computed={}, state={}  # Large data per workflow
             )
 
         # Then - Verify initial state

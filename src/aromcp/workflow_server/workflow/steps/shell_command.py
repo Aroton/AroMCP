@@ -1,7 +1,10 @@
 """Shell command step processor for workflow execution."""
 
+import os
 import subprocess
 from typing import Any
+
+from ....filesystem_server._security import get_project_root
 
 
 class ShellCommandProcessor:
@@ -24,13 +27,21 @@ class ShellCommandProcessor:
             return {"status": "failed", "error": "Missing 'command' in shell_command step"}
 
         try:
-            # Execute command (shell=True is intentional for workflow step execution)
+            # Get the correct project directory to run the command in
+            project_root = get_project_root()
+
+            # Ensure the project directory exists, fallback to current directory if not
+            if not os.path.exists(project_root) or not os.path.isdir(project_root):
+                project_root = os.getcwd()
+
+            # Execute command in the project directory (shell=True is intentional for workflow step execution)
             result = subprocess.run(  # noqa: S602
                 command,
                 shell=True,
                 capture_output=True,
                 text=True,
                 timeout=30,  # 30 second timeout
+                cwd=project_root,  # Run in the correct project directory
             )
 
             output = {

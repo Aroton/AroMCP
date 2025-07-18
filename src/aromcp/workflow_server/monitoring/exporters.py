@@ -46,10 +46,7 @@ class JSONExporter(MetricsExporter):
         data = {
             "type": "workflow_metrics",
             "timestamp": datetime.now().isoformat(),
-            "workflows": {
-                workflow_id: metric.to_dict()
-                for workflow_id, metric in metrics.items()
-            }
+            "workflows": {workflow_id: metric.to_dict() for workflow_id, metric in metrics.items()},
         }
         return json.dumps(data, indent=self.indent)
 
@@ -58,7 +55,7 @@ class JSONExporter(MetricsExporter):
         data = {
             "type": "performance_metrics",
             "timestamp": datetime.now().isoformat(),
-            "metrics": [metric.to_dict() for metric in metrics]
+            "metrics": [metric.to_dict() for metric in metrics],
         }
         return json.dumps(data, indent=self.indent)
 
@@ -67,16 +64,13 @@ class JSONExporter(MetricsExporter):
         data = {
             "type": "resource_metrics",
             "timestamp": datetime.now().isoformat(),
-            "metrics": [metric.to_dict() for metric in metrics]
+            "metrics": [metric.to_dict() for metric in metrics],
         }
         return json.dumps(data, indent=self.indent)
 
     def export_summary(self, summary: dict[str, Any]) -> str:
         """Export summary statistics as JSON."""
-        data = {
-            "type": "summary_statistics",
-            "data": summary
-        }
+        data = {"type": "summary_statistics", "data": summary}
         return json.dumps(data, indent=self.indent)
 
     def export_all_metrics(self, metrics_collector: MetricsCollector) -> str:
@@ -85,17 +79,10 @@ class JSONExporter(MetricsExporter):
             "type": "complete_metrics_export",
             "timestamp": datetime.now().isoformat(),
             "workflow_metrics": {
-                wf_id: metrics.to_dict()
-                for wf_id, metrics in metrics_collector.get_all_workflow_metrics().items()
+                wf_id: metrics.to_dict() for wf_id, metrics in metrics_collector.get_all_workflow_metrics().items()
             },
-            "performance_metrics": [
-                metric.to_dict()
-                for metric in metrics_collector.get_performance_metrics()
-            ],
-            "resource_metrics": [
-                metric.to_dict()
-                for metric in metrics_collector.get_resource_metrics()
-            ],
+            "performance_metrics": [metric.to_dict() for metric in metrics_collector.get_performance_metrics()],
+            "resource_metrics": [metric.to_dict() for metric in metrics_collector.get_resource_metrics()],
             "summary": metrics_collector.get_summary_statistics(),
         }
         return json.dumps(data, indent=self.indent)
@@ -127,9 +114,9 @@ class PrometheusExporter(MetricsExporter):
         for workflow_id, metric in metrics.items():
             if metric.total_duration_ms is not None:
                 lines.append(
-                    f'{self.namespace}_workflow_duration_ms{{'
+                    f"{self.namespace}_workflow_duration_ms{{"
                     f'workflow_id="{workflow_id}",workflow_name="{metric.workflow_name}"}} '
-                    f'{metric.total_duration_ms}'
+                    f"{metric.total_duration_ms}"
                 )
 
         # Step statistics
@@ -143,8 +130,7 @@ class PrometheusExporter(MetricsExporter):
         for workflow_id, metric in metrics.items():
             lines.append(f'{self.namespace}_workflow_steps_total{{workflow_id="{workflow_id}"}} {metric.total_steps}')
             lines.append(
-                f'{self.namespace}_workflow_steps_completed{{workflow_id="{workflow_id}"}} '
-                f'{metric.completed_steps}'
+                f'{self.namespace}_workflow_steps_completed{{workflow_id="{workflow_id}"}} ' f"{metric.completed_steps}"
             )
             lines.append(f'{self.namespace}_workflow_steps_failed{{workflow_id="{workflow_id}"}} {metric.failed_steps}')
 
@@ -166,7 +152,7 @@ class PrometheusExporter(MetricsExporter):
             operations[metric.operation_name].append(metric.duration_ms)
 
         # Simple histogram buckets
-        buckets = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, float('inf')]
+        buckets = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, float("inf")]
 
         for operation, durations in operations.items():
             durations.sort()
@@ -174,9 +160,9 @@ class PrometheusExporter(MetricsExporter):
             # Calculate histogram buckets
             for bucket in buckets:
                 count = sum(1 for d in durations if d <= bucket)
-                bucket_label = "+Inf" if bucket == float('inf') else str(bucket)
+                bucket_label = "+Inf" if bucket == float("inf") else str(bucket)
                 lines.append(
-                    f'{self.namespace}_operation_duration_ms_bucket{{'
+                    f"{self.namespace}_operation_duration_ms_bucket{{"
                     f'operation="{operation}",le="{bucket_label}"}} {count}'
                 )
 
@@ -304,9 +290,7 @@ class CSVExporter(MetricsExporter):
 
     def export_performance_metrics(self, metrics: list[PerformanceMetrics]) -> str:
         """Export performance metrics as CSV."""
-        lines = [
-            "timestamp,operation_name,duration_ms,success,workflow_id,step_id,operation_type"
-        ]
+        lines = ["timestamp,operation_name,duration_ms,success,workflow_id,step_id,operation_type"]
 
         for metric in metrics:
             lines.append(
@@ -375,7 +359,7 @@ class FileMetricsExporter:
         filename = f"{self.base_path}/{filename_prefix}_{timestamp}.{export_format}"
 
         try:
-            with open(filename, 'w') as f:
+            with open(filename, "w") as f:
                 if export_format == "json":
                     content = exporter.export_all_metrics(metrics_collector)
                 else:

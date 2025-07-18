@@ -241,14 +241,17 @@ class TestDebugToolsIntegration:
 
         # Set up test data
         self.test_workflow_id = "wf_test_123"
-        self.state_manager.set_state(self.test_workflow_id, {
-            "counter": 5,
-            "name": "TestUser",
-            "items": ["a", "b", "c"],
-        })
+        self.state_manager.set_state(
+            self.test_workflow_id,
+            {
+                "counter": 5,
+                "name": "TestUser",
+                "items": ["a", "b", "c"],
+            },
+        )
 
-    @patch('aromcp.workflow_server.tools.debug_tools._state_manager')
-    @patch('aromcp.workflow_server.tools.debug_tools._workflow_executor')
+    @patch("aromcp.workflow_server.tools.debug_tools._state_manager")
+    @patch("aromcp.workflow_server.tools.debug_tools._workflow_executor")
     def test_workflow_trace_transformations_tool(self, mock_executor, mock_state_manager):
         """Test workflow_trace_transformations tool function."""
         from aromcp.workflow_server.tools.debug_tools import workflow_trace_transformations
@@ -295,10 +298,13 @@ class TestDebugToolsIntegration:
         from aromcp.workflow_server.tools.debug_tools import workflow_debug_info
 
         # Set up next step response
-        self.workflow_executor.set_next_step_response(self.test_workflow_id, {
-            "id": "next_step",
-            "type": "state_update",
-        })
+        self.workflow_executor.set_next_step_response(
+            self.test_workflow_id,
+            {
+                "id": "next_step",
+                "type": "state_update",
+            },
+        )
 
         # Add some traces and history
         record_transformation_trace(
@@ -720,7 +726,7 @@ class TestPhase5DebugAcceptanceCriteria:
 
         # Create a clear bottleneck scenario
         bottleneck_duration = 5000.0  # 5 seconds
-        normal_duration = 10.0       # 10 milliseconds
+        normal_duration = 10.0  # 10 milliseconds
 
         # Record normal operations
         for i in range(5):

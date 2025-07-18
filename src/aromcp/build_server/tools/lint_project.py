@@ -255,19 +255,28 @@ def lint_project_impl(
                 debug_info.append(f"🔍 DEBUG: First file: {first_file}")
                 debug_info.append(f"🔍 DEBUG: First file issues: {len(first_file_issues)}")
 
+        # Estimate files checked
+        files_checked = len({issue["file"] for issue in all_issues}) if all_issues else 1
+
         # Build result - always show issues array, add total if there are issues
         if total_issues == 0:
-            result = {"issues": [], "check_again": False}
+            result = {
+                "issues": [],
+                "total_issues": 0,
+                "fixable_issues": 0,
+                "files_checked": files_checked,
+                "check_again": False,
+                "success": True,
+            }
         else:
             result = {
                 "issues": first_file_issues,
-                "total": total_issues,
+                "total_issues": total_issues,
+                "fixable_issues": fixable_count,
+                "files_checked": files_checked,
                 "check_again": fixable_count > 0,  # Suggest checking again if issues are fixable
+                "success": False,
             }
-
-            # Only include fixable count if > 0
-            if fixable_count > 0:
-                result["fixable"] = fixable_count
 
         # Add debug info if requested
         if debug:

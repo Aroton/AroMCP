@@ -199,9 +199,9 @@ def assert_error_response(result: dict[str, Any], expected_code: str = None):
     assert "message" in result["error"], "Error response missing message"
 
     if expected_code:
-        assert result["error"]["code"] == expected_code, (
-            f"Expected error code {expected_code}, got {result['error']['code']}"
-        )
+        assert (
+            result["error"]["code"] == expected_code
+        ), f"Expected error code {expected_code}, got {result['error']['code']}"
 
 
 def assert_success_response(result: dict[str, Any]):

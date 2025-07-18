@@ -1,8 +1,13 @@
 """FileSystem server tools implementations."""
 
-from typing import Any
-
 from ...utils.json_parameter_middleware import json_convert
+from ..models.filesystem_models import (
+    ExtractMethodSignaturesResponse,
+    FindWhoImportsResponse,
+    ListFilesResponse,
+    ReadFilesResponse,
+    WriteFilesResponse,
+)
 
 # from .._security import get_project_root  # Not used in registration
 from .extract_method_signatures import extract_method_signatures_impl
@@ -17,7 +22,7 @@ def register_filesystem_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def list_files(patterns: str | list[str]) -> list[str]:
+    def list_files(patterns: str | list[str]) -> ListFilesResponse:
         """List files matching glob patterns.
 
         Use this tool when:
@@ -33,15 +38,16 @@ def register_filesystem_tools(mcp):
 
         Example:
             list_files("**/*.py")
-            → ["src/main.py", "tests/test_utils.py", "setup.py"]
+            → {"files": ["src/main.py", "tests/test_utils.py", "setup.py"], "total_files": 3}
 
         Note: Returns relative paths from project root. For reading file contents, use read_files.
         """
-        return list_files_impl(patterns)
+        files = list_files_impl(patterns)
+        return ListFilesResponse(files=files, pattern_used=patterns, total_files=len(files))
 
     @mcp.tool
     @json_convert
-    def read_files(files: str | list[str], page: int = 1, max_tokens: int = 20000) -> dict[str, Any]:
+    def read_files(files: str | list[str], page: int = 1, max_tokens: int = 20000) -> ReadFilesResponse:
         """Read multiple files and return their contents.
 
         Use this tool when:
@@ -61,13 +67,37 @@ def register_filesystem_tools(mcp):
             read_files(["src/main.py", "config.json"])
             → {"items": [{"file": "src/main.py", "content": "import os...", "encoding": "utf-8"}], "page": 1}
 
-        Note: For listing files by pattern, use list_files. Supports pagination for large file contents.
+        Note: For listing files by pattern, use read_files. Supports pagination for large file contents.
         """
-        return read_files_impl(files, page, max_tokens)
+        from ..models.filesystem_models import ReadFileItem
+
+        result = read_files_impl(files, page, max_tokens)
+
+        # Convert dict items to ReadFileItem dataclasses
+        items = []
+        for item in result["items"]:
+            items.append(
+                ReadFileItem(
+                    file=item["file"],
+                    content=item["content"],
+                    encoding=item["encoding"],
+                    size=item["size"],
+                    exists=True,
+                    error=None,
+                )
+            )
+
+        return ReadFilesResponse(
+            items=items,
+            page=result["page"],
+            total_pages=result.get("total_pages", 1),
+            total_files=result.get("total_files", len(items)),
+            has_more=result.get("has_more", False),
+        )
 
     @mcp.tool
     @json_convert
-    def write_files(files: dict[str, str] | str) -> None:
+    def write_files(files: dict[str, str] | str) -> WriteFilesResponse:
         """Write content to multiple NEW files with automatic directory creation.
 
         Use this tool when:
@@ -87,7 +117,13 @@ def register_filesystem_tools(mcp):
 
         Note: Creates directories automatically. For editing existing files, use Edit or MultiEdit.
         """
-        return write_files_impl(files)
+        result = write_files_impl(files)
+        return WriteFilesResponse(
+            files_written=result["files_written"],
+            total_files=result["total_files"],
+            directories_created=result["directories_created"],
+            success=result["success"],
+        )
 
     @mcp.tool
     @json_convert
@@ -96,7 +132,7 @@ def register_filesystem_tools(mcp):
         include_docstrings: bool = True,
         include_decorators: bool = True,
         expand_patterns: bool = True,
-    ) -> list[dict[str, Any]]:
+    ) -> ExtractMethodSignaturesResponse:
         """Parse code files to extract function/method signatures programmatically.
 
         Use this tool when:
@@ -124,11 +160,39 @@ def register_filesystem_tools(mcp):
         Note: For import analysis use find_who_imports. For API endpoints use extract_api_endpoints.
         Supports Python (.py) files with full AST parsing.
         """
-        return extract_method_signatures_impl(file_paths, include_docstrings, include_decorators, expand_patterns)
+        from ..models.filesystem_models import MethodSignature
+
+        result = extract_method_signatures_impl(file_paths, include_docstrings, include_decorators, expand_patterns)
+
+        # Convert dict signatures to MethodSignature dataclasses
+        signatures = []
+        for sig in result["signatures"]:
+            signatures.append(
+                MethodSignature(
+                    name=sig["name"],
+                    file_path=sig["file_path"],
+                    line=sig["line"],
+                    signature=sig["signature"],
+                    params=sig.get("params", []),
+                    returns=sig.get("returns"),
+                    decorators=sig.get("decorators", []),
+                    docstring=sig.get("docstring"),
+                    class_name=sig.get("class_name"),
+                    is_method=sig.get("is_method", False),
+                    is_async=sig.get("is_async", False),
+                )
+            )
+
+        return ExtractMethodSignaturesResponse(
+            signatures=signatures,
+            total_signatures=result["total_signatures"],
+            files_processed=result["files_processed"],
+            patterns_used=result["patterns_used"],
+        )
 
     @mcp.tool
     @json_convert
-    def find_who_imports(file_path: str) -> dict[str, Any]:
+    def find_who_imports(file_path: str) -> FindWhoImportsResponse:
         """Find all files that import/depend on the specified file.
 
         Use this tool when:
@@ -148,7 +212,29 @@ def register_filesystem_tools(mcp):
 
         Note: This is reverse dependency analysis - finds who imports FROM this file.
         """
-        return find_who_imports_impl(file_path)
+        from ..models.filesystem_models import ImportDependency
+
+        result = find_who_imports_impl(file_path)
+
+        # Convert dict dependents to ImportDependency dataclasses
+        dependents = []
+        for dep in result["dependents"]:
+            dependents.append(
+                ImportDependency(
+                    file=dep["file"],
+                    imports=dep["imports"],
+                    line_numbers=dep["line_numbers"],
+                    import_type=dep["import_type"],
+                )
+            )
+
+        return FindWhoImportsResponse(
+            target_file=result["target_file"],
+            dependents=dependents,
+            total_dependents=result["total_dependents"],
+            safe_to_delete=result["safe_to_delete"],
+            impact_analysis=result["impact_analysis"],
+        )
 
 
 __all__ = [

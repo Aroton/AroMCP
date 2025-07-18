@@ -147,9 +147,7 @@ class TestUpdateRule:
 
     def test_eslint_files_non_string_content(self):
         """Test ESLint files with non-string content."""
-        eslint_files: dict[str, Any] = {
-            "rules/test.js": {"not": "a string"}  # type: ignore
-        }
+        eslint_files: dict[str, Any] = {"rules/test.js": {"not": "a string"}}  # type: ignore
 
         result = update_rule_impl("test-standard", eslint_files, self.temp_dir)
 

@@ -98,10 +98,7 @@ class RetryManager:
                     }
 
                 # Calculate retry delay
-                delay = self._calculate_retry_delay(
-                    retry_state.attempt_count,
-                    error_handler
-                )
+                delay = self._calculate_retry_delay(retry_state.attempt_count, error_handler)
 
                 retry_state.next_retry_time = datetime.now() + timedelta(milliseconds=delay)
                 retry_state.cumulative_delay += delay
@@ -126,7 +123,7 @@ class RetryManager:
     def _calculate_retry_delay(self, attempt: int, handler: ErrorHandler) -> int:
         """Calculate retry delay with exponential backoff and jitter."""
         base_delay = handler.retry_delay
-        backoff_delay = base_delay * (handler.retry_backoff_multiplier ** attempt)
+        backoff_delay = base_delay * (handler.retry_backoff_multiplier**attempt)
 
         # Apply max delay limit
         delay = min(backoff_delay, handler.retry_max_delay)
@@ -185,9 +182,7 @@ class RetryManager:
 
         if breaker.failure_count >= handler.failure_threshold:
             breaker.state = "open"
-            breaker.next_attempt_time = datetime.now() + timedelta(
-                milliseconds=handler.circuit_timeout
-            )
+            breaker.next_attempt_time = datetime.now() + timedelta(milliseconds=handler.circuit_timeout)
             logger.error(f"Circuit breaker opened for {operation_key}")
 
         self._circuit_breakers[operation_key] = breaker
@@ -197,11 +192,7 @@ class RetryManager:
         if operation_key in self._retry_states:
             del self._retry_states[operation_key]
 
-    async def _execute_operation(
-        self,
-        operation: Callable,
-        context: dict[str, Any] | None
-    ) -> Any:
+    async def _execute_operation(self, operation: Callable, context: dict[str, Any] | None) -> Any:
         """Execute an operation, handling both sync and async functions."""
         if asyncio.iscoroutinefunction(operation):
             if context:
@@ -304,10 +295,7 @@ class SubAgentRetryCoordinator:
             }
 
         # Calculate retry delay for sub-agent coordination
-        delay = self.retry_manager._calculate_retry_delay(
-            retry_info["retry_count"] - 1,
-            error_handler
-        )
+        delay = self.retry_manager._calculate_retry_delay(retry_info["retry_count"] - 1, error_handler)
 
         logger.info(f"Retrying sub-agent {sub_agent_id} in {delay}ms")
 
@@ -329,7 +317,7 @@ class SubAgentRetryCoordinator:
                     "failed_task_count": len(info["failed_tasks"]),
                 }
                 for key, info in self._sub_agent_retries.items()
-            }
+            },
         }
 
     def clear_sub_agent_retry(self, parent_workflow_id: str, sub_agent_id: str):
@@ -353,7 +341,7 @@ class ExponentialBackoffCalculator:
         """Calculate exponential backoff delay with optional jitter."""
 
         # Calculate exponential delay
-        delay = base_delay * (multiplier ** attempt)
+        delay = base_delay * (multiplier**attempt)
 
         # Apply maximum delay limit
         delay = min(delay, max_delay)

@@ -71,11 +71,13 @@ def extract_api_endpoints_impl(
 
         if not route_files:
             return {
-                "data": {
-                    "endpoints": [],
-                    "middleware": [],
-                    "summary": {"total_endpoints": 0, "files_analyzed": 0, "http_methods": {}, "route_groups": {}},
-                }
+                "endpoints": [],
+                "middleware": [],
+                "total_endpoints": 0,
+                "by_method": {},
+                "by_framework": {},
+                "files_processed": 0,
+                "summary": {"total_endpoints": 0, "files_analyzed": 0, "http_methods": {}, "route_groups": {}},
             }
 
         # Set the project root temporarily for read_files_impl
@@ -133,16 +135,18 @@ def extract_api_endpoints_impl(
         all_endpoints.sort(key=lambda x: (x["path"], x["method"]))
 
         return {
-            "data": {
-                "endpoints": all_endpoints,
-                "middleware": all_middleware if include_middleware else [],
-                "summary": {
-                    "total_endpoints": len(all_endpoints),
-                    "files_analyzed": len(route_files),
-                    "http_methods": method_stats,
-                    "route_groups": route_groups,
-                },
-            }
+            "endpoints": all_endpoints,
+            "middleware": all_middleware,
+            "total_endpoints": len(all_endpoints),
+            "by_method": method_stats,
+            "by_framework": {},  # TODO: Detect frameworks
+            "files_processed": len(route_files),
+            "summary": {
+                "total_endpoints": len(all_endpoints),
+                "files_analyzed": len(route_files),
+                "http_methods": method_stats,
+                "route_groups": route_groups,
+            },
         }
 
     except Exception as e:

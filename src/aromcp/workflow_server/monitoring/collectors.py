@@ -91,8 +91,7 @@ class ExecutionMetricsCollector:
         # Get all performance metrics for this workflow
         all_metrics = self.metrics_collector.get_performance_metrics()
         workflow_metrics = [
-            m for m in all_metrics
-            if m.workflow_id == workflow_id and m.operation_type == "step_execution"
+            m for m in all_metrics if m.workflow_id == workflow_id and m.operation_type == "step_execution"
         ]
 
         if workflow_metrics:
@@ -116,8 +115,7 @@ class ExecutionMetricsCollector:
                 "completed_steps": counters.get("completed", 0),
                 "failed_steps": counters.get("failed", 0),
                 "success_rate": (
-                    counters.get("completed", 0) / counters.get("total", 1) * 100
-                    if counters.get("total", 0) > 0 else 0
+                    counters.get("completed", 0) / counters.get("total", 1) * 100 if counters.get("total", 0) > 0 else 0
                 ),
             }
         else:
@@ -132,8 +130,7 @@ class ExecutionMetricsCollector:
                 "completed_steps": total_stats["completed"],
                 "failed_steps": total_stats["failed"],
                 "success_rate": (
-                    total_stats["completed"] / total_stats["total"] * 100
-                    if total_stats["total"] > 0 else 0
+                    total_stats["completed"] / total_stats["total"] * 100 if total_stats["total"] > 0 else 0
                 ),
                 "active_workflows": len(self._step_counters),
             }
@@ -210,12 +207,14 @@ class StateMetricsCollector:
 
         for workflow_id, sizes in self._state_sizes.items():
             if sizes and sizes[-1] > threshold_kb:
-                warnings.append({
-                    "workflow_id": workflow_id,
-                    "current_size_kb": sizes[-1],
-                    "threshold_kb": threshold_kb,
-                    "exceeded_by_kb": sizes[-1] - threshold_kb,
-                })
+                warnings.append(
+                    {
+                        "workflow_id": workflow_id,
+                        "current_size_kb": sizes[-1],
+                        "threshold_kb": threshold_kb,
+                        "exceeded_by_kb": sizes[-1] - threshold_kb,
+                    }
+                )
 
         return sorted(warnings, key=lambda w: w["exceeded_by_kb"], reverse=True)
 
@@ -249,8 +248,7 @@ class TransformationMetricsCollector:
 
         # Keep only last 100 timings
         if len(self._transformation_timings[transformation_key]) > 100:
-            self._transformation_timings[transformation_key] = \
-                self._transformation_timings[transformation_key][-100:]
+            self._transformation_timings[transformation_key] = self._transformation_timings[transformation_key][-100:]
 
         # Record as performance metric
         metadata = {"field_name": field_name}
@@ -273,8 +271,7 @@ class TransformationMetricsCollector:
 
         # Update workflow transformation count
         total_transformations = sum(
-            count for key, count in self._transformation_counts.items()
-            if key.startswith(f"{workflow_id}:")
+            count for key, count in self._transformation_counts.items() if key.startswith(f"{workflow_id}:")
         )
 
         self.metrics_collector.update_workflow_metrics(
@@ -284,10 +281,7 @@ class TransformationMetricsCollector:
 
     def get_transformation_statistics(self, workflow_id: str) -> dict[str, Any]:
         """Get transformation statistics for a workflow."""
-        workflow_keys = [
-            key for key in self._transformation_counts.keys()
-            if key.startswith(f"{workflow_id}:")
-        ]
+        workflow_keys = [key for key in self._transformation_counts.keys() if key.startswith(f"{workflow_id}:")]
 
         field_stats = {}
         total_count = 0
@@ -331,13 +325,15 @@ class TransformationMetricsCollector:
                 max_timing = max(timings)
                 avg_timing = sum(timings) / len(timings)
 
-                all_timings.append({
-                    "workflow_id": workflow_id,
-                    "field_name": field_name,
-                    "max_duration_ms": max_timing,
-                    "avg_duration_ms": avg_timing,
-                    "executions": len(timings),
-                })
+                all_timings.append(
+                    {
+                        "workflow_id": workflow_id,
+                        "field_name": field_name,
+                        "max_duration_ms": max_timing,
+                        "avg_duration_ms": avg_timing,
+                        "executions": len(timings),
+                    }
+                )
 
         return sorted(all_timings, key=lambda x: x["max_duration_ms"], reverse=True)[:limit]
 
@@ -387,7 +383,8 @@ class ErrorRateCollector:
 
         # Update workflow error count
         total_errors = sum(
-            count for key, count in self._error_counts[workflow_id].items()
+            count
+            for key, count in self._error_counts[workflow_id].items()
             if not key.startswith(("step:", "severity:"))
         )
 
@@ -408,9 +405,9 @@ class ErrorRateCollector:
             # Get recent performance metrics for this workflow
             all_metrics = self.metrics_collector.get_performance_metrics()
             recent_metrics = [
-                m for m in all_metrics
-                if (m.workflow_id == workflow_id and
-                    (now - m.timestamp).total_seconds() < 3600)  # Last hour
+                m
+                for m in all_metrics
+                if (m.workflow_id == workflow_id and (now - m.timestamp).total_seconds() < 3600)  # Last hour
             ]
 
             if recent_metrics:
@@ -432,12 +429,9 @@ class ErrorRateCollector:
         error_rates = self._error_rates.get(workflow_id, [])
 
         # Separate different types of counts
-        error_types = {k: v for k, v in error_counts.items()
-                      if not k.startswith(("step:", "severity:"))}
-        step_errors = {k[5:]: v for k, v in error_counts.items()
-                      if k.startswith("step:")}
-        severity_counts = {k[9:]: v for k, v in error_counts.items()
-                          if k.startswith("severity:")}
+        error_types = {k: v for k, v in error_counts.items() if not k.startswith(("step:", "severity:"))}
+        step_errors = {k[5:]: v for k, v in error_counts.items() if k.startswith("step:")}
+        severity_counts = {k[9:]: v for k, v in error_counts.items() if k.startswith("severity:")}
 
         return {
             "workflow_id": workflow_id,
@@ -457,10 +451,12 @@ class ErrorRateCollector:
         for workflow_id, error_counts in self._error_counts.items():
             for error_key, count in error_counts.items():
                 if not error_key.startswith(("step:", "severity:")):
-                    all_errors.append({
-                        "workflow_id": workflow_id,
-                        "error_type": error_key,
-                        "count": count,
-                    })
+                    all_errors.append(
+                        {
+                            "workflow_id": workflow_id,
+                            "error_type": error_key,
+                            "count": count,
+                        }
+                    )
 
         return sorted(all_errors, key=lambda x: x["count"], reverse=True)[:limit]

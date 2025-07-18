@@ -45,17 +45,29 @@ def find_who_imports_impl(file_path: str) -> dict[str, Any]:
 
             imports = _find_imports_in_file(project_path / search_file, file_path, project_path)
             if imports:
-                dependents.append({"file": search_file, "imports": imports})
+                dependents.append(
+                    {
+                        "file": search_file,
+                        "imports": imports,
+                        "line_numbers": [],  # TODO: Extract line numbers
+                        "import_type": "module",  # TODO: Detect import type
+                    }
+                )
 
         # Determine if safe to modify/delete
         safe_to_delete = len(dependents) == 0
         risk_level = "low" if len(dependents) <= 2 else "medium" if len(dependents) <= 10 else "high"
 
         return {
+            "target_file": file_path,
             "dependents": dependents,
             "total_dependents": len(dependents),
             "safe_to_delete": safe_to_delete,
-            "risk_level": risk_level,
+            "impact_analysis": {
+                "risk_level": risk_level,
+                "files_affected": len(dependents),
+                "total_imports": sum(len(dep["imports"]) for dep in dependents),
+            },
         }
 
     except Exception as e:

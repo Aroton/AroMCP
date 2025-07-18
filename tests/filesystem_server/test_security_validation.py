@@ -37,8 +37,10 @@ class TestSecurityValidation:
                 os.environ["MCP_FILE_ROOT"] = temp_dir
                 try:
                     result = extract_method_signatures_impl(path)
-                    # Should return empty result or error for invalid paths
-                    assert isinstance(result, list)
+                    # Should return dict with errors for invalid paths
+                    assert isinstance(result, dict)
+                    assert "errors" in result
+                    assert len(result["errors"]) > 0
                 except ValueError as e:
                     assert "Failed to extract" in str(e) or "Invalid" in str(e)
                 finally:

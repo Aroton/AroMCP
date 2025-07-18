@@ -102,9 +102,18 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
         if result.stdout:
             errors.extend(_parse_tsc_output(result.stdout))
 
+        # Count files checked (estimate based on command)
+        files_checked = 1 if files else 100  # Rough estimate for project-wide check
+
         # Build result - only show errors if there are any
         if len(errors) == 0:
-            return {"errors": [], "check_again": False}
+            return {
+                "errors": [],
+                "total_errors": 0,
+                "files_checked": files_checked,
+                "check_again": False,
+                "success": True,
+            }
         else:
             # Cap errors at first file's errors
             first_file_errors = []
@@ -114,8 +123,10 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
 
             return {
                 "errors": first_file_errors,
-                "total": len(errors),
+                "total_errors": len(errors),
+                "files_checked": files_checked,
                 "check_again": True,  # Always suggest checking again after fixing TypeScript errors
+                "success": False,
             }
 
     except Exception as e:

@@ -149,22 +149,21 @@ class WorkflowBenchmark:
                 op_end = time.time()
                 duration_ms = (op_end - op_start) * 1000
 
-                user_results.append({
-                    "user_id": user_id,
-                    "operation_id": op_id,
-                    "duration_ms": duration_ms,
-                    "success": success,
-                    "timestamp": datetime.now(),
-                })
+                user_results.append(
+                    {
+                        "user_id": user_id,
+                        "operation_id": op_id,
+                        "duration_ms": duration_ms,
+                        "success": success,
+                        "timestamp": datetime.now(),
+                    }
+                )
 
             return user_results
 
         # Execute concurrent users
         with concurrent.futures.ThreadPoolExecutor(max_workers=concurrent_users) as executor:
-            futures = [
-                executor.submit(user_simulation, user_id)
-                for user_id in range(concurrent_users)
-            ]
+            futures = [executor.submit(user_simulation, user_id) for user_id in range(concurrent_users)]
 
             for future in concurrent.futures.as_completed(futures):
                 try:
@@ -255,11 +254,10 @@ class WorkflowBenchmark:
             "state_operations": operation_results,
             "summary": {
                 "total_operations": sum(len(durations) for op in operation_results.values()),
-                "avg_throughput": statistics.mean([
-                    op["throughput_ops_per_second"]
-                    for op in operation_results.values()
-                ]),
-            }
+                "avg_throughput": statistics.mean(
+                    [op["throughput_ops_per_second"] for op in operation_results.values()]
+                ),
+            },
         }
 
     def _percentile(self, data: list[float], percentile: float) -> float:
@@ -314,12 +312,7 @@ class PerformanceBenchmark:
         }
 
     def measure_cpu_usage(
-        self,
-        func: Callable,
-        duration_seconds: float = 10.0,
-        interval_seconds: float = 0.1,
-        *args,
-        **kwargs
+        self, func: Callable, duration_seconds: float = 10.0, interval_seconds: float = 0.1, *args, **kwargs
     ) -> dict[str, Any]:
         """Measure CPU usage while running a function."""
         process = psutil.Process(os.getpid())
@@ -573,14 +566,24 @@ class ScalabilityBenchmark:
         worst_case = results[-1]
 
         throughput_degradation = (
-            (baseline["throughput_ops_per_second"] - worst_case["throughput_ops_per_second"]) /
-            baseline["throughput_ops_per_second"] * 100
-        ) if baseline["throughput_ops_per_second"] > 0 else 0
+            (
+                (baseline["throughput_ops_per_second"] - worst_case["throughput_ops_per_second"])
+                / baseline["throughput_ops_per_second"]
+                * 100
+            )
+            if baseline["throughput_ops_per_second"] > 0
+            else 0
+        )
 
         response_time_increase = (
-            (worst_case["avg_response_time_ms"] - baseline["avg_response_time_ms"]) /
-            baseline["avg_response_time_ms"] * 100
-        ) if baseline["avg_response_time_ms"] > 0 else 0
+            (
+                (worst_case["avg_response_time_ms"] - baseline["avg_response_time_ms"])
+                / baseline["avg_response_time_ms"]
+                * 100
+            )
+            if baseline["avg_response_time_ms"] > 0
+            else 0
+        )
 
         # Find breaking point (where success rate drops below 95%)
         breaking_point = None
@@ -613,9 +616,9 @@ class ScalabilityBenchmark:
         return {
             "complexity_factor": complexity_factor,
             "complexity_assessment": (
-                "Linear" if complexity_factor < 1.5 else
-                "Slightly worse than linear" if complexity_factor < 3 else
-                "Significantly worse than linear"
+                "Linear"
+                if complexity_factor < 1.5
+                else "Slightly worse than linear" if complexity_factor < 3 else "Significantly worse than linear"
             ),
             "largest_data_size": max(data_sizes),
             "performance_at_largest": durations[-1],

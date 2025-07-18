@@ -87,18 +87,23 @@ def run_test_suite_impl(
                 # Generic parsing for unknown frameworks
                 parsed_results = _parse_generic_output(result.stdout, result.stderr)
 
-            # Add metadata
-            parsed_results.update(
-                {
-                    "framework": test_framework,
-                    "command": " ".join(cmd),
-                    "exit_code": result.returncode,
-                    "success": result.returncode == 0,
-                    "project_root": project_root,
-                }
-            )
+            # Extract standard fields from parsed results
+            summary = parsed_results.get("summary", {})
 
-            return parsed_results
+            # Build standardized response
+            standardized_result = {
+                "tests_passed": summary.get("passed", 0),
+                "tests_failed": summary.get("failed", 0),
+                "tests_skipped": summary.get("skipped", 0),
+                "total_tests": summary.get("total", 0),
+                "framework": test_framework,
+                "duration": summary.get("duration", 0),
+                "success": result.returncode == 0,
+                "coverage": parsed_results.get("coverage", None),
+                "test_results": parsed_results.get("test_files", []),
+            }
+
+            return standardized_result
 
         except subprocess.TimeoutExpired as e:
             raise TimeoutError(f"Test execution timed out after {timeout} seconds") from e

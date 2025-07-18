@@ -104,7 +104,7 @@ class TestLintProject:
 
                 assert "issues" in result
                 assert len(result["issues"]) == 1  # Only shows first file's issues
-                assert result["total"] == 2  # Total across all files
+                assert result["total_issues"] == 2  # Total across all files
                 assert not result["check_again"]  # No fixable issues
                 assert result["issues"][0]["rule"] == "no-console"
 
@@ -242,9 +242,9 @@ class TestLintProject:
 
                 assert "issues" in result
                 assert len(result["issues"]) == 1
-                assert result["total"] == 1
+                assert result["total_issues"] == 1
                 assert result["check_again"]  # Should suggest checking again
-                assert result["fixable"] == 1  # Should include fixable count
+                assert result["fixable_issues"] == 1  # Should include fixable count
                 assert result["issues"][0]["rule"] == "no-console"
                 assert result["issues"][0]["fixable"]
 

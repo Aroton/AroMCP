@@ -273,7 +273,8 @@ steps:
             # Create workflow that exists in both (project should take precedence)
             both_project = project_workflows / "both:workflow.yaml"
             both_global = global_workflows / "both:workflow.yaml"
-            both_project.write_text("""
+            both_project.write_text(
+                """
 name: "both:workflow"
 description: "Project version"
 version: "1.0.0"
@@ -281,8 +282,10 @@ version: "1.0.0"
 steps:
   - type: "user_message"
     message: "Both workflow project step"
-""")
-            both_global.write_text("""
+"""
+            )
+            both_global.write_text(
+                """
 name: "both:workflow"
 description: "Global version"
 version: "2.0.0"
@@ -290,7 +293,8 @@ version: "2.0.0"
 steps:
   - type: "user_message"
     message: "Both workflow global step"
-""")
+"""
+            )
 
             with patch("os.path.expanduser") as mock_expanduser:
                 mock_expanduser.return_value = str(Path(temp_dir) / "global")
@@ -323,7 +327,8 @@ steps:
             project_file = project_workflows / "project:workflow.yaml"
             global_file = global_workflows / "global:workflow.yaml"
 
-            project_file.write_text("""
+            project_file.write_text(
+                """
 name: "project:workflow"
 description: "Project workflow"
 version: "1.0.0"
@@ -331,8 +336,10 @@ version: "1.0.0"
 steps:
   - type: "user_message"
     message: "Project workflow step"
-""")
-            global_file.write_text("""
+"""
+            )
+            global_file.write_text(
+                """
 name: "global:workflow"
 description: "Global workflow"
 version: "1.0.0"
@@ -340,7 +347,8 @@ version: "1.0.0"
 steps:
   - type: "user_message"
     message: "Global workflow step"
-""")
+"""
+            )
 
             with patch("os.path.expanduser") as mock_expanduser:
                 mock_expanduser.return_value = str(Path(temp_dir) / "global")
@@ -358,35 +366,38 @@ steps:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_workflows = Path(temp_dir) / ".aromcp" / "workflows"
             project_workflows.mkdir(parents=True)
-            
+
             # Create workflow with invalid step type
             invalid_workflow_file = project_workflows / "invalid:workflow.yaml"
-            invalid_workflow_file.write_text("""
+            invalid_workflow_file.write_text(
+                """
 name: "invalid:workflow"
 description: "Workflow with invalid step"
 version: "1.0.0"
 steps:
   - type: "invalid_step_type"
     message: "This should fail validation"
-""")
-            
+"""
+            )
+
             loader = WorkflowLoader(project_root=temp_dir)
-            
+
             with pytest.raises(WorkflowValidationError) as exc:
                 loader.load("invalid:workflow")
-            
+
             assert "Workflow validation failed" in str(exc.value)
             assert "invalid type: invalid_step_type" in str(exc.value)
-    
+
     def test_validation_with_complex_errors(self):
         """Test that multiple validation errors are reported."""
         with tempfile.TemporaryDirectory() as temp_dir:
             project_workflows = Path(temp_dir) / ".aromcp" / "workflows"
             project_workflows.mkdir(parents=True)
-            
+
             # Create workflow with multiple errors
             workflow_file = project_workflows / "multi-error:workflow.yaml"
-            workflow_file.write_text("""
+            workflow_file.write_text(
+                """
 name: "multi-error"  # Missing namespace
 description: "Workflow with multiple errors"
 version: "not.semantic"  # Bad version
@@ -397,13 +408,14 @@ steps:
     # Missing required field: message
   - type: "invalid_step_type"
     message: "Invalid step"
-""")
-            
+"""
+            )
+
             loader = WorkflowLoader(project_root=temp_dir)
-            
+
             with pytest.raises(WorkflowValidationError) as exc:
                 loader.load("multi-error:workflow")
-            
+
             error_msg = str(exc.value)
             assert "Workflow validation failed" in error_msg
             assert "missing 'path' field" in error_msg

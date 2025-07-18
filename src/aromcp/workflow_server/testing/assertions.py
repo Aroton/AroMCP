@@ -76,17 +76,17 @@ class WorkflowAssertions:
             assert next_step.get("id") == expected_id, f"Expected step ID {expected_id}, got {next_step.get('id')}"
 
         if expected_type:
-            assert next_step.get("type") == expected_type, (
-                f"Expected step type {expected_type}, got {next_step.get('type')}"
-            )
+            assert (
+                next_step.get("type") == expected_type
+            ), f"Expected step type {expected_type}, got {next_step.get('type')}"
 
     @staticmethod
     def assert_workflow_progress(status: dict[str, Any], min_progress: float, max_progress: float = 100.0):
         """Assert workflow progress is within expected range."""
         progress = status.get("progress", 0)
-        assert min_progress <= progress <= max_progress, (
-            f"Expected progress between {min_progress}-{max_progress}, got {progress}"
-        )
+        assert (
+            min_progress <= progress <= max_progress
+        ), f"Expected progress between {min_progress}-{max_progress}, got {progress}"
 
     @staticmethod
     def assert_execution_time(result: dict[str, Any], max_duration_ms: float):
@@ -125,15 +125,13 @@ class StateAssertions:
         """Assert state field has expected type."""
         assert path in state, f"State should contain path '{path}'"
         actual_value = state[path]
-        assert isinstance(actual_value, expected_type), (
-            f"Expected '{path}' to be {expected_type}, got {type(actual_value)}"
-        )
+        assert isinstance(
+            actual_value, expected_type
+        ), f"Expected '{path}' to be {expected_type}, got {type(actual_value)}"
 
     @staticmethod
     def assert_state_update_applied(
-        before_state: dict[str, Any],
-        after_state: dict[str, Any],
-        updates: list[dict[str, Any]]
+        before_state: dict[str, Any], after_state: dict[str, Any], updates: list[dict[str, Any]]
     ):
         """Assert state updates were applied correctly."""
         for update in updates:
@@ -176,9 +174,7 @@ class StateAssertions:
 
     @staticmethod
     def assert_flattened_view_precedence(
-        flattened: dict[str, Any],
-        raw_state: dict[str, Any],
-        computed_state: dict[str, Any]
+        flattened: dict[str, Any], raw_state: dict[str, Any], computed_state: dict[str, Any]
     ):
         """Assert flattened view follows correct precedence (computed > raw > state)."""
         # Check that computed values override raw values
@@ -198,10 +194,7 @@ class ErrorAssertions:
     @staticmethod
     def assert_error_tracked(errors: list[WorkflowError], expected_type: str, workflow_id: str):
         """Assert specific error was tracked."""
-        matching_errors = [
-            e for e in errors
-            if e.error_type == expected_type and e.workflow_id == workflow_id
-        ]
+        matching_errors = [e for e in errors if e.error_type == expected_type and e.workflow_id == workflow_id]
         assert len(matching_errors) > 0, f"Expected error of type '{expected_type}' for workflow '{workflow_id}'"
 
     @staticmethod
@@ -248,16 +241,16 @@ class ErrorAssertions:
     @staticmethod
     def assert_circuit_breaker_open(circuit_state: dict[str, Any]):
         """Assert circuit breaker is open."""
-        assert circuit_state.get("state") == "open", (
-            f"Expected circuit breaker to be open, got {circuit_state.get('state')}"
-        )
+        assert (
+            circuit_state.get("state") == "open"
+        ), f"Expected circuit breaker to be open, got {circuit_state.get('state')}"
 
     @staticmethod
     def assert_circuit_breaker_closed(circuit_state: dict[str, Any]):
         """Assert circuit breaker is closed."""
-        assert circuit_state.get("state") == "closed", (
-            f"Expected circuit breaker to be closed, got {circuit_state.get('state')}"
-        )
+        assert (
+            circuit_state.get("state") == "closed"
+        ), f"Expected circuit breaker to be closed, got {circuit_state.get('state')}"
 
 
 class PerformanceAssertions:
@@ -266,16 +259,16 @@ class PerformanceAssertions:
     @staticmethod
     def assert_operation_time(duration_ms: float, max_duration_ms: float, operation_name: str = "operation"):
         """Assert operation completed within time limit."""
-        assert duration_ms <= max_duration_ms, (
-            f"{operation_name} took {duration_ms:.1f}ms, expected <={max_duration_ms}ms"
-        )
+        assert (
+            duration_ms <= max_duration_ms
+        ), f"{operation_name} took {duration_ms:.1f}ms, expected <={max_duration_ms}ms"
 
     @staticmethod
     def assert_throughput(operations_per_second: float, min_throughput: float, operation_name: str = "operation"):
         """Assert minimum throughput was achieved."""
-        assert operations_per_second >= min_throughput, (
-            f"{operation_name} throughput {operations_per_second:.1f} ops/s below minimum {min_throughput}"
-        )
+        assert (
+            operations_per_second >= min_throughput
+        ), f"{operation_name} throughput {operations_per_second:.1f} ops/s below minimum {min_throughput}"
 
     @staticmethod
     def assert_memory_usage(memory_mb: float, max_memory_mb: float):
@@ -291,23 +284,20 @@ class PerformanceAssertions:
     def assert_no_memory_leaks(before_memory_mb: float, after_memory_mb: float, tolerance_mb: float = 10.0):
         """Assert no significant memory leaks occurred."""
         memory_increase = after_memory_mb - before_memory_mb
-        assert memory_increase <= tolerance_mb, (
-            f"Memory increased by {memory_increase:.1f}MB, tolerance {tolerance_mb}MB"
-        )
+        assert (
+            memory_increase <= tolerance_mb
+        ), f"Memory increased by {memory_increase:.1f}MB, tolerance {tolerance_mb}MB"
 
     @staticmethod
     def assert_scalability(
-        single_user_time: float,
-        multi_user_time: float,
-        user_count: int,
-        max_degradation_factor: float = 2.0
+        single_user_time: float, multi_user_time: float, user_count: int, max_degradation_factor: float = 2.0
     ):
         """Assert performance scales reasonably with load."""
         degradation_factor = multi_user_time / single_user_time
         expected_max = max_degradation_factor * user_count
-        assert degradation_factor <= expected_max, (
-            f"Performance degraded by {degradation_factor:.1f}x with {user_count} users, expected <={expected_max:.1f}x"
-        )
+        assert (
+            degradation_factor <= expected_max
+        ), f"Performance degraded by {degradation_factor:.1f}x with {user_count} users, expected <={expected_max:.1f}x"
 
 
 class IntegrationAssertions:
@@ -318,7 +308,7 @@ class IntegrationAssertions:
         start_result: dict[str, Any],
         final_state: dict[str, Any],
         expected_outputs: dict[str, Any],
-        max_duration_ms: float = 30000
+        max_duration_ms: float = 30000,
     ):
         """Assert end-to-end workflow execution."""
         # Check workflow started
@@ -334,9 +324,7 @@ class IntegrationAssertions:
 
     @staticmethod
     def assert_error_recovery_workflow(
-        error_history: list[WorkflowError],
-        final_state: dict[str, Any],
-        expected_recoveries: int
+        error_history: list[WorkflowError], final_state: dict[str, Any], expected_recoveries: int
     ):
         """Assert error recovery workflow completed successfully."""
         # Check errors were tracked
@@ -344,18 +332,16 @@ class IntegrationAssertions:
 
         # Check recoveries
         recovered_errors = [e for e in error_history if e.recovered]
-        assert len(recovered_errors) >= expected_recoveries, (
-            f"Expected {expected_recoveries} recoveries, got {len(recovered_errors)}"
-        )
+        assert (
+            len(recovered_errors) >= expected_recoveries
+        ), f"Expected {expected_recoveries} recoveries, got {len(recovered_errors)}"
 
         # Check final state is valid
         assert final_state is not None, "Final state should not be None after recovery"
 
     @staticmethod
     def assert_parallel_execution_results(
-        results: list[dict[str, Any]],
-        expected_count: int,
-        max_duration_ms: float = 60000
+        results: list[dict[str, Any]], expected_count: int, max_duration_ms: float = 60000
     ):
         """Assert parallel execution completed successfully."""
         assert len(results) == expected_count, f"Expected {expected_count} parallel results, got {len(results)}"

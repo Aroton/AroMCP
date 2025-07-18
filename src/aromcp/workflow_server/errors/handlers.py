@@ -82,10 +82,12 @@ class ErrorHandlerRegistry:
 
         # Update error state if specified
         if handler.error_state_path:
-            result["state_updates"] = [{
-                "path": handler.error_state_path,
-                "value": error.to_dict(),
-            }]
+            result["state_updates"] = [
+                {
+                    "path": handler.error_state_path,
+                    "value": error.to_dict(),
+                }
+            ]
 
         return result
 
@@ -101,10 +103,12 @@ class ErrorHandlerRegistry:
 
         # Update error state if specified
         if handler.error_state_path:
-            result["state_updates"] = [{
-                "path": handler.error_state_path,
-                "value": error.to_dict(),
-            }]
+            result["state_updates"] = [
+                {
+                    "path": handler.error_state_path,
+                    "value": error.to_dict(),
+                }
+            ]
 
         return result
 
@@ -125,8 +129,7 @@ class ErrorHandlerRegistry:
 
         # Calculate retry delay with exponential backoff
         retry_delay = min(
-            handler.retry_delay * (handler.retry_backoff_multiplier ** retry_state.attempt_count),
-            handler.retry_max_delay
+            handler.retry_delay * (handler.retry_backoff_multiplier**retry_state.attempt_count), handler.retry_max_delay
         )
 
         # Update retry state
@@ -136,8 +139,7 @@ class ErrorHandlerRegistry:
         self._retry_states[retry_key] = retry_state
 
         logger.info(
-            f"Retrying {retry_key} in {retry_delay}ms "
-            f"(attempt {retry_state.attempt_count}/{handler.retry_count})"
+            f"Retrying {retry_key} in {retry_delay}ms " f"(attempt {retry_state.attempt_count}/{handler.retry_count})"
         )
 
         result = {
@@ -151,17 +153,19 @@ class ErrorHandlerRegistry:
 
         # Update error state if specified
         if handler.error_state_path:
-            result["state_updates"] = [{
-                "path": handler.error_state_path,
-                "value": {
-                    "error": error.to_dict(),
-                    "retry_state": {
-                        "attempt": retry_state.attempt_count,
-                        "max_retries": handler.retry_count,
-                        "next_retry": retry_state.next_retry_time.isoformat(),
-                    }
-                },
-            }]
+            result["state_updates"] = [
+                {
+                    "path": handler.error_state_path,
+                    "value": {
+                        "error": error.to_dict(),
+                        "retry_state": {
+                            "attempt": retry_state.attempt_count,
+                            "max_retries": handler.retry_count,
+                            "next_retry": retry_state.next_retry_time.isoformat(),
+                        },
+                    },
+                }
+            ]
 
         return result
 
@@ -178,10 +182,12 @@ class ErrorHandlerRegistry:
 
         # Update error state if specified
         if handler.error_state_path:
-            result["state_updates"] = [{
-                "path": handler.error_state_path,
-                "value": error.to_dict(),
-            }]
+            result["state_updates"] = [
+                {
+                    "path": handler.error_state_path,
+                    "value": error.to_dict(),
+                }
+            ]
 
         return result
 
@@ -197,9 +203,7 @@ class ErrorHandlerRegistry:
         # Check if we should open the circuit
         if breaker_state.failure_count >= handler.failure_threshold:
             breaker_state.state = "open"
-            breaker_state.next_attempt_time = datetime.now() + timedelta(
-                milliseconds=handler.circuit_timeout
-            )
+            breaker_state.next_attempt_time = datetime.now() + timedelta(milliseconds=handler.circuit_timeout)
             logger.error(f"Circuit breaker opened for {breaker_key} after {breaker_state.failure_count} failures")
 
         self._circuit_breakers[breaker_key] = breaker_state
@@ -211,25 +215,25 @@ class ErrorHandlerRegistry:
             "circuit_state": breaker_state.state,
             "failure_count": breaker_state.failure_count,
             "next_attempt_time": (
-                breaker_state.next_attempt_time.isoformat()
-                if breaker_state.next_attempt_time
-                else None
+                breaker_state.next_attempt_time.isoformat() if breaker_state.next_attempt_time else None
             ),
         }
 
         # Update error state if specified
         if handler.error_state_path:
-            result["state_updates"] = [{
-                "path": handler.error_state_path,
-                "value": {
-                    "error": error.to_dict(),
-                    "circuit_breaker": {
-                        "state": breaker_state.state,
-                        "failure_count": breaker_state.failure_count,
-                        "threshold": handler.failure_threshold,
-                    }
-                },
-            }]
+            result["state_updates"] = [
+                {
+                    "path": handler.error_state_path,
+                    "value": {
+                        "error": error.to_dict(),
+                        "circuit_breaker": {
+                            "state": breaker_state.state,
+                            "failure_count": breaker_state.failure_count,
+                            "threshold": handler.failure_threshold,
+                        },
+                    },
+                }
+            ]
 
         return result
 
@@ -295,7 +299,7 @@ class ErrorHandlerRegistry:
                     "next_retry": retry.next_retry_time.isoformat() if retry.next_retry_time else None,
                 }
                 for key, retry in self._retry_states.items()
-            }
+            },
         }
 
 
