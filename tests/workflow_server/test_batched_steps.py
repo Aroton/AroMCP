@@ -360,8 +360,8 @@ class TestBatchedStepExecution:
         # Verify the shell command was executed and state was updated
         status = executor.get_workflow_status(workflow_id)
         state = status["state"]
-        assert "output" in state, "State should contain output from shell command"
-        assert "Hello from workflow" in state["output"], "Output should contain command result"
+        assert "output" in state["raw"], "State should contain output from shell command"
+        assert "Hello from workflow" in state["raw"]["output"], "Output should contain command result"
 
         # Complete the batch by acknowledging the final message
         executor.step_complete(workflow_id, "result_msg", "success")

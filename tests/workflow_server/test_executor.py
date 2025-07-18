@@ -95,7 +95,7 @@ class TestWorkflowExecutor:
                 id="cond1",
                 type="conditional",
                 definition={
-                    "condition": "counter > 0",
+                    "condition": "raw.counter > 0",
                     "then_steps": [{"type": "user_message", "message": "Counter is positive"}],
                     "else_steps": [{"type": "user_message", "message": "Counter is zero or negative"}],
                 },
@@ -156,7 +156,7 @@ class TestWorkflowExecutor:
                 id="foreach1",
                 type="foreach",
                 definition={
-                    "items": "files",
+                    "items": "raw.files",
                     "variable_name": "file",
                     "body": [{"type": "user_message", "message": "Processing {{ file }}"}],
                 },
@@ -370,7 +370,7 @@ class TestWorkflowExecutor:
             WorkflowStep(
                 id="parallel1",
                 type="parallel_foreach",
-                definition={"items": "batches", "sub_agent_task": "process_batch", "max_parallel": 3},
+                definition={"items": "raw.batches", "sub_agent_task": "process_batch", "max_parallel": 3},
             )
         ]
 

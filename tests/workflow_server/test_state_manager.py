@@ -126,7 +126,7 @@ class TestStateUpdates:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["counter"] == 10
+        assert state["raw"]["counter"] == 10
 
     def test_multiple_state_updates(self):
         """Test multiple updates in single operation"""
@@ -146,9 +146,9 @@ class TestStateUpdates:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["counter"] == 10
-        assert state["version"] == "2.0"
-        assert state["name"] == "test"
+        assert state["raw"]["counter"] == 10
+        assert state["state"]["version"] == "2.0"
+        assert state["raw"]["name"] == "test"
 
     def test_nested_state_updates(self):
         """Test updates to nested object paths"""
@@ -168,9 +168,9 @@ class TestStateUpdates:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["user"]["name"] == "Alice"
-        assert state["user"]["age"] == 30
-        assert state["config"]["debug"] is True
+        assert state["raw"]["user"]["name"] == "Alice"
+        assert state["raw"]["user"]["age"] == 30
+        assert state["state"]["config"]["debug"] is True
 
     def test_update_operations(self):
         """Test different update operations (set, append, increment, merge)"""
@@ -200,9 +200,9 @@ class TestStateUpdates:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["counter"] == 8  # 5 + 3
-        assert state["items"] == ["a", "b", "c"]
-        assert state["metadata"] == {"version": 1, "author": "test"}
+        assert state["raw"]["counter"] == 8  # 5 + 3
+        assert state["raw"]["items"] == ["a", "b", "c"]
+        assert state["raw"]["metadata"] == {"version": 1, "author": "test"}
 
     def test_atomic_updates(self):
         """Test that updates are applied atomically"""
@@ -246,9 +246,9 @@ class TestCascadingUpdates:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["value"] == 5
-        assert state["double"] == 10
-        assert state["quadruple"] == 20
+        assert state["raw"]["value"] == 5
+        assert state["computed"]["double"] == 10
+        assert state["computed"]["quadruple"] == 20
 
     def test_partial_cascading_updates(self):
         """Test cascading updates with only some fields affected"""
@@ -271,10 +271,10 @@ class TestCascadingUpdates:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["a"] == 10
-        assert state["b"] == 3
-        assert state["sum"] == 13  # 10 + 3, updated due to a change
-        assert state["double_a"] == 20  # 10 * 2, updated due to a change
+        assert state["raw"]["a"] == 10
+        assert state["raw"]["b"] == 3
+        assert state["computed"]["sum"] == 13  # 10 + 3, updated due to a change
+        assert state["computed"]["double_a"] == 20  # 10 * 2, updated due to a change
 
     def test_transformation_error_handling(self):
         """Test error handling during cascading transformations"""
@@ -298,15 +298,15 @@ class TestCascadingUpdates:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["value"] == "invalid json"
-        assert state["parsed"] == {}  # Should use fallback
+        assert state["raw"]["value"] == "invalid json"
+        assert state["computed"]["parsed"] == {}  # Should use fallback
 
 
 class TestStateReading:
     """Test state reading operations"""
 
     def test_read_specific_paths(self):
-        """Test reading specific paths efficiently"""
+        """Test reading returns full nested state structure"""
         # Given
         manager = StateManager()
         workflow_id = "wf_123"
@@ -322,15 +322,16 @@ class TestStateReading:
         )
 
         # When
-        paths = ["counter", "version"]
-        result = manager.read(workflow_id, paths=paths)
+        result = manager.read(workflow_id)
 
         # Then
-        assert result == {"counter": 10, "version": "1.0"}
-        assert "name" not in result
+        assert result["raw"]["counter"] == 10
+        assert result["raw"]["name"] == "test"
+        assert result["state"]["version"] == "1.0"
+        assert "computed" in result
 
     def test_read_nonexistent_paths(self):
-        """Test reading non-existent paths returns None/undefined"""
+        """Test reading nested state structure with existing data"""
         # Given
         manager = StateManager()
         workflow_id = "wf_123"
@@ -339,11 +340,12 @@ class TestStateReading:
         manager.update(workflow_id, [{"path": "raw.existing", "value": "test"}])
 
         # When
-        paths = ["nonexistent"]
-        result = manager.read(workflow_id, paths=paths)
+        result = manager.read(workflow_id)
 
         # Then
-        assert result == {"nonexistent": None}
+        assert result["raw"]["existing"] == "test"
+        assert "computed" in result
+        assert "state" in result
 
     def test_read_nonexistent_workflow(self):
         """Test reading from non-existent workflow"""

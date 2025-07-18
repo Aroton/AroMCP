@@ -7,7 +7,7 @@ from typing import Any
 from ...utils.json_parameter_middleware import json_convert
 from ..models.workflow_models import WorkflowStartResponse
 from ..state.concurrent import ConcurrentStateManager
-from ..state.manager import StateManager
+from ..state.shared import get_shared_state_manager
 from ..workflow.executor import WorkflowExecutor
 from ..workflow.loader import WorkflowLoader
 from ..workflow.models import WorkflowExecutionError, WorkflowNotFoundError
@@ -17,7 +17,6 @@ from ..workflow.sub_agents import SubAgentManager
 # Global instances for workflow management
 _workflow_loader = None
 _workflow_executor = None
-_state_manager = None
 _concurrent_state_manager = None
 _sub_agent_manager = None
 _parallel_processor = None
@@ -33,29 +32,24 @@ def get_workflow_loader() -> WorkflowLoader:
 
 def get_workflow_executor() -> WorkflowExecutor:
     """Get or create workflow executor instance."""
-    global _workflow_executor, _state_manager
+    global _workflow_executor
     if _workflow_executor is None:
-        if _state_manager is None:
-            _state_manager = StateManager()
-        _workflow_executor = WorkflowExecutor(_state_manager)
+        state_manager = get_shared_state_manager()
+        _workflow_executor = WorkflowExecutor(state_manager)
     return _workflow_executor
 
 
-def get_state_manager() -> StateManager:
-    """Get or create state manager instance."""
-    global _state_manager
-    if _state_manager is None:
-        _state_manager = StateManager()
-    return _state_manager
+def get_state_manager():
+    """Get the shared state manager instance."""
+    return get_shared_state_manager()
 
 
 def get_concurrent_state_manager() -> ConcurrentStateManager:
     """Get or create concurrent state manager instance."""
-    global _concurrent_state_manager, _state_manager
+    global _concurrent_state_manager
     if _concurrent_state_manager is None:
-        if _state_manager is None:
-            _state_manager = StateManager()
-        _concurrent_state_manager = ConcurrentStateManager(_state_manager)
+        state_manager = get_shared_state_manager()
+        _concurrent_state_manager = ConcurrentStateManager(state_manager)
     return _concurrent_state_manager
 
 

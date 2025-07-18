@@ -21,7 +21,7 @@ state_schema:
     changed_files:
       from: "raw.git_output"
       transform: "input.split('\\n').filter(line => line.trim() !== '')"
-    
+
     code_files:
       from: "computed.changed_files"
       transform: |
@@ -33,19 +33,19 @@ state_schema:
           const isCode = codeExts.some(ext => file.endsWith(ext));
           return !hasExcluded && isCode;
         })
-    
+
     total_files:
       from: "computed.code_files"
       transform: "input.length"
-    
+
     has_files:
       from: "computed.code_files"
       transform: "input.length > 0"
-    
+
     all_processed:
       from: ["raw.processing_results", "computed.code_files"]
       transform: "Object.keys(input[0]).length === input[1].length"
-    
+
     failed_files:
       from: "raw.processing_results"
       transform: "Object.entries(input).filter(([_, result]) => !result.success).map(([file, _]) => file)"
@@ -57,7 +57,7 @@ inputs:
     description: "Branch name to compare against for changes"
     required: false
     default: "main"
-  
+
   commit:
     type: "string"
     description: "Specific commit hash to get changed files from"
@@ -66,16 +66,16 @@ inputs:
 
 # Workflow steps
 steps:
+  - id: "welcome_message"
+    type: "user_message"
+    message: "Starting code standards enforcement workflow..."
+
   # Step 1: Initialize and get changed files
   - id: "init_comparison_target"
     type: "state_update"
     path: "raw.comparison_target"
     value: "{{ commit || compare_to || 'HEAD' }}"
-  
-  - id: "welcome_message"
-    type: "user_message"
-    message: "Starting code standards enforcement workflow..."
-  
+
   - id: "get_changed_files"
     type: "conditional"
     condition: "{{ commit }}"
@@ -83,7 +83,7 @@ steps:
       - id: "commit_message"
         type: "user_message"
         message: "Getting files changed in commit {{ commit }}..."
-      
+
       - id: "git_diff_tree"
         type: "shell_command"
         command: "git diff-tree --no-commit-id --name-only -r {{ commit }}"
@@ -94,14 +94,14 @@ steps:
       - id: "diff_message"
         type: "user_message"
         message: "Checking for changed files against {{ compare_to || 'HEAD' }}..."
-      
+
       - id: "git_diff_status"
         type: "shell_command"
         command: "git diff --name-only {{ compare_to || 'HEAD' }} && git ls-files --others --exclude-standard"
         state_update:
           path: "raw.git_output"
           value: "stdout"
-  
+
   # Step 3: Check if we have files to process
   - id: "check_files_to_process"
     type: "conditional"
@@ -116,7 +116,7 @@ steps:
         message: "No code files found in the changes"
       - id: "exit_workflow"
         type: "break"
-  
+
   # Step 4: Process files in parallel
   - id: "process_files_parallel"
     type: "parallel_foreach"
@@ -124,7 +124,7 @@ steps:
     max_parallel: 10
     sub_agent_task: "enforce_standards_on_file"
     timeout_seconds: 600
-  
+
   # Step 5: Wait for all files to be processed
   - id: "wait_for_completion"
     type: "while_loop"
@@ -134,11 +134,11 @@ steps:
       - id: "progress_message"
         type: "user_message"
         message: "Processing files... ({{ Object.keys(raw.processing_results).length }}/{{ computed.total_files }} complete)"
-      
+
       - id: "wait_step"
         type: "shell_command"
         command: "sleep 2"
-  
+
   # Step 6: Generate summary
   - id: "summary_message"
     type: "user_message"
@@ -147,7 +147,7 @@ steps:
       Total files processed: {{ computed.total_files }}
       ✅ Successfully fixed: {{ raw.success_count }} files
     format: "text"
-  
+
   - id: "check_failures"
     type: "conditional"
     condition: "{{ raw.failure_count > 0 }}"
@@ -155,7 +155,7 @@ steps:
       - id: "failures_message"
         type: "user_message"
         message: "❌ Failed to fix: {{ raw.failure_count }} files"
-      
+
       - id: "list_failed_files"
         type: "foreach"
         items: "{{ computed.failed_files }}"
@@ -168,7 +168,7 @@ steps:
                 Attempts: {{ raw.processing_results[failed_file].attempts }}
                 Last error: {{ raw.processing_results[failed_file].last_error }}
             format: "text"
-      
+
       - id: "final_message_with_failures"
         type: "user_message"
         message: "\nAll changes have been left uncommitted. Review and commit when ready."
@@ -186,45 +186,45 @@ sub_agent_tasks:
         type: "string"
         description: "Path to the file to process"
         required: true
-      
+
       max_attempts:
         type: "number"
         description: "Maximum fix attempts"
         required: false
         default: 10
-    
+
     context_template:
       current_file: "{{ file_path }}"
       attempt_number: 0
       lint_errors: 0
       ts_errors: 0
-    
+
     prompt_template: |
       You are tasked with enforcing code standards on the file: {{ file_path }}
-      
+
       Follow these steps up to {{ max_attempts }} times until all checks pass:
-      
+
       1. First, get hints for the file using aromcp.hints_for_files
       2. Review the hints and apply ALL suggested improvements to the file
       3. Run aromcp.lint_project with use_eslint_standards=true
       4. Fix any linting errors or warnings found
       5. Run aromcp.check_typescript on the file (if it's a TypeScript/JavaScript file)
       6. Fix any TypeScript errors found
-      
+
       Continue this loop until:
       - All hints have been applied
       - No lint errors or warnings remain
       - No TypeScript errors remain (for TS/JS files)
       - OR you've reached {{ max_attempts }} attempts
-      
+
       For each iteration:
       - Apply fixes carefully to maintain functionality
       - Use the file editing tools to make changes
       - Re-run all checks after making changes
-      
+
       Report back with:
       - success: true/false
       - attempts: number of attempts made
       - last_error: description of any remaining issues
-      
+
       IMPORTANT: You must actually run the tools and make edits. Do not simulate or skip steps.

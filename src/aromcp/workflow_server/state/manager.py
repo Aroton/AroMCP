@@ -157,14 +157,16 @@ class StateManager:
 
     def read(self, workflow_id: str, paths: list[str] | None = None) -> dict[str, Any]:
         """
-        Read workflow state with flattened view
+        Read workflow state with nested structure
+        
+        Automatically computes all computed fields when state is accessed.
 
         Args:
             workflow_id: Unique workflow identifier
-            paths: Optional list of specific paths to read
+            paths: Optional list of specific paths to read (not implemented for nested state)
 
         Returns:
-            Flattened state dictionary
+            Nested state dictionary with structure: {raw: {...}, computed: {...}, state: {...}}
 
         Raises:
             KeyError: If workflow doesn't exist
@@ -176,7 +178,16 @@ class StateManager:
                 raise KeyError(f"Workflow '{workflow_id}' not found")
 
             state = self._states[workflow_id]
-            return self.get_flattened_view(state, paths)
+            
+            # Ensure all computed fields are up to date
+            self._ensure_computed_fields_current(state)
+            
+            # Return nested structure
+            return {
+                "raw": dict(state.raw),
+                "computed": dict(state.computed), 
+                "state": dict(state.state)
+            }
 
     def update(self, workflow_id: str, updates: list[dict[str, Any]]) -> dict[str, Any]:
         """
@@ -301,6 +312,31 @@ class StateManager:
             current[final_key].update(value)
         else:
             raise ValueError(f"Unknown operation: {operation}")
+
+    def _ensure_computed_fields_current(self, state: WorkflowState) -> None:
+        """
+        Ensure all computed fields are up to date
+        
+        This method computes all defined computed fields regardless of what changed.
+        Should be called when reading state to ensure computed fields are current.
+        
+        Args:
+            state: WorkflowState to update computed fields for
+        """
+        if not self._cascade_calculator:
+            return
+            
+        # Get all computed field names
+        computed_fields = list(self._cascade_calculator.dependencies.keys())
+        
+        # Compute each field
+        for field_name in computed_fields:
+            try:
+                self._compute_field(state, field_name)
+            except Exception as e:
+                # Handle errors based on field configuration
+                field_info = self._cascade_calculator.dependencies[field_name]
+                self._handle_computation_error(state, field_name, field_info, e)
 
     def _update_computed_fields(self, state: WorkflowState, changed_paths: list[str]) -> None:
         """

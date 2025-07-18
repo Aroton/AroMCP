@@ -9,19 +9,13 @@ from typing import Any
 from fastmcp import FastMCP
 
 from ...utils.json_parameter_middleware import json_convert
-from ..state.manager import StateManager
 from ..state.models import StateSchema
-
-# Global state manager instance (in production, this might be injected or configured)
-_state_manager: StateManager | None = None
+from ..state.shared import get_shared_state_manager
 
 
-def get_state_manager() -> StateManager:
-    """Get the global state manager instance"""
-    global _state_manager
-    if _state_manager is None:
-        _state_manager = StateManager()
-    return _state_manager
+def get_state_manager():
+    """Get the shared state manager instance"""
+    return get_shared_state_manager()
 
 
 def register_workflow_state_tools(mcp: FastMCP) -> None:
@@ -31,10 +25,10 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
     @json_convert
     def workflow_state_read(workflow_id: str, paths: list[str] | str | None = None) -> dict[str, Any]:
         """
-        Read workflow state with flattened view
+        Read workflow state with nested structure
 
-        Returns a unified view of workflow state where computed values take precedence
-        over raw values, and raw values take precedence over state values.
+        Returns workflow state in nested format: {raw: {...}, computed: {...}, state: {...}}.
+        All computed fields are automatically calculated when state is read.
 
         Use this tool when:
         - Reading current workflow state for decision making
@@ -44,28 +38,20 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
 
         Args:
             workflow_id: Unique identifier for the workflow
-            paths: Optional list of specific field paths to read. If None, returns all fields.
-                  Can be a single string or list of strings.
+            paths: Reserved for future use (path filtering not implemented for nested state)
 
         Returns:
-            Flattened state dictionary with computed values taking precedence
+            Nested state dictionary with structure: {raw: {...}, computed: {...}, state: {...}}
 
         Example:
-            workflow_state_read("wf_123", ["counter", "status"])
-            → {"counter": 5, "status": "running"}
+            workflow_state_read("wf_123")
+            → {"raw": {"counter": 5}, "computed": {"doubled": 10}, "state": {"status": "running"}}
         """
         try:
             manager = get_state_manager()
 
-            # Handle both string and list inputs for paths
-            path_list = None
-            if paths is not None:
-                if isinstance(paths, str):
-                    path_list = [paths]
-                else:
-                    path_list = paths
-
-            state = manager.read(workflow_id, path_list)
+            # Get nested state (paths parameter not used for nested state)
+            state = manager.read(workflow_id)
 
             return {"data": {"workflow_id": workflow_id, "state": state}}
 
@@ -264,7 +250,7 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
                     import json
 
                     schema = json.loads(schema)
-                state_schema = StateSchema(**schema)
+                state_schema = StateSchema(**schema) if isinstance(schema, dict) else None
 
             # For now, use the global state manager
             # In production, this might create workflow-specific managers
@@ -284,10 +270,11 @@ def register_workflow_state_tools(mcp: FastMCP) -> None:
 
                 # Convert initial state to update operations
                 updates = []
-                for tier in ["raw", "state"]:
-                    if tier in initial_state:
-                        for key, value in initial_state[tier].items():
-                            updates.append({"path": f"{tier}.{key}", "value": value})
+                if isinstance(initial_state, dict):
+                    for tier in ["raw", "state"]:
+                        if tier in initial_state and isinstance(initial_state[tier], dict):
+                            for key, value in initial_state[tier].items():
+                                updates.append({"path": f"{tier}.{key}", "value": value})
 
                 if updates:
                     updated_state = manager.update(workflow_id, updates)

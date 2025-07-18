@@ -377,10 +377,10 @@ class TestPhase4ConcurrentStateAcceptance:
         assert all(result["success"] for _, result in results)
 
         final_state = manager.read("wf_123")
-        assert final_state["batch_status"]["batch_0"] == "processing"
-        assert final_state["batch_status"]["batch_1"] == "processing"
-        assert final_state["file_results"]["index_ts"]["status"] == "complete"
-        assert final_state["progress"]["completed"] == 1
+        assert final_state["raw"]["batch_status"]["batch_0"] == "processing"
+        assert final_state["raw"]["batch_status"]["batch_1"] == "processing"
+        assert final_state["raw"]["file_results"]["index_ts"]["status"] == "complete"
+        assert final_state["raw"]["progress"]["completed"] == 1
 
     def test_conflict_handling_same_path(self):
         """AC: Conflicts on same path handled gracefully."""
@@ -416,7 +416,7 @@ class TestPhase4ConcurrentStateAcceptance:
         assert success_count >= 1
 
         final_state = manager.read("wf_123")
-        assert final_state["counter"] in [10, 20, 30]  # One value should win
+        assert final_state["raw"]["counter"] in [10, 20, 30]  # One value should win
 
     def test_transformation_consistency(self):
         """AC: Transformations remain consistent."""
@@ -452,10 +452,10 @@ class TestPhase4ConcurrentStateAcceptance:
         assert all(result.get("success", False) for result in results)
 
         final_state = manager.read("wf_123")
-        assert len(final_state["file_results"]) == 3
-        assert final_state["file_results"]["file_1"]["status"] == "complete"
-        assert final_state["file_results"]["file_2"]["status"] == "complete"
-        assert final_state["file_results"]["file_3"]["status"] == "failed"
+        assert len(final_state["raw"]["file_results"]) == 3
+        assert final_state["raw"]["file_results"]["file_1"]["status"] == "complete"
+        assert final_state["raw"]["file_results"]["file_2"]["status"] == "complete"
+        assert final_state["raw"]["file_results"]["file_3"]["status"] == "failed"
 
     def test_no_race_conditions_computed_fields(self):
         """AC: No race conditions in computed fields."""
@@ -481,7 +481,7 @@ class TestPhase4ConcurrentStateAcceptance:
 
         # Then - All values should be present (no lost updates)
         final_state = manager.read("wf_123")
-        final_values = final_state["values"]
+        final_values = final_state["raw"]["values"]
 
         # Due to race conditions, not all values may be present, but at least some should be
         assert len(final_values) > 0
@@ -762,7 +762,7 @@ class TestPhase4StandardsFixIntegration:
 
         # When - Process parallel_foreach step
         step_def = ParallelForEachStep(
-            items="file_batches", max_parallel=10, wait_for_all=True, sub_agent_task="process_standards_batch"
+            items="computed.file_batches", max_parallel=10, wait_for_all=True, sub_agent_task="process_standards_batch"
         )
 
         state = concurrent_manager.read("wf_standards_fix")
@@ -843,11 +843,11 @@ class TestPhase4StandardsFixIntegration:
         final_state = concurrent_manager.read("wf_standards_fix")
 
         # All batches should be complete
-        assert final_state["batch_status"]["process_batches_task_0"] == "complete"
-        assert final_state["batch_status"]["process_batches_task_1"] == "complete"
+        assert final_state["raw"]["batch_status"]["process_batches_task_0"] == "complete"
+        assert final_state["raw"]["batch_status"]["process_batches_task_1"] == "complete"
 
         # All files should be processed
-        file_results = final_state["file_results"]
+        file_results = final_state["raw"]["file_results"]
         assert len(file_results) == 4  # 4 valid files processed
 
         # All agents should be completed

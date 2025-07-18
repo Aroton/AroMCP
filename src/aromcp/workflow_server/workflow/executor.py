@@ -74,6 +74,15 @@ class VariableReplacer:
             if var_expr in state:
                 return str(state[var_expr])
 
+            # For dot notation expressions, always use the expression evaluator
+            if "." in var_expr:
+                try:
+                    result = evaluator.evaluate(var_expr, state)
+                    return str(result)
+                except Exception:
+                    # If evaluation fails, keep original
+                    return f"{{{{ {var_expr} }}}}"
+
             # If it contains operators or is more complex, evaluate as expression
             if any(op in var_expr for op in ["||", "&&", "==", "!=", ">", "<", "+", "-", "*", "/", "?", ":"]):
                 try:
@@ -83,7 +92,7 @@ class VariableReplacer:
                     # If evaluation fails, keep original
                     return f"{{{{ {var_expr} }}}}"
 
-            # Simple dot notation lookup
+            # Simple variable lookup with fallback
             return str(state.get(var_expr, f"{{{{ {var_expr} }}}}"))
 
         return re.sub(pattern, replace_match, text)
@@ -763,6 +772,8 @@ class WorkflowExecutor:
             "execution_context": context.get_execution_summary() if context else None,
         }
 
+
+
     def _create_error_response(self, step_id, error_message):
         """Create an error response for step processing failures."""
         return {
@@ -838,7 +849,8 @@ class WorkflowExecutor:
         if cleaned_expression.startswith("{{") and cleaned_expression.endswith("}}"):
             cleaned_expression = cleaned_expression[2:-2].strip()
 
-        # Merge state with context variables
+        # Use nested state structure directly for expressions
+        # State is now: {"raw": {...}, "computed": {...}, "state": {...}}
         evaluation_context = dict(state)
         evaluation_context.update(context.get_all_variables())
 

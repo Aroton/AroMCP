@@ -37,12 +37,12 @@ class TestCascadingTransformations:
 
         # Then
         # value=7 → step1=14 → step2=24 → step3=12 → step4=12 → final=1200
-        assert state["value"] == 7
-        assert state["step1"] == 14
-        assert state["step2"] == 24
-        assert state["step3"] == 12
-        assert state["step4"] == 12
-        assert state["final"] == 1200
+        assert state["raw"]["value"] == 7
+        assert state["computed"]["step1"] == 14
+        assert state["computed"]["step2"] == 24
+        assert state["computed"]["step3"] == 12
+        assert state["computed"]["step4"] == 12
+        assert state["computed"]["final"] == 1200
 
     def test_diamond_dependency_pattern(self):
         """Test diamond-shaped dependency graph"""
@@ -64,10 +64,10 @@ class TestCascadingTransformations:
 
         # Then
         # source=3 → branch_a=6, branch_b=8 → merge=48
-        assert state["source"] == 3
-        assert state["branch_a"] == 6
-        assert state["branch_b"] == 8
-        assert state["merge"] == 48
+        assert state["raw"]["source"] == 3
+        assert state["computed"]["branch_a"] == 6
+        assert state["computed"]["branch_b"] == 8
+        assert state["computed"]["merge"] == 48
 
     def test_multiple_root_dependencies(self):
         """Test transformations with multiple independent sources"""
@@ -91,9 +91,9 @@ class TestCascadingTransformations:
 
         # Then
         # a=2, b=3, c=4 → sum_ab=5, product_bc=12 → final=17
-        assert state["sum_ab"] == 5
-        assert state["product_bc"] == 12
-        assert state["final"] == 17
+        assert state["computed"]["sum_ab"] == 5
+        assert state["computed"]["product_bc"] == 12
+        assert state["computed"]["final"] == 17
 
 
 class TestComplexDependencyGraphs:
@@ -122,10 +122,10 @@ class TestComplexDependencyGraphs:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["base"] == 10
-        assert state["level1_0"] == 10  # 10 + 0
-        assert state["level1_5"] == 15  # 10 + 5
-        assert state["level2_0"] == 21  # (10+0) + (10+1)
+        assert state["raw"]["base"] == 10
+        assert state["computed"]["level1_0"] == 10  # 10 + 0
+        assert state["computed"]["level1_5"] == 15  # 10 + 5
+        assert state["computed"]["level2_0"] == 21  # (10+0) + (10+1)
 
     def test_mixed_tier_dependencies(self):
         """Test dependencies across all three tiers"""
@@ -151,9 +151,9 @@ class TestComplexDependencyGraphs:
 
         # Then
         # counter=5, multiplier=3 → doubled=10 → scaled=30 → combined=38 (5+3+30)
-        assert state["doubled"] == 10
-        assert state["scaled"] == 30
-        assert state["combined"] == 38
+        assert state["computed"]["doubled"] == 10
+        assert state["computed"]["scaled"] == 30
+        assert state["computed"]["combined"] == 38
 
 
 class TestRealWorldTransformationExamples:
@@ -181,8 +181,8 @@ class TestRealWorldTransformationExamples:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["parsed_files"] == ["file1.ts", "file2.js", "file3.py"]
-        assert state["file_count"] == 3
+        assert state["computed"]["parsed_files"] == ["file1.ts", "file2.js", "file3.py"]
+        assert state["computed"]["file_count"] == 3
 
     def test_user_data_processing_example(self):
         """Test user data aggregation and formatting"""
@@ -215,11 +215,11 @@ class TestRealWorldTransformationExamples:
 
         # Then
         # print(f"DEBUG: state = {state}")
-        assert len(state["adult_users"]) == 2
-        assert state["adult_users"][0]["name"] == "Alice"
-        assert state["adult_users"][1]["name"] == "Charlie"
-        assert state["user_summary"] == "Engineering: 2 adult users (Alice, Charlie)"
-        assert state["average_age"] == 28  # (25 + 30) / 2 = 27.5 → 28
+        assert len(state["computed"]["adult_users"]) == 2
+        assert state["computed"]["adult_users"][0]["name"] == "Alice"
+        assert state["computed"]["adult_users"][1]["name"] == "Charlie"
+        assert state["computed"]["user_summary"] == "Engineering: 2 adult users (Alice, Charlie)"
+        assert state["computed"]["average_age"] == 28  # (25 + 30) / 2 = 27.5 → 28
 
     def test_configuration_validation_example(self):
         """Test configuration validation and defaults"""
@@ -253,12 +253,12 @@ class TestRealWorldTransformationExamples:
         state = manager.read(workflow_id)
 
         # Then
-        validated = state["validated_config"]
+        validated = state["computed"]["validated_config"]
         assert validated["timeout"] == 5000
         assert validated["retries"] == 10  # Clamped to max 10
         assert validated["debug"] is True  # "yes" is truthy
         assert validated["endpoint"] == "http://localhost:3000"  # Default
-        assert state["is_valid"] is True
+        assert state["computed"]["is_valid"] is True
 
 
 class TestPerformanceLargeState:
@@ -286,9 +286,9 @@ class TestPerformanceLargeState:
 
         # Verify data integrity
         state = manager.read(workflow_id)
-        assert state["field_0"] == 0
-        assert state["field_500"] == 500
-        assert state["field_999"] == 999
+        assert state["raw"]["field_0"] == 0
+        assert state["raw"]["field_500"] == 500
+        assert state["raw"]["field_999"] == 999
 
     def test_transformation_performance(self):
         """Test transformation performance with large arrays"""
@@ -317,9 +317,9 @@ class TestPerformanceLargeState:
 
         # Verify results
         state = manager.read(workflow_id)
-        assert len(state["filtered"]) == 5000  # Half the elements (even numbers)
-        assert state["mapped"][0] == 0  # 0 * 2
-        assert state["mapped"][1] == 4  # 2 * 2
+        assert len(state["computed"]["filtered"]) == 5000  # Half the elements (even numbers)
+        assert state["computed"]["mapped"][0] == 0  # 0 * 2
+        assert state["computed"]["mapped"][1] == 4  # 2 * 2
 
 
 class TestErrorHandlingStrategies:
@@ -347,7 +347,7 @@ class TestErrorHandlingStrategies:
         state = manager.read(workflow_id)
 
         # Then
-        assert state["parsed"] == {"error": "invalid_json"}
+        assert state["computed"]["parsed"] == {"error": "invalid_json"}
 
     def test_propagate_strategy(self):
         """Test propagate error handling"""
@@ -386,5 +386,5 @@ class TestErrorHandlingStrategies:
 
         # Then
         # processed should not be set due to error being ignored
-        assert "processed" not in state
-        assert state["other"] == "test"  # Other transformations should still work
+        assert "processed" not in state["computed"]
+        assert state["computed"]["other"] == "test"  # Other transformations should still work

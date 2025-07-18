@@ -96,7 +96,7 @@ class TestPhase4ConcurrentExecution:
 
         # When - Process with 10+ parallel agents (max_parallel=15 to test scaling)
         step_def = ParallelForEachStep(
-            items="file_batches",
+            items="computed.file_batches",
             max_parallel=15,  # Allow all batches to run in parallel
             wait_for_all=True,
             sub_agent_task="process_standards_batch",
@@ -178,7 +178,7 @@ class TestPhase4ConcurrentExecution:
 
                 # Increment processed count
                 current_state = concurrent_manager.read("wf_perf_test")
-                new_count = current_state.get("processed_count", 0) + len(files)
+                new_count = current_state.get("raw", {}).get("processed_count", 0) + len(files)
                 concurrent_manager.update(
                     "wf_perf_test",
                     [{"path": "raw.processed_count", "value": new_count}],
@@ -227,18 +227,18 @@ class TestPhase4ConcurrentExecution:
         final_state = concurrent_manager.read("wf_perf_test")
 
         # All batches should be complete
-        batch_statuses = final_state["batch_status"]
+        batch_statuses = final_state["raw"]["batch_status"]
         assert len(batch_statuses) == 5
         assert all(status == "complete" for status in batch_statuses.values())
 
         # All files should be processed
-        file_results = final_state["file_results"]
+        file_results = final_state["raw"]["file_results"]
         assert len(file_results) == 15  # All 15 files processed
         assert all(result["status"] == "complete" for result in file_results.values())
         assert all(result["fixes"] == 3 for result in file_results.values())
 
         # Processed count should be correct
-        assert final_state["processed_count"] == 15
+        assert final_state["raw"]["processed_count"] == 15
 
         # All agents should be completed
         workflow_agents = sub_agent_manager.get_workflow_agents("wf_perf_test")
@@ -285,8 +285,8 @@ class TestPhase4ConcurrentExecution:
 
                 # Update shared totals (potential race condition)
                 current_state = manager.read("race_test")
-                new_sum = current_state["totals"]["sum"] + 1
-                new_count = current_state["totals"]["count"] + 1
+                new_sum = current_state["raw"]["totals"]["sum"] + 1
+                new_count = current_state["raw"]["totals"]["count"] + 1
 
                 manager.update(
                     "race_test",
@@ -308,7 +308,7 @@ class TestPhase4ConcurrentExecution:
         final_state = manager.read("race_test")
 
         # All individual counters should exist
-        counters = final_state["counters"]
+        counters = final_state["raw"]["counters"]
         assert len(counters) == num_agents
 
         # Each counter should have its final value
@@ -316,7 +316,7 @@ class TestPhase4ConcurrentExecution:
             assert counters[f"agent_{i}"] == updates_per_agent
 
         # Shared totals should be consistent (within reasonable bounds due to race conditions)
-        totals = final_state["totals"]
+        totals = final_state["raw"]["totals"]
         expected_total_updates = num_agents * updates_per_agent
 
         # Due to race conditions, we might not get exact values, but they should be close

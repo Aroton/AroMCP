@@ -134,7 +134,7 @@ class JSONParameterMiddleware:
 
                 if self.debug:
                     # Debug logging for parameter conversion
-                    # print(f"[JSONMiddleware] Converted {param_name} from JSON string to {type(parsed).__name__}")
+                    print(f"[JSONMiddleware] Converted {param_name} from JSON string to {type(parsed).__name__}")
                     pass
 
                 # Validate the parsed type matches expected type

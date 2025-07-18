@@ -64,9 +64,9 @@ steps:
             assert result["workflow_id"].startswith("wf_")
             assert result["status"] == "running"
             assert result["total_steps"] == 2
-            assert result["state"]["counter"] == 0  # Default state
-            assert result["state"]["name"] == "test"  # Input applied
-            assert result["state"]["doubled"] == 0  # Computed field
+            assert result["state"]["raw"]["counter"] == 0  # Default state
+            assert result["state"]["raw"]["name"] == "test"  # Input applied
+            assert result["state"]["computed"]["doubled"] == 0  # Computed field
 
     def test_workflow_start_with_inputs(self):
         """Test workflow initialization with input values."""
@@ -103,8 +103,8 @@ steps:
             workflow_def = loader.load("test:inputs")
             result = executor.start(workflow_def, inputs={"multiplier": 3})
 
-            assert result["state"]["base_value"] == 10
-            assert result["state"]["multiplier"] == 3
+            assert result["state"]["raw"]["base_value"] == 10
+            assert result["state"]["raw"]["multiplier"] == 3
 
     def test_workflow_start_without_inputs(self):
         """Test workflow startup without providing inputs."""
@@ -134,7 +134,7 @@ steps:
             workflow_def = loader.load("test:no-inputs")
             result = executor.start(workflow_def)
 
-            assert result["state"]["counter"] == 5
+            assert result["state"]["raw"]["counter"] == 5
 
 
 class TestSequentialExecution:
@@ -340,7 +340,7 @@ steps:
     path: "raw.counter"
     value: 5
   - type: "user_message"
-    message: "Hello {{ user_name }}, counter is {{ counter }}, doubled is {{ doubled }}"
+    message: "Hello {{ raw.user_name }}, counter is {{ raw.counter }}, doubled is {{ computed.doubled }}"
 """
             workflow_file.write_text(workflow_content)
 
@@ -404,7 +404,7 @@ class TestWorkflowStatusAndManagement:
         assert status["status"] == "running"
         assert status["created_at"] is not None
         assert status["completed_at"] is None
-        assert status["state"]["value"] == 1
+        assert status["state"]["raw"]["value"] == 1
         assert "execution_context" in status
 
     def test_list_active_workflows(self):
@@ -534,7 +534,7 @@ class TestConditionalMultipleSteps:
         # But we can verify the state was updated
         current_state = executor.state_manager.read(workflow_id)
         assert (
-            current_state.get("processed") is True
+            current_state.get("raw", {}).get("processed") is True
         ), f"State update from conditional was not applied. State: {current_state}"
 
         # Complete the last step to finish workflow
@@ -543,7 +543,7 @@ class TestConditionalMultipleSteps:
 
         # Verify that the state was actually updated by the conditional else_steps
         current_state = executor.state_manager.read(workflow_id)
-        assert current_state.get("processed") is True, f"State was not updated. Current state: {current_state}"
+        assert current_state.get("raw", {}).get("processed") is True, f"State was not updated. Current state: {current_state}"
 
     def test_conditional_with_shell_command_in_else_steps(self):
         """Test that shell commands in else_steps are executed properly."""
@@ -614,7 +614,7 @@ class TestConditionalMultipleSteps:
         # If this test fails, it means the shell command was not executed
         # and the bug is still present
         assert (
-            current_state.get("changed_files") == "file1.py\nfile2.py"
+            current_state.get("raw", {}).get("changed_files") == "file1.py\nfile2.py"
         ), f"Shell command was not executed. State: {current_state}"
 
         # The second step should be the final processing step with variables replaced
