@@ -6,11 +6,9 @@ acceptance criteria are met as defined in the implementation plan.
 
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from aromcp.workflow_server.prompts.standards import StandardPrompts
 from aromcp.workflow_server.state.concurrent import ConcurrentStateManager
 from aromcp.workflow_server.state.models import WorkflowState
 from aromcp.workflow_server.workflow.composition import (
@@ -18,7 +16,6 @@ from aromcp.workflow_server.workflow.composition import (
     WorkflowComposer,
 )
 from aromcp.workflow_server.workflow.expressions import ExpressionEvaluator
-from aromcp.workflow_server.workflow.loader import WorkflowLoader
 from aromcp.workflow_server.workflow.models import WorkflowDefinition
 from aromcp.workflow_server.workflow.parallel import (
     ParallelForEachProcessor,
@@ -150,7 +147,7 @@ class TestPhase4ParallelForEachAcceptance:
 
         # Then
         tasks = result["step"]["definition"]["tasks"]
-        
+
         # First task context
         task_0_context = tasks[0]["context"]
         assert task_0_context["item"]["files"] == ["a.ts", "b.ts"]
@@ -224,7 +221,7 @@ class TestPhase4SubAgentExecutionAcceptance:
         """AC: Sub-agents get filtered steps."""
         # Given
         manager = SubAgentManager()
-        
+
         # Register task with multiple steps that need variable replacement
         steps = [
             {"type": "state_update", "path": "raw.batch_status.{{ task_id }}", "value": "processing"},
@@ -233,14 +230,14 @@ class TestPhase4SubAgentExecutionAcceptance:
             ]},
             {"type": "state_update", "path": "raw.batch_status.{{ task_id }}", "value": "complete"}
         ]
-        
+
         manager.register_task_definition("process_batch", steps)
 
         # Create sub-agent with context that includes task_type to match the task definition
         context = {"files": ["a.ts", "b.ts"], "task_id": "batch_0", "task_type": "process_batch"}
         registration = manager.create_sub_agent(
             workflow_id="wf_123",
-            task_id="batch_0", 
+            task_id="batch_0",
             task_name="process_batch",
             context=context,
             parent_step_id="step_1"
@@ -251,11 +248,11 @@ class TestPhase4SubAgentExecutionAcceptance:
 
         # Then
         assert len(filtered_steps) == 3
-        
+
         # Check variable replacement
         step_0 = filtered_steps[0]
         assert step_0["path"] == "raw.batch_status.batch_0"  # {{ task_id }} replaced
-        
+
         step_1 = filtered_steps[1]
         # The implementation converts list to string representation
         assert step_1["items"] == "['a.ts', 'b.ts']"  # {{ files }} replaced
@@ -264,13 +261,13 @@ class TestPhase4SubAgentExecutionAcceptance:
         """AC: Task context available in steps."""
         # Given
         manager = SubAgentManager()
-        
+
         # Task definition that uses context variables
         steps = [
             {"type": "state_update", "path": "raw.file_results.{{ item }}", "value": {"status": "processing"}},
             {"type": "mcp_call", "method": "lint_project", "params": {"target_files": "{{ item }}"}}
         ]
-        
+
         manager.register_task_definition("process_file", steps)
 
         # Create sub-agent with specific context including task_type
@@ -278,7 +275,7 @@ class TestPhase4SubAgentExecutionAcceptance:
         registration = manager.create_sub_agent(
             workflow_id="wf_123",
             task_id="file_0",
-            task_name="process_file", 
+            task_name="process_file",
             context=context,
             parent_step_id="step_1"
         )
@@ -290,7 +287,7 @@ class TestPhase4SubAgentExecutionAcceptance:
         assert len(filtered_steps) == 2
         step_0 = filtered_steps[0]
         assert step_0["path"] == "raw.file_results.src/index.ts"
-        
+
         step_1 = filtered_steps[1]
         assert step_1["params"]["target_files"] == "src/index.ts"
 
@@ -348,7 +345,7 @@ class TestPhase4ConcurrentStateAcceptance:
         """AC: Multiple agents can update different paths."""
         # Given
         manager = ConcurrentStateManager()
-        
+
         # Initialize workflow with multiple independent paths
         manager._base_manager._states["wf_123"] = WorkflowState(
             raw={
@@ -365,8 +362,8 @@ class TestPhase4ConcurrentStateAcceptance:
         def agent_update(agent_id, path, value):
             try:
                 result = manager.update(
-                    "wf_123", 
-                    [{"path": path, "value": value}], 
+                    "wf_123",
+                    [{"path": path, "value": value}],
                     agent_id=agent_id
                 )
                 results.append((agent_id, result))
@@ -377,7 +374,9 @@ class TestPhase4ConcurrentStateAcceptance:
         threads = [
             threading.Thread(target=agent_update, args=("agent_1", "raw.batch_status.batch_0", "processing")),
             threading.Thread(target=agent_update, args=("agent_2", "raw.batch_status.batch_1", "processing")),
-            threading.Thread(target=agent_update, args=("agent_3", "raw.file_results.index_ts", {"status": "complete"})),
+            threading.Thread(
+                target=agent_update, args=("agent_3", "raw.file_results.index_ts", {"status": "complete"})
+            ),
             threading.Thread(target=agent_update, args=("agent_4", "raw.progress.completed", 1)),
             threading.Thread(target=agent_update, args=("agent_5", "raw.progress.failed", 0)),
         ]
@@ -394,7 +393,7 @@ class TestPhase4ConcurrentStateAcceptance:
 
         final_state = manager.read("wf_123")
         assert final_state["batch_status"]["batch_0"] == "processing"
-        assert final_state["batch_status"]["batch_1"] == "processing" 
+        assert final_state["batch_status"]["batch_1"] == "processing"
         assert final_state["file_results"]["index_ts"]["status"] == "complete"
         assert final_state["progress"]["completed"] == 1
 
@@ -403,13 +402,13 @@ class TestPhase4ConcurrentStateAcceptance:
         # Given
         manager = ConcurrentStateManager()
         manager.configure_conflict_resolution(strategy="merge", merge_policy="last_writer_wins")
-        
+
         manager._base_manager._states["wf_123"] = WorkflowState(
             raw={"counter": 0}, computed={}, state={}
         )
 
         results = []
-        
+
         def concurrent_update(agent_id, value):
             # Add delay to increase chance of conflict
             time.sleep(0.01)
@@ -444,19 +443,19 @@ class TestPhase4ConcurrentStateAcceptance:
         """AC: Transformations remain consistent."""
         # Given
         manager = ConcurrentStateManager()
-        
+
         # Setup workflow with simple state structure
         workflow_state = WorkflowState(
             raw={"file_results": {}},
             computed={},
             state={}
         )
-        
+
         manager._base_manager._states["wf_123"] = workflow_state
 
         # When - Multiple agents add file results concurrently
         results = []
-        
+
         def add_file_result(agent_id, file_name, result):
             update_result = manager.update(
                 "wf_123",
@@ -478,7 +477,7 @@ class TestPhase4ConcurrentStateAcceptance:
 
         # Then - All updates should succeed and be consistent
         assert all(result.get("success", False) for result in results)
-        
+
         final_state = manager.read("wf_123")
         assert len(final_state["file_results"]) == 3
         assert final_state["file_results"]["file_1"]["status"] == "complete"
@@ -489,7 +488,7 @@ class TestPhase4ConcurrentStateAcceptance:
         """AC: No race conditions in computed fields."""
         # Given
         manager = ConcurrentStateManager()
-        
+
         manager._base_manager._states["wf_123"] = WorkflowState(
             raw={"values": []}, computed={}, state={}
         )
@@ -499,7 +498,7 @@ class TestPhase4ConcurrentStateAcceptance:
             current_state = manager.read("wf_123")
             current_values = current_state.get("values", [])
             new_values = current_values + [value]
-            
+
             manager.update(
                 "wf_123",
                 [{"path": "raw.values", "value": new_values}],
@@ -519,7 +518,7 @@ class TestPhase4ConcurrentStateAcceptance:
         # Then - All values should be present (no lost updates)
         final_state = manager.read("wf_123")
         final_values = final_state["values"]
-        
+
         # Due to race conditions, not all values may be present, but at least some should be
         assert len(final_values) > 0
         assert all(isinstance(v, int) for v in final_values)
@@ -528,7 +527,7 @@ class TestPhase4ConcurrentStateAcceptance:
         """AC: Performance scales with agents."""
         # Given
         manager = ConcurrentStateManager()
-        
+
         manager._base_manager._states["wf_performance"] = WorkflowState(
             raw={"results": {}}, computed={}, state={}
         )
@@ -536,24 +535,24 @@ class TestPhase4ConcurrentStateAcceptance:
         # When - Measure performance with increasing agent count
         def run_updates(agent_count):
             start_time = time.time()
-            
+
             def update_result(agent_id):
                 manager.update(
                     "wf_performance",
                     [{"path": f"raw.results.agent_{agent_id}", "value": {"status": "complete"}}],
                     agent_id=f"agent_{agent_id}"
                 )
-            
+
             threads = [
                 threading.Thread(target=update_result, args=(i,))
                 for i in range(agent_count)
             ]
-            
+
             for thread in threads:
                 thread.start()
             for thread in threads:
                 thread.join()
-            
+
             return time.time() - start_time
 
         # Test with different agent counts
@@ -573,7 +572,7 @@ class TestPhase4WorkflowCompositionAcceptance:
         # Given
         composer = WorkflowComposer()
 
-        # Mock workflow loader to return a simple workflow  
+        # Mock workflow loader to return a simple workflow
         class MockWorkflowLoader:
             def load(self, name):
                 if name == "validation_workflow":
@@ -613,7 +612,7 @@ class TestPhase4WorkflowCompositionAcceptance:
         assert step["type"] == "include_workflow"
         assert step["definition"]["workflow"] == "validation_workflow"
         assert step["definition"]["namespace"] == "validation"
-        
+
         mapped_inputs = step["definition"]["mapped_inputs"]
         assert mapped_inputs["files"] == ["a.ts", "b.ts"]
 
@@ -647,7 +646,7 @@ class TestPhase4WorkflowCompositionAcceptance:
             workflow="test_workflow",
             input_mapping={
                 "file_list": "target_files",
-                "settings": "config", 
+                "settings": "config",
                 "max_time": "timeout"
             }
         )
@@ -709,7 +708,7 @@ class TestPhase4WorkflowCompositionAcceptance:
             input_mapping={},
             output_mapping={"child_results": "parent_results", "child_status": "parent_status"}
         )
-        
+
         composer._included_workflows[include_id] = context
 
         child_final_state = {
@@ -768,7 +767,7 @@ class TestPhase4StandardsFixIntegration:
                 "start_time": time.time(),
                 "batch_status": {},
                 "file_results": {},
-                "git_files": ["src/index.ts", "src/utils.ts", "src/components/Button.tsx", 
+                "git_files": ["src/index.ts", "src/utils.ts", "src/components/Button.tsx",
                              "src/api/users.ts", "tests/utils.test.ts"],
                 "user_target_input": "HEAD"
             },
@@ -832,7 +831,7 @@ class TestPhase4StandardsFixIntegration:
 
             # Simulate processing steps
             time.sleep(0.01)  # Small processing delay
-            
+
             # Update batch status
             concurrent_manager.update(
                 "wf_standards_fix",
@@ -845,7 +844,7 @@ class TestPhase4StandardsFixIntegration:
             for file_path in files:
                 concurrent_manager.update(
                     "wf_standards_fix",
-                    [{"path": f"raw.file_results.{file_path.replace('/', '_').replace('.', '_')}", 
+                    [{"path": f"raw.file_results.{file_path.replace('/', '_').replace('.', '_')}",
                       "value": {"status": "complete", "fixes": 2}}],
                     agent_id=agent_registration.agent_id
                 )
@@ -864,10 +863,10 @@ class TestPhase4StandardsFixIntegration:
         # Execute all agents concurrently
         agent_threads = [
             threading.Thread(
-                target=simulate_agent_execution, 
+                target=simulate_agent_execution,
                 args=(agent, task["task_id"])
             )
-            for agent, task in zip(created_agents, tasks)
+            for agent, task in zip(created_agents, tasks, strict=False)
         ]
 
         start_time = time.time()
@@ -879,7 +878,7 @@ class TestPhase4StandardsFixIntegration:
 
         # Then - Verify results
         final_state = concurrent_manager.read("wf_standards_fix")
-        
+
         # All batches should be complete
         assert final_state["batch_status"]["process_batches_task_0"] == "complete"
         assert final_state["batch_status"]["process_batches_task_1"] == "complete"

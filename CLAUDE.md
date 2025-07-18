@@ -385,6 +385,8 @@ All list-returning tools support pagination to stay under 20k token limits:
 - **All list-returning tools now support pagination** - Use `page` and `max_tokens` parameters for large result sets
 - Pagination maintains deterministic ordering and includes comprehensive metadata
 - Token estimation uses conservative 4:1 character ratio to stay under 20k token limit
+- **Line length is 120 characters**
+- **Ignore linting errors that are intentional**
 
 ## Tool Discovery and Agent Guidance (Added 2025-07-09)
 
