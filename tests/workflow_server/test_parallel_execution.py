@@ -688,38 +688,34 @@ class TestComputedFieldsParallelExecution:
     def test_parallel_foreach_with_computed_fields(self):
         """Test parallel foreach step that depends on computed fields."""
         # Given - Create a workflow executor
-        from aromcp.workflow_server.workflow.executor import WorkflowExecutor
-        from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowStep
         from aromcp.workflow_server.state.models import StateSchema
-        
+        from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowStep
+        from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
+
         executor = WorkflowExecutor()
-        
+
         # Create a simple workflow definition with computed fields
         state_schema = StateSchema(
             computed={
                 "file_list": {
                     "from": "raw.git_output",
-                    "transform": "input.split('\\n').filter(line => line.trim() !== '')"
+                    "transform": "input.split('\\n').filter(line => line.trim() !== '')",
                 },
                 "code_files": {
-                    "from": "computed.file_list", 
-                    "transform": "input.filter(file => file.endsWith('.ts') || file.endsWith('.js'))"
-                }
+                    "from": "computed.file_list",
+                    "transform": "input.filter(file => file.endsWith('.ts') || file.endsWith('.js'))",
+                },
             }
         )
-        
+
         steps = [
             WorkflowStep(
                 id="process_files_parallel",
-                type="parallel_foreach", 
-                definition={
-                    "items": "{{ computed.code_files }}",
-                    "max_parallel": 2,
-                    "sub_agent_task": "process_file"
-                }
+                type="parallel_foreach",
+                definition={"items": "{{ computed.code_files }}", "max_parallel": 2, "sub_agent_task": "process_file"},
             )
         ]
-        
+
         workflow_def = WorkflowDefinition(
             name="test_computed_parallel",
             description="Test workflow with computed fields and parallel execution",
@@ -727,41 +723,41 @@ class TestComputedFieldsParallelExecution:
             default_state={"raw": {"git_output": ""}},
             state_schema=state_schema,
             inputs={},
-            steps=steps
+            steps=steps,
         )
-        
+
         # When - Start workflow with git output data
         inputs = {"git_output": "src/app.ts\nsrc/utils.js\nREADME.md\npackage.json"}
         result = executor.start(workflow_def, inputs)
         workflow_id = result["workflow_id"]
-        
+
         # Check that computed fields are properly initialized
         state = executor.state_manager.read(workflow_id)
         print(f"DEBUG TEST: State after start: {state}")
-        
+
         # Verify computed fields exist and have correct values in nested structure
         assert "computed" in state
         assert "file_list" in state["computed"]
         assert "code_files" in state["computed"]
-        
+
         # Get expected code files from nested structure
         expected_files = ["src/app.ts", "src/utils.js"]
         code_files = state["computed"]["code_files"]
-            
+
         assert code_files == expected_files
-        
+
         # When - Get next step (should be parallel foreach)
         try:
             next_step = executor.get_next_step(workflow_id)
-            
+
             # Then - Should not fail with NoneType error
             assert next_step is not None
             assert "error" not in next_step or "NoneType" not in str(next_step.get("error", ""))
-            
+
             if "step" in next_step:
                 step = next_step["step"]
                 assert step["type"] == "parallel_foreach" or step["type"] == "parallel_tasks"
-                
+
         except Exception as e:
             # Should not get "Parallel foreach items must be an array, got <class 'NoneType'>"
             assert "NoneType" not in str(e), f"Got NoneType error: {e}"

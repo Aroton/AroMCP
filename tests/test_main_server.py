@@ -47,8 +47,6 @@ class TestMainServer:
             "workflow_list_active",
             "workflow_checkpoint",
             "workflow_resume",
-            "workflow_create_sub_agent",
-            "workflow_get_sub_agent_status",
         ]
 
         build_tools = ["check_typescript", "lint_project", "run_test_suite"]

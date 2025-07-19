@@ -196,11 +196,13 @@ class WorkflowLoader:
                 raise WorkflowValidationError(f"Sub-agent task '{name}' must be an object")
 
             inputs = self._parse_inputs(task_data.get("inputs", {}))
+            steps = self._parse_steps(task_data.get("steps", []))
 
             tasks[name] = SubAgentTask(
                 name=name,
                 description=task_data.get("description", ""),
                 inputs=inputs,
+                steps=steps,
                 context_template=task_data.get("context_template", {}),
                 prompt_template=task_data.get("prompt_template", ""),
             )

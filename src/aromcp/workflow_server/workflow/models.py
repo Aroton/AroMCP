@@ -33,8 +33,9 @@ class SubAgentTask:
     name: str
     description: str
     inputs: dict[str, InputDefinition]
-    context_template: dict[str, Any]
-    prompt_template: str
+    steps: list[WorkflowStep]
+    context_template: dict[str, Any] = field(default_factory=dict)
+    prompt_template: str = ""
 
 
 @dataclass
@@ -65,6 +66,7 @@ class WorkflowInstance:
     created_at: str = ""
     completed_at: str | None = None
     error_message: str | None = None
+    inputs: dict[str, Any] = field(default_factory=dict)  # Store workflow inputs
 
 
 @dataclass

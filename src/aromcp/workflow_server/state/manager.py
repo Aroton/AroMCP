@@ -303,7 +303,9 @@ class StateManager:
                 current[final_key] = 0
             if not isinstance(current[final_key], int | float):
                 raise ValueError(f"Cannot increment non-number: {final_key}")
-            current[final_key] += value
+            # Default increment value is 1 if not provided
+            increment_value = 1 if value is None else value
+            current[final_key] += increment_value
         elif operation == "merge":
             if final_key not in current:
                 current[final_key] = {}

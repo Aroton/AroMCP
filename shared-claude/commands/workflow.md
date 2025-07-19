@@ -136,19 +136,36 @@ const step = {
 const step = {
   type: "parallel_foreach",
   items: "{{ files }}",
-  task_template: "process_file",
-  max_parallel: 10
+  sub_agent_task: "process_file",
+  max_parallel: 10,
+  instructions: "Create sub-agents for ALL tasks listed. Execute them in parallel. Wait for ALL to complete before calling get_next_step again.",
+  subagent_prompt: "You are a workflow sub-agent. Your role is to execute a specific task by following the workflow system...",
+  definition: {
+    tasks: [
+      {
+        task_id: "process_file.item0",
+        context: {
+          item: "file1.ts",
+          index: 0,
+          total: 3,
+          task_id: "process_file.item0",
+          parent_step_id: "step_3",
+          workflow_id: "wf_abc123"
+        }
+      }
+      // ... more tasks
+    ]
+  }
 };
 ```
-1. Call workflow_create_sub_agent for each item (up to max_parallel)
-2. Provide sub-agent with:
-   - Task ID
-   - Item to process
-   - Workflow context
-   - Instructions to use workflow_get_next_step
-3. Monitor sub-agent completion
-4. Aggregate results
-5. Mark step complete when all sub-agents finish
+
+**Client-Side Sub-Agent Creation**:
+1. **Client orchestrator** receives parallel_foreach step with task list
+2. **For each task**, spawn a new sub-agent using the provided `subagent_prompt`
+3. **Sub-agents** call `workflow_get_next_step(workflow_id, task_id)` to get their specific steps
+4. **Sub-agents** execute steps defined in workflow's `sub_agent_tasks` section
+5. **Sub-agents** continue until `workflow_get_next_step` returns null (task complete)
+6. **Wait for ALL sub-agents** to complete before main agent continues
 
 ### Shell Commands (`shell_command`)
 ```javascript
@@ -167,26 +184,34 @@ const step = {
 
 ## Sub-Agent Instructions
 
-**When delegated as a sub-agent for parallel execution:**
+**When spawned as a sub-agent for parallel execution:**
 
-1. Receive your task context:
-   - workflow_id
-   - task_id
-   - item to process
-   - Any additional context
+1. **Receive your task context** from the orchestrator:
+   - `workflow_id`: Parent workflow instance
+   - `task_id`: Your unique task identifier (e.g., "process_file.item0")
+   - `item`: The specific item you're processing
+   - `index`, `total`: Your position in the batch
+   - Additional context variables
 
-2. Execute your assigned task:
+2. **Execute your assigned task** using the workflow system:
    ```
    while task not complete:
      1. Call workflow_get_next_step(workflow_id, task_id)
-     2. Execute the step following main agent patterns
-     3. Call workflow_step_complete with your task_id
-     4. Continue until no more steps
+     2. If step returned, execute it following main agent patterns:
+        - mcp_call: Execute the specified MCP tool
+        - state_update: Call workflow_update_state
+        - conditional: Follow branch logic
+        - Other types: Follow step instructions
+     3. Call workflow_step_complete(workflow_id, step_id, result)
+     4. Continue until workflow_get_next_step returns null
    ```
 
-3. Focus only on your assigned item/task
-4. Update state only through workflow tools
-5. Report completion when done
+3. **Key principles for sub-agents:**
+   - Use your specific `task_id` for all workflow operations
+   - Focus only on your assigned item/task
+   - Update state only through workflow tools
+   - Follow the same step execution patterns as main agents
+   - Variables like `{{ item }}`, `{{ index }}`, `{{ task_id }}` are available in your context
 
 ## Error Handling
 

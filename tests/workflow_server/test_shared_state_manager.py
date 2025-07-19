@@ -7,9 +7,10 @@ they used separate instances.
 """
 
 import pytest
+
 from aromcp.workflow_server.state.shared import get_shared_state_manager, reset_shared_state_manager
-from aromcp.workflow_server.tools.workflow_tools import get_state_manager as get_workflow_state_manager
 from aromcp.workflow_server.tools.state_tools import get_state_manager as get_state_state_manager
+from aromcp.workflow_server.tools.workflow_tools import get_state_manager as get_workflow_state_manager
 
 
 class TestSharedStateManager:

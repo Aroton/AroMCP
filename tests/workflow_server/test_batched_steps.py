@@ -1,8 +1,8 @@
 """Test batched step execution in workflow executor."""
 
 from aromcp.workflow_server.state.models import StateSchema
-from aromcp.workflow_server.workflow.executor import WorkflowExecutor
 from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowStep
+from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
 
 
 class TestBatchedStepExecution:
@@ -133,8 +133,13 @@ class TestBatchedStepExecution:
         assert next_step["steps"][0]["id"] == "msg1"
         assert next_step["steps"][1]["id"] == "msg2"
 
-        # Complete the batch
+        # Complete both user messages in the batch
+        executor.step_complete(workflow_id, "msg1", "success")
         executor.step_complete(workflow_id, "msg2", "success")
+
+        # Call get_next_step to trigger completion check
+        final_step = executor.get_next_step(workflow_id)
+        assert final_step is None  # Should be None when workflow is complete
 
         # Workflow should be complete
         status = executor.get_workflow_status(workflow_id)
@@ -210,24 +215,26 @@ class TestBatchedStepExecution:
                     definition={
                         "condition": "{{ raw.condition }}",
                         "then_steps": [
-                            {"id": "then_msg1", "type": "user_message", "definition": {"message": "Condition true"}},
+                            {"id": "then_msg1", "type": "user_message", "message": "Condition true"},
                             {
                                 "id": "then_msg2",
                                 "type": "user_message",
-                                "definition": {"message": "Executing then branch"},
+                                "message": "Executing then branch",
                             },
                             {
                                 "id": "then_action",
                                 "type": "state_update",
-                                "definition": {"path": "raw.result", "value": "then"},
+                                "path": "raw.result", 
+                                "value": "then"
                             },
                         ],
                         "else_steps": [
-                            {"id": "else_msg", "type": "user_message", "definition": {"message": "Condition false"}},
+                            {"id": "else_msg", "type": "user_message", "message": "Condition false"},
                             {
                                 "id": "else_action",
                                 "type": "state_update",
-                                "definition": {"path": "raw.result", "value": "else"},
+                                "path": "raw.result", 
+                                "value": "else"
                             },
                         ],
                     },
@@ -242,17 +249,24 @@ class TestBatchedStepExecution:
         # Get next step - conditional is processed internally and returns first step from branch
         next_step = executor.get_next_step(workflow_id)
 
-        # The conditional evaluates to false (raw.condition is True but state is empty)
-        # So we get the first step from else branch, which should be batched with the action
+        # The conditional evaluates to true (raw.condition is True)
+        # So we get the steps from then branch, which should be batched
         assert next_step is not None
 
-        # Check if it's a batched response or a single step
-        if next_step.get("batch"):
-            # Batched user messages
-            assert len(next_step["user_messages"]) >= 1
-        else:
-            # Single step - should be a user_message from the conditional branch
-            assert next_step["step"]["type"] == "user_message"
+        # Should be batched format with steps and server_completed_steps
+        assert "steps" in next_step
+        assert "server_completed_steps" in next_step
+        
+        # Should have the two user messages from then_steps
+        user_messages = [s for s in next_step["steps"] if s["type"] == "user_message"]
+        assert len(user_messages) == 2
+        assert user_messages[0]["definition"]["message"] == "Condition true"
+        assert user_messages[1]["definition"]["message"] == "Executing then branch"
+        
+        # The state_update should be in server_completed_steps
+        state_updates = [s for s in next_step["server_completed_steps"] if s["type"] == "state_update"]
+        assert len(state_updates) == 1
+        assert state_updates[0]["result"]["status"] == "success"
 
     def test_shell_command_not_batched(self):
         """Test that shell commands are processed internally with correct batching behavior."""

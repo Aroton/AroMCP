@@ -8,18 +8,14 @@ from ...utils.json_parameter_middleware import json_convert
 from ..models.workflow_models import WorkflowStartResponse
 from ..state.concurrent import ConcurrentStateManager
 from ..state.shared import get_shared_state_manager
-from ..workflow.executor import WorkflowExecutor
+from ..workflow.queue_executor import QueueBasedWorkflowExecutor
 from ..workflow.loader import WorkflowLoader
 from ..workflow.models import WorkflowExecutionError, WorkflowNotFoundError
-from ..workflow.parallel import ParallelForEachProcessor
-from ..workflow.sub_agents import SubAgentManager
 
 # Global instances for workflow management
 _workflow_loader = None
 _workflow_executor = None
 _concurrent_state_manager = None
-_sub_agent_manager = None
-_parallel_processor = None
 
 
 def get_workflow_loader() -> WorkflowLoader:
@@ -30,12 +26,12 @@ def get_workflow_loader() -> WorkflowLoader:
     return _workflow_loader
 
 
-def get_workflow_executor() -> WorkflowExecutor:
+def get_workflow_executor() -> QueueBasedWorkflowExecutor:
     """Get or create workflow executor instance."""
     global _workflow_executor
     if _workflow_executor is None:
-        state_manager = get_shared_state_manager()
-        _workflow_executor = WorkflowExecutor(state_manager)
+        shared_state_manager = get_shared_state_manager()
+        _workflow_executor = QueueBasedWorkflowExecutor(shared_state_manager)
     return _workflow_executor
 
 
@@ -53,22 +49,8 @@ def get_concurrent_state_manager() -> ConcurrentStateManager:
     return _concurrent_state_manager
 
 
-def get_sub_agent_manager() -> SubAgentManager:
-    """Get or create sub-agent manager instance."""
-    global _sub_agent_manager
-    if _sub_agent_manager is None:
-        _sub_agent_manager = SubAgentManager()
-    return _sub_agent_manager
 
 
-def get_parallel_processor() -> ParallelForEachProcessor:
-    """Get or create parallel processor instance."""
-    global _parallel_processor
-    if _parallel_processor is None:
-        from ..workflow.expressions import ExpressionEvaluator
-
-        _parallel_processor = ParallelForEachProcessor(ExpressionEvaluator())
-    return _parallel_processor
 
 
 def register_workflow_tools(mcp):
@@ -248,7 +230,10 @@ def register_workflow_tools(mcp):
             # Extract error message if step failed
             error_message = None
             if status == "failed" and result:
-                error_message = result.get("error", "Step execution failed")
+                if isinstance(result, dict):
+                    error_message = result.get("error", "Step execution failed")
+                else:
+                    error_message = str(result)
 
             completion_result = executor.step_complete(workflow_id, step_id, status, result, error_message)
 
@@ -328,7 +313,15 @@ def register_workflow_tools(mcp):
                         }
                     }
 
-            updated_state = executor.update_workflow_state(workflow_id, updates)
+            # Ensure updates is a list (json_convert handles this)
+            if isinstance(updates, str):
+                # This shouldn't happen with @json_convert, but just in case
+                updates = json.loads(updates)
+            
+            # Type assertion for type checker
+            parsed_updates: list[dict[str, Any]] = updates  # type: ignore[assignment]
+            
+            updated_state = executor.update_workflow_state(workflow_id, parsed_updates)
 
             return {"data": {"state": updated_state}}
 
@@ -366,82 +359,50 @@ def register_workflow_tools(mcp):
 
     @mcp.tool
     @json_convert
-    def workflow_get_next_step(
-        workflow_id: str, sub_agent_context: dict[str, Any] | str | None = None
-    ) -> dict[str, Any]:
-        """Get next step with sub-agent context support.
+    def workflow_get_next_step(workflow_id: str, task_id: str | None = None) -> dict[str, Any]:
+        """Get next step in workflow execution or for a specific sub-agent task.
 
         Use this tool when:
+        - You want to advance workflow execution
         - You are a sub-agent getting your next task step
-        - You need workflow guidance with your specific context
-        - You are executing parallel tasks and need filtered steps
-        - You want to advance workflow execution with context isolation
+        - You need the next actionable step
+        - You want to check workflow completion status
 
         Args:
             workflow_id: ID of the workflow instance
-            sub_agent_context: Sub-agent context including task_id and context data
+            task_id: Optional task ID for sub-agent execution (e.g., "checkFile.item1")
 
         Returns:
-            Next step filtered for sub-agent or main workflow step
+            Next step for execution or completion status
 
         Example:
-            workflow_get_next_step("wf_abc123", {"task_id": "batch_0", "context": {...}})
+            workflow_get_next_step("wf_abc123")
             → {"step": {"type": "mcp_call", "definition": {...}}}
+            
+            workflow_get_next_step("wf_abc123", "checkFile.item1")
+            → {"step": {"type": "mcp_call", "definition": {...}}}
+            
+        Note:
+            If you get an error about "items must be an array", ensure your workflow state
+            contains properly evaluated arrays instead of template strings. Use workflow_update_state
+            to fix the state before calling this tool.
         """
         try:
             executor = get_workflow_executor()
-
-            # Parse sub_agent_context if provided as string
-            if isinstance(sub_agent_context, str):
-                try:
-                    sub_agent_context = json.loads(sub_agent_context)
-                except json.JSONDecodeError:
-                    return {
-                        "error": {
-                            "code": "INVALID_INPUT",
-                            "message": "Sub-agent context must be valid JSON if provided as string",
-                        }
-                    }
-
-            # If sub-agent context provided, get filtered steps
-            if sub_agent_context and "task_id" in sub_agent_context:
-                sub_agent_manager = get_sub_agent_manager()
-                agent = sub_agent_manager.get_agent_by_task_id(workflow_id, sub_agent_context["task_id"])
-
-                if agent:
-                    # Record activity
-                    sub_agent_manager.record_agent_activity(agent.agent_id)
-
-                    # Get filtered steps for this sub-agent
-                    filtered_steps = sub_agent_manager.get_filtered_steps_for_agent(agent.agent_id)
-
-                    if filtered_steps:
-                        next_step = filtered_steps[0]  # Get next step
-                        return {"data": {"step": next_step}}
-                    else:
-                        # Sub-agent task complete
-                        sub_agent_manager.update_agent_status(agent.agent_id, "completed")
-                        return {
-                            "data": {
-                                "completed": True,
-                                "task_id": sub_agent_context["task_id"],
-                                "workflow_id": workflow_id,
-                            }
-                        }
-                else:
-                    return {
-                        "error": {
-                            "code": "NOT_FOUND",
-                            "message": f"Sub-agent not found for task_id: {sub_agent_context['task_id']}",
-                        }
-                    }
-
-            # Regular workflow step processing
-            next_step = executor.get_next_step(workflow_id)
+            
+            if task_id:
+                # Sub-agent execution
+                next_step = executor.get_next_sub_agent_step(task_id)
+            else:
+                # Main workflow execution
+                next_step = executor.get_next_step(workflow_id)
 
             if next_step is None:
-                status = executor.get_workflow_status(workflow_id)
-                return {"data": {"completed": True, "status": status["status"], "workflow_id": workflow_id}}
+                if task_id:
+                    return {"data": {"completed": True, "task_id": task_id, "workflow_id": workflow_id}}
+                else:
+                    status = executor.get_workflow_status(workflow_id)
+                    return {"data": {"completed": True, "status": status["status"], "workflow_id": workflow_id}}
 
             return {"data": next_step}
 
@@ -546,144 +507,4 @@ def register_workflow_tools(mcp):
         except Exception as e:
             return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to resume workflow: {e}"}}
 
-    @mcp.tool
-    @json_convert
-    def workflow_create_sub_agent(
-        workflow_id: str,
-        task_id: str,
-        task_name: str,
-        context: dict[str, Any] | str,
-        parent_step_id: str,
-        custom_prompt: str | None = None,
-    ) -> dict[str, Any]:
-        """Create a sub-agent for parallel task execution.
 
-        Use this tool when:
-        - You need to delegate work to a sub-agent
-        - You are implementing parallel_foreach step execution
-        - You want to isolate task context for specific work
-        - You need to distribute work across multiple agents
-
-        Args:
-            workflow_id: Parent workflow ID
-            task_id: Unique identifier for this task
-            task_name: Name of task definition to execute
-            context: Context data for the sub-agent
-            parent_step_id: ID of step that created this sub-agent
-            custom_prompt: Optional custom prompt override
-
-        Returns:
-            Sub-agent registration information and prompt
-
-        Example:
-            workflow_create_sub_agent("wf_abc123", "batch_0", "process_batch",
-                                    {"files": ["a.ts", "b.ts"]}, "step_3")
-            → {"agent_id": "agent_xyz", "task_id": "batch_0", "prompt": "..."}
-        """
-        try:
-            # Parse context if provided as string
-            if isinstance(context, str):
-                try:
-                    context = json.loads(context)
-                except json.JSONDecodeError:
-                    return {
-                        "error": {
-                            "code": "INVALID_INPUT",
-                            "message": "Context must be valid JSON if provided as string",
-                        }
-                    }
-
-            sub_agent_manager = get_sub_agent_manager()
-
-            # Create sub-agent
-            registration = sub_agent_manager.create_sub_agent(
-                workflow_id=workflow_id,
-                task_id=task_id,
-                task_name=task_name,
-                context=context,
-                parent_step_id=parent_step_id,
-                custom_prompt=custom_prompt,
-            )
-
-            if registration:
-                return {
-                    "data": {
-                        "agent_id": registration.agent_id,
-                        "task_id": registration.task_id,
-                        "workflow_id": registration.workflow_id,
-                        "prompt": registration.prompt,
-                        "context": registration.context.to_dict(),
-                        "status": registration.status,
-                        "created_at": registration.created_at,
-                    }
-                }
-            else:
-                return {
-                    "error": {"code": "CREATION_FAILED", "message": f"Failed to create sub-agent for task: {task_name}"}
-                }
-
-        except Exception as e:
-            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to create sub-agent: {e}"}}
-
-    @mcp.tool
-    @json_convert
-    def workflow_get_sub_agent_status(workflow_id: str, task_id: str | None = None) -> dict[str, Any]:
-        """Get status of sub-agents for a workflow.
-
-        Use this tool when:
-        - You want to monitor parallel task execution progress
-        - You need to check if sub-agents have completed their work
-        - You want to see which tasks are still running
-        - You need to coordinate between parallel sub-agents
-
-        Args:
-            workflow_id: Workflow ID to check sub-agents for
-            task_id: Optional specific task ID to check
-
-        Returns:
-            Sub-agent status information and statistics
-
-        Example:
-            workflow_get_sub_agent_status("wf_abc123")
-            → {"total_agents": 3, "completed": 2, "active": 1, "agents": [...]}
-        """
-        try:
-            sub_agent_manager = get_sub_agent_manager()
-
-            if task_id:
-                # Get specific sub-agent
-                agent = sub_agent_manager.get_agent_by_task_id(workflow_id, task_id)
-                if agent:
-                    return {
-                        "data": {
-                            "agent_id": agent.agent_id,
-                            "task_id": agent.task_id,
-                            "status": agent.status,
-                            "step_count": agent.step_count,
-                            "last_activity": agent.last_activity,
-                            "error": agent.error,
-                        }
-                    }
-                else:
-                    return {"error": {"code": "NOT_FOUND", "message": f"Sub-agent not found for task_id: {task_id}"}}
-            else:
-                # Get all sub-agents for workflow
-                agents = sub_agent_manager.get_workflow_agents(workflow_id)
-                stats = sub_agent_manager.get_agent_stats(workflow_id)
-
-                agent_data = [
-                    {
-                        "agent_id": agent.agent_id,
-                        "task_id": agent.task_id,
-                        "status": agent.status,
-                        "step_count": agent.step_count,
-                        "last_activity": agent.last_activity,
-                        "error": agent.error,
-                    }
-                    for agent in agents
-                ]
-
-                return {"data": {"workflow_id": workflow_id, "agents": agent_data, "stats": stats}}
-
-        except Exception as e:
-            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to get sub-agent status: {e}"}}

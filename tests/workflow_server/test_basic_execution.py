@@ -6,9 +6,10 @@ from pathlib import Path
 import pytest
 
 from aromcp.workflow_server.state.manager import StateManager
-from aromcp.workflow_server.workflow.executor import VariableReplacer, WorkflowExecutor
 from aromcp.workflow_server.workflow.loader import WorkflowLoader
 from aromcp.workflow_server.workflow.models import WorkflowExecutionError
+from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
+from aromcp.workflow_server.workflow.variables import VariableReplacer
 
 
 class TestWorkflowStart:
@@ -182,13 +183,14 @@ class TestSequentialExecution:
         assert next_step["steps"][0]["id"] == "step2"
         assert next_step["steps"][0]["type"] == "user_message"
 
-        # Only step3 should be in server_completed_steps (step1 was processed before batching started)
-        assert len(next_step["server_completed_steps"]) == 1
-        assert next_step["server_completed_steps"][0]["id"] == "step3"
+        # Both state_update steps should be in server_completed_steps
+        assert len(next_step["server_completed_steps"]) == 2
+        assert next_step["server_completed_steps"][0]["id"] == "step1"
+        assert next_step["server_completed_steps"][1]["id"] == "step3"
         assert next_step["server_completed_steps"][0]["type"] == "state_update"
 
         # Complete the user message step
-        executor.step_complete(workflow_id, "step2")
+        executor.step_complete(workflow_id, "step2", "success")
 
         # Should be done
         next_step = executor.get_next_step(workflow_id)
@@ -234,8 +236,10 @@ class TestSequentialExecution:
         assert next_step["steps"][0]["id"] == "step2"
         assert next_step["steps"][0]["type"] == "user_message"
 
-        # No server_completed_steps in this batch (step1 was processed before batching)
-        assert len(next_step["server_completed_steps"]) == 0
+        # Step1 (state_update) should be in server_completed_steps
+        assert len(next_step["server_completed_steps"]) == 1
+        assert next_step["server_completed_steps"][0]["id"] == "step1"
+        assert next_step["server_completed_steps"][0]["type"] == "state_update"
 
         # Mark step2 as failed
         completion_result = executor.step_complete(
@@ -364,8 +368,9 @@ steps:
             assert first_step["steps"][0]["type"] == "user_message"
             message_def = first_step["steps"][0]["definition"]
 
-            # state_update was processed before batching (not included in server_completed_steps)
-            assert len(first_step["server_completed_steps"]) == 0
+            # state_update was processed and included in server_completed_steps
+            assert len(first_step["server_completed_steps"]) == 1
+            assert first_step["server_completed_steps"][0]["type"] == "state_update"
 
             # Variables should be replaced based on current state
             message = message_def["message"]
@@ -409,8 +414,8 @@ class TestWorkflowStatusAndManagement:
 
     def test_list_active_workflows(self):
         """Test listing active workflow instances."""
-        # Create fresh executor with its own state manager
-        executor = WorkflowExecutor(StateManager())
+        # Create fresh executor - QueueBasedWorkflowExecutor creates its own state manager
+        executor = WorkflowExecutor()
 
         from aromcp.workflow_server.state.models import StateSchema
         from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowStep
@@ -456,10 +461,11 @@ class TestWorkflowStatusAndManagement:
         """Test error handling for non-existent workflows."""
         executor = WorkflowExecutor()
 
-        with pytest.raises(WorkflowExecutionError) as exc:
-            executor.get_next_step("nonexistent_workflow")
-
-        assert "Workflow nonexistent_workflow not found" in str(exc.value)
+        # QueueBasedWorkflowExecutor returns error dict instead of raising exception
+        result = executor.get_next_step("nonexistent_workflow")
+        
+        assert "error" in result
+        assert "Workflow nonexistent_workflow not found" in result["error"]
 
 
 class TestConditionalMultipleSteps:
@@ -505,45 +511,45 @@ class TestConditionalMultipleSteps:
         workflow_id = result["workflow_id"]
 
         # First step should be the conditional step, which should process internally
-        # Since there's no initial user_message, it returns single steps from the conditional
+        # With batching fix, it now returns all steps in batched format
         next_step = executor.get_next_step(workflow_id)
 
-        # Should be the first user message from else_steps (not batched)
-        assert "step" in next_step
-        assert next_step["step"]["type"] == "user_message"
-        assert "Value is 10 or less" in next_step["step"]["definition"]["message"]
-        executor.step_complete(workflow_id, next_step["step"]["id"], "success")
-
-        # Next step - now we should get batching since we're continuing from a user_message
-        next_step = executor.get_next_step(workflow_id)
-
-        # Should get batched format now
+        # Should get batched format with all the steps
         assert "steps" in next_step
         assert "server_completed_steps" in next_step
 
-        # Should have remaining user messages
+        # Should have all user messages from else_steps and final_step
         user_messages = [s for s in next_step["steps"] if s["type"] == "user_message"]
-        assert len(user_messages) >= 1  # At least "Processing complete" and maybe "Final step"
+        assert len(user_messages) == 3  # "Value is 10 or less", "Processing complete", "Final step"
 
-        # Check for the expected message
+        # Check for the expected messages
         messages = [msg["definition"]["message"] for msg in user_messages]
-        assert any("Processing complete" in msg for msg in messages)
+        assert "Value is 10 or less" in messages[0]
+        assert "Processing complete" in messages[1]
+        assert "Final step" in messages[2]
 
-        # The state_update was already processed when we were in the conditional branch
-        # It won't be in server_completed_steps because it was processed before this batch
-        # But we can verify the state was updated
+        # The state_update should have been processed on the server
+        assert len(next_step["server_completed_steps"]) == 1
+        assert next_step["server_completed_steps"][0]["type"] == "state_update"
+        assert next_step["server_completed_steps"][0]["result"]["status"] == "success"
+
+        # Verify the state was updated
         current_state = executor.state_manager.read(workflow_id)
         assert (
             current_state.get("raw", {}).get("processed") is True
         ), f"State update from conditional was not applied. State: {current_state}"
 
-        # Complete the last step to finish workflow
-        last_step_id = next_step["steps"][-1]["id"]
-        executor.step_complete(workflow_id, last_step_id, "success")
+        # Complete all the steps to finish workflow
+        for step in next_step["steps"]:
+            executor.step_complete(workflow_id, step["id"], "success")
 
-        # Verify that the state was actually updated by the conditional else_steps
-        current_state = executor.state_manager.read(workflow_id)
-        assert current_state.get("raw", {}).get("processed") is True, f"State was not updated. Current state: {current_state}"
+        # Check if there are more steps
+        next_step = executor.get_next_step(workflow_id)
+        assert next_step is None, f"Unexpected next step: {next_step}"
+
+        # Check workflow is completed
+        status = executor.get_workflow_status(workflow_id)
+        assert status["status"] == "completed"
 
     def test_conditional_with_shell_command_in_else_steps(self):
         """Test that shell commands in else_steps are executed properly."""
@@ -571,7 +577,9 @@ class TestConditionalMultipleSteps:
                 },
             ),
             WorkflowStep(
-                id="process_files", type="user_message", definition={"message": "Processing files: {{ changed_files }}"}
+                id="process_files",
+                type="user_message",
+                definition={"message": "Processing files: {{ raw.changed_files }}"},
             ),
         ]
 
@@ -592,21 +600,22 @@ class TestConditionalMultipleSteps:
         # Get the first step - should execute conditional and return user message
         first_step = executor.get_next_step(workflow_id)
 
-        # The conditional should be processed internally and we should get the user message
-        if first_step.get("batch"):
-            assert len(first_step["user_messages"]) >= 1
-            assert "Getting changed files..." in first_step["user_messages"][0]["definition"]["message"]
-            # Complete all user messages
-            for msg in first_step["user_messages"]:
-                executor.step_complete(workflow_id, msg["id"], "success")
-        else:
-            assert first_step["step"]["type"] == "user_message"
-            assert "Getting changed files..." in first_step["step"]["definition"]["message"]
-            # Complete the user message step
-            executor.step_complete(workflow_id, first_step["step"]["id"], "success")
+        # The conditional should be processed internally and we should get batched results
+        assert "steps" in first_step
+        assert "server_completed_steps" in first_step
+
+        # Should have the user message
+        user_messages = [s for s in first_step["steps"] if s["type"] == "user_message"]
+        assert len(user_messages) >= 1
+        assert "Getting changed files..." in user_messages[0]["definition"]["message"]
+
+        # The shell command should have been executed on the server
+        shell_commands = [s for s in first_step["server_completed_steps"] if s["type"] == "shell_command"]
+        assert len(shell_commands) == 1
+        assert shell_commands[0]["result"]["status"] == "success"
 
         # Now get the next step - the shell command should have been processed internally
-        second_step = executor.get_next_step(workflow_id)
+        executor.get_next_step(workflow_id)
 
         # Check that the state was updated by the shell command
         current_state = executor.state_manager.read(workflow_id)
@@ -617,10 +626,8 @@ class TestConditionalMultipleSteps:
             current_state.get("raw", {}).get("changed_files") == "file1.py\nfile2.py"
         ), f"Shell command was not executed. State: {current_state}"
 
-        # The second step should be the final processing step with variables replaced
-        if second_step:
-            if second_step.get("batch"):
-                # Verify that variable replacement worked in subsequent steps
-                assert len(second_step["user_messages"]) >= 1
-                message = second_step["user_messages"][0]["definition"]["message"]
-                assert "file1.py" in message, f"Variables not replaced properly: {message}"
+        # The processing step should also be in the first batch with variables replaced
+        assert "Processing files:" in user_messages[-1]["definition"]["message"]
+        # Verify that variable replacement worked
+        message = user_messages[-1]["definition"]["message"]
+        assert "file1.py" in message, f"Variables not replaced properly: {message}"
