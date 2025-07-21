@@ -115,16 +115,14 @@ class TestBatchedStepExecution:
         result = executor.start(workflow_def)
         workflow_id = result["workflow_id"]
 
-        # Get first step - should be a single actionable step (not batched)
+        # Get first step - should be in batched format
         first_step = executor.get_next_step(workflow_id)
-        assert "step" in first_step  # Single step format
-        assert first_step["step"]["id"] == "action1"
-        assert first_step["step"]["type"] == "mcp_call"
+        assert "steps" in first_step  # Batched format
+        assert len(first_step["steps"]) == 1
+        assert first_step["steps"][0]["id"] == "action1"
+        assert first_step["steps"][0]["type"] == "mcp_call"
 
-        # Complete first step
-        executor.step_complete(workflow_id, "action1", "success")
-
-        # Get next step - should be batched user messages
+        # Get next step (implicitly completes first step) - should be batched user messages
         next_step = executor.get_next_step(workflow_id)
         assert "steps" in next_step
         assert "server_completed_steps" in next_step
@@ -133,11 +131,7 @@ class TestBatchedStepExecution:
         assert next_step["steps"][0]["id"] == "msg1"
         assert next_step["steps"][1]["id"] == "msg2"
 
-        # Complete both user messages in the batch
-        executor.step_complete(workflow_id, "msg1", "success")
-        executor.step_complete(workflow_id, "msg2", "success")
-
-        # Call get_next_step to trigger completion check
+        # Get next step (implicitly completes both user messages)
         final_step = executor.get_next_step(workflow_id)
         assert final_step is None  # Should be None when workflow is complete
 
@@ -185,10 +179,7 @@ class TestBatchedStepExecution:
         assert first_batch["steps"][1]["id"] == "action1"
         assert first_batch["steps"][1]["type"] == "mcp_call"
 
-        # Complete first action
-        executor.step_complete(workflow_id, "action1", "success")
-
-        # Second batch: starts with user_message, so it triggers batching
+        # Second batch: get next step (implicitly completes first batch) - starts with user_message, so it triggers batching
         second_batch = executor.get_next_step(workflow_id)
         assert "steps" in second_batch
         assert "server_completed_steps" in second_batch
@@ -310,10 +301,7 @@ class TestBatchedStepExecution:
         assert next_step["server_completed_steps"][0]["type"] == "shell_command"
         assert next_step["server_completed_steps"][0]["result"]["status"] == "success"
 
-        # Complete the batch by acknowledging the user message
-        executor.step_complete(workflow_id, "msg2", "success")
-
-        # Second call should return None (workflow complete)
+        # Get next step (implicitly completes the user messages)
         final_step = executor.get_next_step(workflow_id)
         assert final_step is None, "Workflow should be complete"
 
@@ -377,8 +365,7 @@ class TestBatchedStepExecution:
         assert "output" in state["raw"], "State should contain output from shell command"
         assert "Hello from workflow" in state["raw"]["output"], "Output should contain command result"
 
-        # Complete the batch by acknowledging the final message
-        executor.step_complete(workflow_id, "result_msg", "success")
+        # Get next step (implicitly completes the user messages)
         final_step = executor.get_next_step(workflow_id)
         assert final_step is None, "Workflow should be complete"
 
@@ -430,11 +417,7 @@ class TestBatchedStepExecution:
         expected_steps = ["first_cmd", "second_cmd"]
         assert server_step_ids == expected_steps, f"Expected {expected_steps} but got {server_step_ids}"
 
-        # Complete the batch (workflow should complete after this)
-        for step in step1["steps"]:
-            executor.step_complete(workflow_id, step["id"], "success")
-
-        # Workflow should be complete
+        # Get next step (implicitly completes the batch)
         step2 = executor.get_next_step(workflow_id)
         assert step2 is None, "Workflow should be complete"
 
@@ -488,10 +471,7 @@ class TestBatchedStepExecution:
         assert step1["server_completed_steps"][0]["id"] == "first_cmd"
         assert step1["server_completed_steps"][0]["type"] == "shell_command"
 
-        # Complete the actionable step
-        executor.step_complete(workflow_id, "actionable_cmd", "success")
-
-        # Workflow should be complete
+        # Get next step (implicitly completes the actionable step)
         step2 = executor.get_next_step(workflow_id)
         assert step2 is None, "Workflow should be complete"
 

@@ -118,9 +118,11 @@ class TestWorkflowValidator:
         validator = WorkflowValidator()
         result = validator.validate(workflow)
         assert result is False
-        assert any("missing prompt_template" in error for error in validator.errors)
+        # prompt_template is now optional, so no error for missing_prompt task
         assert any("must be an object" in error for error in validator.errors)
-        assert len(validator.warnings) > 0  # Should warn about missing description
+        # Should have warnings about missing description and missing prompt_template/steps
+        assert len(validator.warnings) > 0  
+        assert any("should have either prompt_template or steps" in warning for warning in validator.warnings)
 
     def test_config_validation(self):
         """Test validation of workflow configuration."""

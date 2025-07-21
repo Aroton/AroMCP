@@ -1,6 +1,15 @@
 """Workflow validation logic shared between runtime and static validation."""
 
+import json
+from pathlib import Path
 from typing import Any
+
+try:
+    import jsonschema
+    from jsonschema import validate, ValidationError, Draft7Validator
+    HAS_JSONSCHEMA = True
+except ImportError:
+    HAS_JSONSCHEMA = False
 
 
 class WorkflowValidator:
@@ -9,7 +18,7 @@ class WorkflowValidator:
     # Required top-level fields
     REQUIRED_FIELDS = {"name", "description", "version", "steps"}
 
-    # Valid step types
+    # Valid step types (matches step registry and schema)
     VALID_STEP_TYPES = {
         "state_update",
         "mcp_call",
@@ -26,6 +35,9 @@ class WorkflowValidator:
         "agent_shell_command",
         "internal_mcp_call",
         "conditional_message",
+        "agent_task",
+        "debug_task_completion",
+        "debug_step_advance",
     }
 
     # Valid message types
@@ -46,6 +58,29 @@ class WorkflowValidator:
         self.state_paths: set[str] = set()
         self.input_params: set[str] = set()
         self.sub_agent_tasks: set[str] = set()
+        self.schema = None
+        self._load_schema()
+    
+    def _load_schema(self):
+        """Load the workflow JSON schema if available."""
+        if not HAS_JSONSCHEMA:
+            return
+        
+        # Try to find the schema file relative to this module
+        schema_paths = [
+            Path(__file__).parent.parent.parent.parent.parent / ".aromcp" / "workflows" / "schema.json",
+            Path.cwd() / ".aromcp" / "workflows" / "schema.json",
+        ]
+        
+        for schema_path in schema_paths:
+            if schema_path.exists():
+                try:
+                    with open(schema_path, 'r') as f:
+                        self.schema = json.load(f)
+                    break
+                except Exception:
+                    # Silently ignore schema loading errors
+                    pass
 
     def validate(self, workflow: dict[str, Any]) -> bool:
         """Validate a workflow definition.
@@ -65,6 +100,19 @@ class WorkflowValidator:
         if not isinstance(workflow, dict):
             self.errors.append("Workflow must be a dictionary/object")
             return False
+
+        # Try JSON schema validation first if available
+        if self.schema and HAS_JSONSCHEMA:
+            try:
+                validate(instance=workflow, schema=self.schema)
+            except ValidationError as e:
+                # Convert JSON schema error to user-friendly message
+                error_path = " -> ".join(str(p) for p in e.absolute_path) if e.absolute_path else "root"
+                self.errors.append(f"Schema validation error at {error_path}: {e.message}")
+                # Continue with traditional validation to provide more specific errors
+            except Exception:
+                # If schema validation fails for any reason, fall back to traditional validation
+                pass
 
         # Validate structure
         self._validate_structure(workflow)
@@ -358,11 +406,38 @@ class WorkflowValidator:
         if "description" not in task:
             self.warnings.append(f"Sub-agent task '{name}' should have a description")
 
-        if "prompt_template" not in task:
-            self.errors.append(f"Sub-agent task '{name}' missing prompt_template")
+        # prompt_template is optional - defaults to standard prompt if missing
+        if "prompt_template" not in task and "steps" not in task:
+            self.warnings.append(f"Sub-agent task '{name}' should have either prompt_template or steps defined")
 
     def _validate_references(self):
         """Cross-validate references between components."""
         # This is where we'd check that referenced sub_agent_tasks exist,
         # state paths are valid, etc. For now, basic implementation.
         pass
+    
+    def validate_with_schema(self, workflow: dict[str, Any]) -> tuple[bool, list[str]]:
+        """Validate a workflow using only the JSON schema.
+        
+        Args:
+            workflow: Parsed workflow dictionary
+            
+        Returns:
+            Tuple of (is_valid, error_messages)
+        """
+        if not self.schema or not HAS_JSONSCHEMA:
+            return True, ["JSON schema validation not available"]
+        
+        try:
+            validate(instance=workflow, schema=self.schema)
+            return True, []
+        except ValidationError as e:
+            # Collect all validation errors
+            validator = Draft7Validator(self.schema)
+            errors = []
+            for error in validator.iter_errors(workflow):
+                error_path = " -> ".join(str(p) for p in error.absolute_path) if error.absolute_path else "root"
+                errors.append(f"Schema error at {error_path}: {error.message}")
+            return False, errors
+        except Exception as e:
+            return False, [f"Schema validation error: {str(e)}"]

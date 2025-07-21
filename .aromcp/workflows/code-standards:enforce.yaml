@@ -27,7 +27,7 @@ state_schema:
       transform: |
         input.filter(file => {
           const codeExts = ['.py', '.pyi', '.ts', '.tsx', '.js', '.jsx', '.java', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.cs', '.rb'];
-          const excludeDirs = ['node_modules', '__pycache__', '.git', 'dist', 'build', 'target', 'bin', 'obj', 'out', '.venv', 'venv', 'env', '.pytest_cache', '.mypy_cache', 'vendor'];
+          const excludeDirs = ['node_modules', '__pycache__', '.git', 'dist', 'build', 'target', 'bin', 'obj', 'out', '.venv', 'venv', 'env', '.pytest_cache', '.mypy_cache', 'vendor', 'eslint', '.aromcp', '.claude'];
           const parts = file.split('/');
           const hasExcluded = parts.some(part => excludeDirs.includes(part));
           const isCode = codeExts.some(ext => file.endsWith(ext));
@@ -193,38 +193,223 @@ sub_agent_tasks:
         required: false
         default: 10
 
-    context_template:
-      current_file: "{{ file_path }}"
-      attempt_number: 0
-      lint_errors: 0
-      ts_errors: 0
+    default_state:
+      raw:
+        attempt_number: 0
+        success: false
+        last_error: ""
+        step_results:
+          hints: -1  # -1 = not started, 0 = success, >0 = error count
+          lint: -1   # -1 = not started, 0 = success, >0 = error count
+          typescript: -1  # -1 = not started, 0 = success, >0 = error count
 
-    prompt_template: |
-      You are tasked with enforcing code standards on the file: {{ file_path }}
+    state_schema:
+      computed:
+        is_typescript_file:
+          from: "{{ file_path }}"
+          transform: "input.endsWith('.ts') || input.endsWith('.tsx')"
 
-      Follow these steps up to {{ max_attempts }} times until all checks pass:
+        hints_completed:
+          from: "raw.step_results"
+          transform: "input.hints === 0"  # 0 = success, -1 = not started, >0 = errors
 
-      1. First, get hints for the file using aromcp.hints_for_files
-      2. Review the hints and apply ALL suggested improvements to the file
-      3. Run aromcp.lint_project with use_eslint_standards=true
-      4. Fix any linting errors or warnings found
-      5. Run aromcp.check_typescript on the file (if it's a TypeScript/JavaScript file)
-      6. Fix any TypeScript errors found
+        lint_completed:
+          from: "raw.step_results"
+          transform: "input.lint === 0"   # 0 = success, -1 = not started, >0 = errors
 
-      Continue this loop until:
-      - All hints have been applied
-      - No lint errors or warnings remain
-      - No TypeScript errors remain (for TS/JS files)
-      - OR you've reached {{ max_attempts }} attempts
+        typescript_completed:
+          from: ["raw.step_results", "computed.is_typescript_file"]
+          transform: "!input[1] || input[0].typescript === 0"  # Skip if not TS file, or 0 = success
 
-      For each iteration:
-      - Apply fixes carefully to maintain functionality
-      - Use the file editing tools to make changes
-      - Re-run all checks after making changes
+        all_steps_completed:
+          from: ["computed.hints_completed", "computed.lint_completed", "computed.typescript_completed"]
+          transform: "input[0] && input[1] && input[2]"
 
-      Report back with:
-      - success: true/false
-      - attempts: number of attempts made
-      - last_error: description of any remaining issues
+        can_continue:
+          from: ["raw.attempt_number", "{{ max_attempts }}", "computed.all_steps_completed"]
+          transform: "input[0] < input[1] && !input[2]"
 
-      IMPORTANT: You must actually run the tools and make edits. Do not simulate or skip steps.
+    steps:
+      # Main processing loop matching original prompt template logic
+      - id: "standards_enforcement_loop"
+        type: "while_loop"
+        condition: "{{ computed.can_continue }}"
+        max_iterations: 10
+        body:
+          - id: "start_attempt"
+            type: "state_update"
+            path: "raw.attempt_number"
+            value: "{{ raw.attempt_number + 1 }}"
+
+          - id: "attempt_message"
+            type: "user_message"
+            message: "Starting attempt {{ raw.attempt_number }} for {{ file_path }}"
+
+          # Step 1: Get hints for the file using aromcp.hints_for_files
+          - id: "get_hints_step"
+            type: "conditional"
+            condition: "{{ !computed.hints_completed }}"
+            then_steps:
+              - id: "get_hints"
+                type: "mcp_call"
+                tool: "aromcp.hints_for_files"
+                parameters:
+                  file_paths: ["{{ file_path }}"]
+
+              - id: "apply_hints_instruction"
+                type: "agent_task"
+                prompt: "Review the hints and apply ALL suggested improvements to {{ file_path }}. Apply fixes carefully to maintain functionality."
+
+              - id: "store_hints_success"
+                type: "state_update"
+                path: "raw.step_results.hints"
+                value: 0
+
+          # Step 3: Run aromcp.lint_project with use_eslint_standards=true
+          - id: "lint_step"
+            type: "conditional"
+            condition: "{{ computed.hints_completed && !computed.lint_completed }}"
+            then_steps:
+              - id: "run_lint"
+                type: "mcp_call"
+                tool: "aromcp.lint_project"
+                parameters:
+                  use_eslint_standards: true
+                store_result: "raw.lint_tool_output"
+
+              - id: "process_lint_results"
+                type: "conditional"
+                condition: "{{ raw.lint_tool_output.success && (!raw.lint_tool_output.data.errors || raw.lint_tool_output.data.errors.length === 0) }}"
+                then_steps:
+                  - id: "lint_success"
+                    type: "state_update"
+                    path: "raw.step_results.lint"
+                    value: 0
+                else_steps:
+                  - id: "fix_lint_instruction"
+                    type: "agent_task"
+                    prompt: "Fix any linting errors or warnings found in {{ file_path }}. Use the file editing tools to make changes, then re-run all checks."
+
+                  - id: "lint_partial"
+                    type: "state_update"
+                    path: "raw.step_results.lint"
+                    value: "{{ raw.lint_tool_output.data.errors.length || 0 }}"
+
+          # Step 5: Run aromcp.check_typescript (if it's a TypeScript/JavaScript file)
+          - id: "typescript_step"
+            type: "conditional"
+            condition: "{{ computed.is_typescript_file && computed.lint_completed && !computed.typescript_completed }}"
+            then_steps:
+              - id: "run_typescript"
+                type: "mcp_call"
+                tool: "aromcp.check_typescript"
+                parameters:
+                  file_paths: ["{{ file_path }}"]
+                store_result: "raw.typescript_tool_output"
+
+              - id: "process_typescript_results"
+                type: "conditional"
+                condition: "{{ raw.typescript_tool_output.success && (!raw.typescript_tool_output.data.errors || raw.typescript_tool_output.data.errors.length === 0) }}"
+                then_steps:
+                  - id: "typescript_success"
+                    type: "state_update"
+                    path: "raw.step_results.typescript"
+                    value: 0
+                else_steps:
+                  - id: "fix_typescript_instruction"
+                    type: "agent_task"
+                    prompt: "Fix any TypeScript errors found in {{ file_path }}. Use the file editing tools to make changes, then re-run all checks."
+
+                  - id: "typescript_partial"
+                    type: "state_update"
+                    path: "raw.step_results.typescript"
+                    value: "{{ raw.typescript_tool_output.data.errors.length || 0 }}"
+
+          # Auto-complete TypeScript for non-TS files
+          - id: "skip_typescript_for_non_ts"
+            type: "conditional"
+            condition: "{{ !computed.is_typescript_file && computed.lint_completed }}"
+            then_steps:
+              - id: "auto_complete_typescript"
+                type: "state_update"
+                path: "raw.step_results.typescript"
+                value: 0
+
+      # Final result processing matching original prompt template requirements
+      - id: "final_result_processing"
+        type: "conditional"
+        condition: "{{ computed.all_steps_completed }}"
+        then_steps:
+          - id: "mark_final_success"
+            type: "state_update"
+            path: "raw.success"
+            value: true
+
+          - id: "success_message"
+            type: "user_message"
+            message: "✅ Successfully enforced standards on {{ file_path }} in {{ raw.attempt_number }} attempts"
+        else_steps:
+          - id: "analyze_failure_reason"
+            type: "state_update"
+            path: "raw.failure_analysis"
+            value: |
+              {{
+                !computed.hints_completed ? 'Hints step failed or never completed' :
+                !computed.lint_completed ? 'Linting errors not resolved' :
+                computed.is_typescript_file && !computed.typescript_completed ? 'TypeScript errors not resolved' :
+                raw.attempt_number >= max_attempts ? 'Maximum attempts exceeded' :
+                'Unknown failure condition'
+              }}
+
+          - id: "mark_final_failure"
+            type: "state_update"
+            path: "raw.last_error"
+            value: "Failed to complete all standards checks after {{ raw.attempt_number }} attempts. Reason: {{ raw.failure_analysis }}"
+
+          - id: "failure_message"
+            type: "user_message"
+            message: "❌ Failed to enforce standards on {{ file_path }} after {{ raw.attempt_number }} attempts"
+
+          - id: "failure_reason"
+            type: "user_message"
+            message: "🔍 Failure Analysis: {{ raw.failure_analysis }}"
+
+          - id: "failure_details"
+            type: "user_message"
+            message: |
+              📊 Detailed Status:
+              - Hints: {{ computed.hints_completed ? '✅ Completed' : '❌ Failed' }}{{ !computed.hints_completed && raw.step_results.hints ? ' (' + (raw.step_results.hints.error || 'Unknown error') + ')' : '' }}
+              - Lint: {{ computed.lint_completed ? '✅ Completed' : '❌ Failed' }}{{ !computed.lint_completed && raw.step_results.lint ? ' (' + (raw.step_results.lint.errors || '0') + ' errors)' : '' }}
+              - TypeScript: {{ computed.typescript_completed ? '✅ Completed' : (computed.is_typescript_file ? '❌ Failed' : '⏭️ Skipped') }}{{ computed.is_typescript_file && !computed.typescript_completed && raw.step_results.typescript ? ' (' + (raw.step_results.typescript.errors || '0') + ' errors)' : '' }}
+
+              🔧 Debug Information:
+              - Max Attempts: {{ max_attempts }}
+              - Current Attempt: {{ raw.attempt_number }}
+              - Can Continue: {{ computed.can_continue }}
+              - All Steps Completed: {{ computed.all_steps_completed }}
+              - Is TypeScript File: {{ computed.is_typescript_file }}
+
+          - id: "diagnostic_dump"
+            type: "user_message"
+            message: |
+              🔍 Full Diagnostic Information:
+              ```
+              File: {{ file_path }}
+              TypeScript File: {{ computed.is_typescript_file || 'unknown' }}
+
+              Execution State:
+              - Attempt: {{ raw.attempt_number }}
+              - Max Attempts: {{ max_attempts }}
+              - Can Continue: {{ computed.can_continue || 'unknown' }}
+              - All Completed: {{ computed.all_steps_completed || 'unknown' }}
+
+              Step Completion Status:
+              - Hints: {{ computed.hints_completed || 'unknown' }}
+              - Lint: {{ computed.lint_completed || 'unknown' }}
+              - TypeScript: {{ computed.typescript_completed || 'unknown' }}
+
+              Raw Step Results:
+              - Hints Result: {{ raw.step_results.hints || 'not started' }}
+              - Lint Result: {{ raw.step_results.lint || 'not started' }}
+              - TypeScript Result: {{ raw.step_results.typescript || 'not started' }}
+              ```

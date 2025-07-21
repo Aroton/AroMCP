@@ -148,87 +148,176 @@ sub_agent_tasks:
         required: false
         default: 5
 
-    prompt_template: |
-      You are processing file: {{ file_path }} (item {{ index }} of {{ total }})
-      
-      Your task is to enforce code standards on this file through the following steps:
-      1. Get hints for the file using hints_for_files
-      2. Apply suggested improvements
-      3. Run linting checks
-      4. Fix any issues found
-      5. Verify all checks pass
-      
-      Continue until all standards are met or max attempts ({{ max_attempts }}) reached.
+    default_state:
+      raw:
+        attempt_number: 0
+        success: false
+        last_error: ""
+        step_results:
+          hints: null
+          lint: null
+          typescript: null
+
+    state_schema:
+      computed:
+        is_typescript_file:
+          from: "{{ file_path }}"
+          transform: "input.endsWith('.ts') || input.endsWith('.tsx')"
+
+        hints_completed:
+          from: "raw.step_results"
+          transform: "input.hints !== null && input.hints.success === true"
+
+        lint_completed:
+          from: "raw.step_results"
+          transform: "input.lint !== null && input.lint.success === true"
+
+        typescript_completed:
+          from: ["raw.step_results", "computed.is_typescript_file"]
+          transform: "!input[1] || (input[0].typescript !== null && input[0].typescript.success === true)"
+
+        all_steps_completed:
+          from: ["computed.hints_completed", "computed.lint_completed", "computed.typescript_completed"]
+          transform: "input[0] && input[1] && input[2]"
+
+        can_continue:
+          from: ["raw.attempt_number", "{{ max_attempts }}", "computed.all_steps_completed"]
+          transform: "input[0] < input[1] && !input[2]"
 
     steps:
-      - id: "mark_processing"
-        type: "state_update"
-        path: "raw.processing_results.{{ task_id }}"
-        value:
-          status: "processing"
-          file: "{{ item }}"
-          started_at: "{{ now() }}"
-          attempts: 0
-
-      - id: "get_hints"
-        type: "mcp_call"
-        tool: "hints_for_files"
-        parameters:
-          file_paths: ["{{ item }}"]
-        state_update:
-          path: "raw.processing_results.{{ task_id }}.hints"
-
-      - id: "initial_lint"
-        type: "mcp_call"
-        tool: "lint_project"
-        parameters:
-          target_files: ["{{ item }}"]
-          use_eslint_standards: true
-        state_update:
-          path: "raw.processing_results.{{ task_id }}.initial_lint"
-
-      - id: "check_typescript"
-        type: "conditional"
-        condition: "{{ item.endsWith('.ts') || item.endsWith('.tsx') }}"
-        then_steps:
-          - id: "run_typescript_check"
-            type: "mcp_call"
-            tool: "check_typescript"
-            parameters:
-              file_paths: ["{{ item }}"]
-            state_update:
-              path: "raw.processing_results.{{ task_id }}.typescript_check"
-
-      - id: "analyze_issues"
-        type: "state_update"
-        path: "raw.processing_results.{{ task_id }}.has_issues"
-        value: "{{ (initial_lint && initial_lint.issues && initial_lint.issues.length > 0) || (typescript_check && typescript_check.errors && typescript_check.errors.length > 0) }}"
-
-      - id: "mark_success"
-        type: "conditional"
-        condition: "{{ !raw.processing_results[task_id].has_issues }}"
-        then_steps:
-          - id: "mark_completed_success"
+      # Main processing loop matching original prompt template logic
+      - id: "standards_enforcement_loop"
+        type: "while_loop"
+        condition: "{{ computed.can_continue }}"
+        max_iterations: 5
+        body:
+          - id: "start_attempt"
             type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.status"
-            value: "completed"
-          
-          - id: "mark_success_flag"
+            path: "raw.attempt_number"
+            value: "{{ raw.attempt_number + 1 }}"
+
+          - id: "attempt_message"
+            type: "user_message"
+            message: "Starting attempt {{ raw.attempt_number }} for {{ file_path }}"
+
+          # Step 1: Get hints for the file
+          - id: "get_hints_step"
+            type: "conditional"
+            condition: "{{ !computed.hints_completed }}"
+            then_steps:
+              - id: "get_hints"
+                type: "mcp_call"
+                tool: "hints_for_files"
+                parameters:
+                  file_paths: ["{{ file_path }}"]
+                store_result: "hints_output"
+
+              - id: "process_hints_result"
+                type: "conditional"
+                condition: "{{ hints_output.success }}"
+                then_steps:
+                  - id: "store_hints_success"
+                    type: "state_update"
+                    path: "raw.step_results.hints"
+                    value:
+                      success: true
+                      completed_at: "{{ raw.attempt_number }}"
+                else_steps:
+                  - id: "store_hints_failure"
+                    type: "state_update"
+                    path: "raw.step_results.hints"
+                    value:
+                      success: false
+                      error: "Failed to get hints"
+                      attempt: "{{ raw.attempt_number }}"
+
+          # Step 2: Run linting
+          - id: "lint_step"
+            type: "conditional"
+            condition: "{{ computed.hints_completed && !computed.lint_completed }}"
+            then_steps:
+              - id: "run_lint"
+                type: "mcp_call"
+                tool: "lint_project"
+                parameters:
+                  target_files: ["{{ file_path }}"]
+                  use_eslint_standards: true
+                store_result: "lint_output"
+
+              - id: "process_lint_results"
+                type: "conditional"
+                condition: "{{ lint_output.success && (!lint_output.data.errors || lint_output.data.errors.length === 0) }}"
+                then_steps:
+                  - id: "lint_success"
+                    type: "state_update"
+                    path: "raw.step_results.lint"
+                    value:
+                      success: true
+                      completed_at: "{{ raw.attempt_number }}"
+                else_steps:
+                  - id: "lint_partial"
+                    type: "state_update"
+                    path: "raw.step_results.lint"
+                    value:
+                      success: false
+                      errors: "{{ lint_output.data.errors.length || 0 }}"
+                      attempt: "{{ raw.attempt_number }}"
+
+          # Step 3: TypeScript check (if applicable)
+          - id: "typescript_step"
+            type: "conditional"
+            condition: "{{ computed.is_typescript_file && computed.lint_completed && !computed.typescript_completed }}"
+            then_steps:
+              - id: "run_typescript"
+                type: "mcp_call"
+                tool: "check_typescript"
+                parameters:
+                  file_paths: ["{{ file_path }}"]
+                store_result: "typescript_output"
+
+              - id: "process_typescript_results"
+                type: "conditional"
+                condition: "{{ typescript_output.success && (!typescript_output.data.errors || typescript_output.data.errors.length === 0) }}"
+                then_steps:
+                  - id: "typescript_success"
+                    type: "state_update"
+                    path: "raw.step_results.typescript"
+                    value:
+                      success: true
+                      completed_at: "{{ raw.attempt_number }}"
+                else_steps:
+                  - id: "typescript_partial"
+                    type: "state_update"
+                    path: "raw.step_results.typescript"
+                    value:
+                      success: false
+                      errors: "{{ typescript_output.data.errors.length || 0 }}"
+                      attempt: "{{ raw.attempt_number }}"
+
+          # Auto-complete TypeScript for non-TS files
+          - id: "skip_typescript_for_non_ts"
+            type: "conditional"
+            condition: "{{ !computed.is_typescript_file && computed.lint_completed }}"
+            then_steps:
+              - id: "auto_complete_typescript"
+                type: "state_update"
+                path: "raw.step_results.typescript"
+                value:
+                  success: true
+                  skipped: true
+                  reason: "Not a TypeScript/JavaScript file"
+
+      # Final result processing
+      - id: "final_result_processing"
+        type: "conditional"
+        condition: "{{ computed.all_steps_completed }}"
+        then_steps:
+          - id: "mark_final_success"
             type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.success"
+            path: "raw.success"
             value: true
         else_steps:
-          - id: "mark_completed_with_issues"
+          - id: "mark_final_failure"
             type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.status"
-            value: "completed_with_issues"
-          
-          - id: "mark_needs_work"
-            type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.success"
-            value: false
-          
-          - id: "record_issues"
-            type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.last_error"
-            value: "File has linting or TypeScript issues that need manual attention"
+            path: "raw.last_error"
+            value: "Failed to complete all standards checks after {{ raw.attempt_number }} attempts"

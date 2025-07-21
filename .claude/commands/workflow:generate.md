@@ -82,9 +82,8 @@ inputs:
 - type: "mcp_call"
   tool: string                 # MCP tool name
   parameters: object           # Tool parameters
-  state_update:                # Optional
-    path: string
-    value: string              # Source: result, stdout, stderr
+  store_result: string         # State path to store tool result (e.g., "raw.tool_output")
+  timeout: number              # Optional timeout in seconds
 ```
 
 #### 3. user_message
@@ -193,6 +192,13 @@ inputs:
   format: string               # Message format
 ```
 
+#### 15. agent_task
+```yaml
+- type: "agent_task"
+  prompt: string               # Task instruction for the agent
+  context: object              # Optional additional context
+```
+
 ### Sub-Agent Tasks
 ```yaml
 sub_agent_tasks:
@@ -231,6 +237,17 @@ JavaScript expressions in conditions and transforms have access to:
 - type: "state_update"
   path: "raw.counter"
   operation: "increment"
+
+# MCP tool call with result storage
+- type: "mcp_call"
+  tool: "aromcp.lint_project"
+  parameters:
+    use_eslint_standards: true
+  store_result: "raw.lint_output"
+
+# Agent task instruction
+- type: "agent_task"
+  prompt: "Fix any linting errors found in the file"
 
 # Conditional with state check
 - type: "conditional"

@@ -1,0 +1,744 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MCP Workflow Schema",
+  "description": "Schema for MCP Workflow YAML files",
+  "type": "object",
+  "required": ["name", "description", "version", "steps"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique workflow identifier in namespace:name format",
+      "pattern": "^[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the workflow's purpose"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the workflow",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "config": {
+      "type": "object",
+      "description": "Workflow configuration options",
+      "properties": {
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of retry attempts for failed steps"
+        },
+        "timeout_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Overall workflow timeout in seconds"
+        }
+      },
+      "additionalProperties": true
+    },
+    "inputs": {
+      "type": "object",
+      "description": "Input parameter definitions for the workflow",
+      "patternProperties": {
+        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+          "$ref": "#/definitions/inputDefinition"
+        }
+      },
+      "additionalProperties": false
+    },
+    "default_state": {
+      "type": "object",
+      "description": "Initial state values for the workflow",
+      "properties": {
+        "raw": {
+          "type": "object",
+          "description": "Initial raw state values (agent-writable)"
+        },
+        "state": {
+          "type": "object",
+          "description": "Initial legacy state values (backward compatibility)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "state_schema": {
+      "type": "object",
+      "description": "Schema defining computed fields and state structure",
+      "properties": {
+        "raw": {
+          "type": "object",
+          "description": "Raw field type definitions",
+          "patternProperties": {
+            ".*": {
+              "type": "string"
+            }
+          }
+        },
+        "computed": {
+          "type": "object",
+          "description": "Computed field definitions",
+          "patternProperties": {
+            "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+              "$ref": "#/definitions/computedFieldDefinition"
+            }
+          }
+        },
+        "state": {
+          "type": "object",
+          "description": "State field type definitions",
+          "patternProperties": {
+            ".*": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "steps": {
+      "type": "array",
+      "description": "Sequential list of workflow steps",
+      "items": {
+        "$ref": "#/definitions/workflowStep"
+      },
+      "minItems": 1
+    },
+    "sub_agent_tasks": {
+      "type": "object",
+      "description": "Sub-agent task definitions for parallel processing",
+      "patternProperties": {
+        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+          "$ref": "#/definitions/subAgentTask"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "inputDefinition": {
+      "type": "object",
+      "required": ["type", "description"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean", "object", "array"],
+          "description": "Data type of the input parameter"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the parameter"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this input is required"
+        },
+        "default": {
+          "description": "Default value if input is not provided"
+        },
+        "validation": {
+          "type": "object",
+          "description": "Additional validation rules for the input"
+        }
+      },
+      "additionalProperties": false
+    },
+    "computedFieldDefinition": {
+      "type": "object",
+      "required": ["from", "transform"],
+      "properties": {
+        "from": {
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Single dependency path"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Multiple dependency paths"
+            }
+          ],
+          "description": "Path(s) to the source data for computation"
+        },
+        "transform": {
+          "type": "string",
+          "description": "JavaScript expression to transform the input data"
+        },
+        "on_error": {
+          "type": "string",
+          "enum": ["use_fallback", "propagate", "ignore"],
+          "default": "use_fallback",
+          "description": "Error handling strategy"
+        },
+        "fallback": {
+          "description": "Default value when transformation fails and on_error is 'use_fallback'"
+        }
+      },
+      "additionalProperties": false
+    },
+    "workflowStep": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the step",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "user_message",
+            "mcp_call",
+            "user_input",
+            "parallel_foreach",
+            "agent_shell_command",
+            "internal_mcp_call",
+            "conditional_message",
+            "agent_task",
+            "shell_command",
+            "state_update",
+            "batch_state_update",
+            "conditional",
+            "while_loop",
+            "foreach",
+            "break",
+            "continue",
+            "debug_task_completion",
+            "debug_step_advance"
+          ],
+          "description": "Type of workflow step"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "user_message" } }
+          },
+          "then": {
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "Message to display to the user"
+              },
+              "message_type": {
+                "type": "string",
+                "enum": ["info", "warning", "error", "success"],
+                "description": "Type of message"
+              },
+              "format": {
+                "type": "string",
+                "enum": ["text", "markdown", "code"],
+                "description": "Message format"
+              }
+            },
+            "required": ["message"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "mcp_call" } }
+          },
+          "then": {
+            "properties": {
+              "tool": {
+                "type": "string",
+                "description": "MCP tool to invoke"
+              },
+              "parameters": {
+                "type": "object",
+                "description": "Parameters to pass to the tool"
+              },
+              "state_update": {
+                "$ref": "#/definitions/stateUpdateSpec",
+                "description": "How to update state with the result"
+              },
+              "store_result": {
+                "type": "string",
+                "description": "State path to store the full result"
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Timeout in seconds for the tool call"
+              }
+            },
+            "required": ["tool"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "user_input" } }
+          },
+          "then": {
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "description": "Prompt to display to the user"
+              },
+              "instructions": {
+                "type": "string",
+                "description": "Additional instructions for the user"
+              },
+              "type": {
+                "type": "string",
+                "description": "Expected input type"
+              },
+              "choices": {
+                "type": "array",
+                "description": "Valid choices for selection inputs"
+              },
+              "validation": {
+                "type": "object",
+                "description": "Validation rules for the input"
+              },
+              "state_update": {
+                "$ref": "#/definitions/stateUpdateSpec",
+                "description": "How to update state with the input"
+              },
+              "default": {
+                "description": "Default value if no input provided"
+              },
+              "max_retries": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Maximum retry attempts for validation"
+              }
+            },
+            "required": ["prompt"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "parallel_foreach" } }
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "string",
+                "description": "Expression that evaluates to an array of items"
+              },
+              "sub_agent_task": {
+                "type": "string",
+                "description": "Name of sub-agent task to execute for each item"
+              },
+              "max_parallel": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum number of parallel executions"
+              },
+              "timeout_seconds": {
+                "type": "number",
+                "description": "Timeout for each sub-agent execution"
+              }
+            },
+            "required": ["items", "sub_agent_task"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "agent_shell_command" } }
+          },
+          "then": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Shell command for agent to execute"
+              },
+              "reason": {
+                "type": "string",
+                "description": "Reason for executing this command"
+              },
+              "working_directory": {
+                "type": "string",
+                "description": "Working directory for command execution"
+              },
+              "state_update": {
+                "$ref": "#/definitions/stateUpdateSpec",
+                "description": "How to update state with command output"
+              }
+            },
+            "required": ["command"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "internal_mcp_call" } }
+          },
+          "then": {
+            "properties": {
+              "tool": {
+                "type": "string",
+                "description": "Internal MCP tool to invoke"
+              },
+              "parameters": {
+                "type": "object",
+                "description": "Parameters for the tool"
+              },
+              "state_update": {
+                "$ref": "#/definitions/stateUpdateSpec",
+                "description": "How to update state with the result"
+              }
+            },
+            "required": ["tool"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "conditional_message" } }
+          },
+          "then": {
+            "properties": {
+              "condition": {
+                "type": "string",
+                "description": "Condition expression to evaluate"
+              },
+              "message": {
+                "type": "string",
+                "description": "Message to display if condition is true"
+              },
+              "message_type": {
+                "type": "string",
+                "enum": ["info", "warning", "error", "success"],
+                "description": "Type of message"
+              },
+              "format": {
+                "type": "string",
+                "enum": ["text", "markdown", "code"],
+                "description": "Message format"
+              }
+            },
+            "required": ["condition", "message"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "agent_task" } }
+          },
+          "then": {
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "description": "Task instruction for the agent"
+              },
+              "context": {
+                "type": "object",
+                "description": "Additional context for the task"
+              }
+            },
+            "required": ["prompt"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "shell_command" } }
+          },
+          "then": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Shell command to execute on server"
+              },
+              "working_directory": {
+                "type": "string",
+                "description": "Working directory for command execution"
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Command timeout in seconds"
+              },
+              "state_update": {
+                "$ref": "#/definitions/stateUpdateSpec",
+                "description": "How to update state with command output"
+              }
+            },
+            "required": ["command"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "state_update" } }
+          },
+          "then": {
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "State path to update (e.g., 'raw.counter')"
+              },
+              "value": {
+                "description": "Value to set at the path"
+              },
+              "operation": {
+                "type": "string",
+                "enum": ["set", "increment", "decrement", "append", "multiply"],
+                "default": "set",
+                "description": "Update operation to perform"
+              }
+            },
+            "required": ["path", "value"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "batch_state_update" } }
+          },
+          "then": {
+            "properties": {
+              "updates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["path", "value"],
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "State path to update"
+                    },
+                    "value": {
+                      "description": "Value to set"
+                    },
+                    "operation": {
+                      "type": "string",
+                      "enum": ["set", "increment", "decrement", "append", "multiply"],
+                      "default": "set"
+                    }
+                  }
+                },
+                "description": "List of state updates to apply"
+              }
+            },
+            "required": ["updates"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "conditional" } }
+          },
+          "then": {
+            "properties": {
+              "condition": {
+                "type": "string",
+                "description": "JavaScript expression to evaluate"
+              },
+              "then_steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/workflowStep"
+                },
+                "description": "Steps to execute if condition is true"
+              },
+              "else_steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/workflowStep"
+                },
+                "description": "Steps to execute if condition is false"
+              }
+            },
+            "required": ["condition"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "while_loop" } }
+          },
+          "then": {
+            "properties": {
+              "condition": {
+                "type": "string",
+                "description": "Loop condition expression"
+              },
+              "body": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/workflowStep"
+                },
+                "description": "Steps to execute in each iteration"
+              },
+              "max_iterations": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 100,
+                "description": "Maximum number of iterations"
+              }
+            },
+            "required": ["condition", "body"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "foreach" } }
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "type": "string",
+                "description": "Expression that evaluates to an array"
+              },
+              "body": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/workflowStep"
+                },
+                "description": "Steps to execute for each item"
+              },
+              "variable_name": {
+                "type": "string",
+                "default": "item",
+                "description": "Variable name for current item"
+              }
+            },
+            "required": ["items", "body"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "break" } }
+          },
+          "then": {
+            "properties": {
+              "id": true,
+              "type": true
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "continue" } }
+          },
+          "then": {
+            "properties": {
+              "id": true,
+              "type": true
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "debug_task_completion" } }
+          },
+          "then": {
+            "properties": {
+              "task_id": {
+                "type": "string",
+                "description": "ID of the completed task"
+              },
+              "total_tasks": {
+                "type": "integer",
+                "description": "Total number of tasks"
+              },
+              "completed_task_index": {
+                "type": "integer",
+                "description": "Index of the completed task"
+              }
+            },
+            "required": ["task_id", "total_tasks", "completed_task_index"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "debug_step_advance" } }
+          },
+          "then": {
+            "properties": {
+              "task_id": {
+                "type": "string",
+                "description": "ID of the current task"
+              },
+              "current_step_index": {
+                "type": "integer",
+                "description": "Current step index"
+              },
+              "total_steps": {
+                "type": "integer",
+                "description": "Total steps in task"
+              },
+              "total_tasks": {
+                "type": "integer",
+                "description": "Total number of tasks"
+              },
+              "current_task_index": {
+                "type": "integer",
+                "description": "Current task index"
+              }
+            },
+            "required": ["task_id", "current_step_index", "total_steps", "total_tasks", "current_task_index"]
+          }
+        }
+      ]
+    },
+    "stateUpdateSpec": {
+      "type": "object",
+      "required": ["path", "value"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "State path to update"
+        },
+        "value": {
+          "type": "string",
+          "description": "Value expression or result field reference"
+        },
+        "operation": {
+          "type": "string",
+          "enum": ["set", "increment", "decrement", "append", "multiply"],
+          "default": "set"
+        }
+      }
+    },
+    "subAgentTask": {
+      "type": "object",
+      "required": ["description"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Description of the sub-agent task"
+        },
+        "inputs": {
+          "type": "object",
+          "description": "Input parameter definitions for the sub-agent",
+          "patternProperties": {
+            "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+              "$ref": "#/definitions/inputDefinition"
+            }
+          }
+        },
+        "default_state": {
+          "type": "object",
+          "description": "Initial state for sub-agent execution"
+        },
+        "state_schema": {
+          "$ref": "#/properties/state_schema",
+          "description": "State schema for sub-agent"
+        },
+        "prompt_template": {
+          "type": "string",
+          "description": "Template for agent prompt"
+        },
+        "context_template": {
+          "type": "object",
+          "description": "Context variables for sub-agent"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/workflowStep"
+          },
+          "description": "Steps to execute in the sub-agent task"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["prompt_template"]
+        },
+        {
+          "required": ["steps"]
+        }
+      ]
+    }
+  }
+}

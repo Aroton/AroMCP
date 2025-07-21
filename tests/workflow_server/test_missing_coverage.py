@@ -557,9 +557,9 @@ class TestParallelForeachWithSubAgents:
         assert "inputs" in task
         assert task["inputs"]["file_path"] == "file1.txt"
         
-        # Test sub-agent step execution
+        # Test sub-agent step execution (fixed API)
         task_id = task["task_id"]
-        sub_step = executor.get_next_sub_agent_step(task_id)
+        sub_step = executor.get_next_sub_agent_step(workflow_id, task_id)
         
         assert sub_step is not None
         assert "step" in sub_step

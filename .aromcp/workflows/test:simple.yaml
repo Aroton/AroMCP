@@ -20,14 +20,17 @@ inputs:
     required: true
 
 steps:
-  - type: "state_update"
+  - id: "set_counter"
+    type: "state_update"
     path: "raw.counter"
     value: 5
     
-  - type: "user_message"
+  - id: "show_counter"
+    type: "user_message"
     message: "Counter is {{ counter }}, doubled is {{ doubled }}"
     
-  - type: "shell_command"
+  - id: "run_echo"
+    type: "shell_command"
     command: "echo 'Hello from workflow'"
     state_update:
       path: "raw.message"

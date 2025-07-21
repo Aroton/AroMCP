@@ -1,5 +1,6 @@
 name: "analyze:dependencies"
 description: "Analyze npm dependencies"
+version: "1.0.0"
 
 default_state:
   raw:
@@ -44,16 +45,16 @@ steps:
   - id: "read_package"
     type: "shell_command"
     command: "cat package.json"
-    output_format: "text"
     state_update:
       path: "raw.package_json"
+      value: "stdout"
 
   - id: "check_outdated"
     type: "shell_command"
     command: "npm outdated --json || true"
-    output_format: "text"
     state_update:
       path: "raw.npm_list"
+      value: "stdout"
 
   - id: "report"
     type: "user_message"

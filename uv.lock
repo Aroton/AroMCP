@@ -124,6 +124,7 @@ source = { editable = "." }
 dependencies = [
     { name = "chardet" },
     { name = "fastmcp" },
+    { name = "jsonschema" },
     { name = "psutil" },
     { name = "pythonmonkey" },
     { name = "pyyaml" },
@@ -148,6 +149,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=25.1.0" },
     { name = "chardet", specifier = ">=5.0.0" },
     { name = "fastmcp", specifier = ">=2.10.5" },
+    { name = "jsonschema", specifier = ">=4.0.0" },
     { name = "psutil", specifier = ">=5.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
     { name = "pythonmonkey", specifier = ">=1.1.1" },

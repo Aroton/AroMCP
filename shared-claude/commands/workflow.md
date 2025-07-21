@@ -11,6 +11,19 @@
 - `/workflow resume {workflow_id}` - Resume a previously started workflow
 - `/workflow status {workflow_id}` - Check the status of a running workflow
 
+## Debug Mode
+To enable serial execution for easier debugging of parallel workflows, set the environment variable:
+```bash
+AROMCP_WORKFLOW_DEBUG=serial
+```
+
+When enabled:
+- All `parallel_foreach` steps convert to TODO mode in the main agent
+- NO sub-agents are spawned - everything executes in the main agent context  
+- Tasks are processed serially using the TodoWrite tool for progress tracking
+- Sub-agent steps are executed directly by the main agent with item context
+- The workflow logic remains identical - only execution method changes
+
 ## Main Agent Workflow
 
 ### Critical Constraints
@@ -19,6 +32,7 @@
 - UPDATE state only through workflow_update_state tool
 - HANDLE errors gracefully and report them clearly
 - For parallel steps, delegate to sub-agents appropriately
+- STEP COMPLETION is implicit - simply call workflow_get_next_step to advance
 
 ### Command: `/workflow list`
 1. Call `workflow_list` tool to get available workflows
@@ -55,15 +69,15 @@
      1. Call workflow_get_next_step(workflow_id)
      2. If no step returned, workflow is complete
      3. Execute the step based on its type:
-        - mcp_call: Execute the specified MCP tool
+        - mcp_call: Execute the specified MCP tool with store_result
+        - agent_task: Execute the prompt instruction using available tools
         - shell_command: (Handled internally by server - skip to next step)
         - state_update: Call workflow_update_state
         - user_message: Display message to user
         - user_input: Prompt user for input
         - parallel_foreach: Create sub-agents
         - Other types: Follow step instructions
-     4. Call workflow_step_complete(workflow_id, step_id, result)
-     5. Handle any errors and report status
+     4. Handle any errors and report status
    ```
 6. Report workflow completion status and final state
 
@@ -88,19 +102,34 @@
 ```javascript
 const step = {
   type: "mcp_call",
-  tool: "list_files",
+  tool: "aromcp.lint_project",
   parameters: {
-    patterns: ["*.ts", "*.tsx"],
-    page: 1
+    use_eslint_standards: true,
+    target_files: ["{{ file_path }}"]
   },
-  output_path: "files"  // Where to store result in state
+  store_result: "raw.lint_output"  // Where to store tool result in state
 };
 ```
 1. Extract tool name and parameters
 2. Interpolate any template variables ({{ variable }})
 3. Call the specified MCP tool
-4. Store result in state at output_path if specified
+4. Store result in state at store_result path if specified
 5. Mark step complete with result
+
+### Agent Tasks (`agent_task`)
+```javascript
+const step = {
+  type: "agent_task",
+  prompt: "Fix any linting errors found in {{ file_path }}. Use the file editing tools to make changes.",
+  context: {
+    file_path: "src/component.ts"
+  }
+};
+```
+1. Read the prompt instruction for the agent
+2. Interpolate any template variables in prompt and context
+3. Execute the task directly using available tools
+4. Mark step complete when task is finished
 
 ### State Updates (`state_update`)
 ```javascript
@@ -159,13 +188,91 @@ const step = {
 };
 ```
 
+#### Normal Execution Mode
 **Client-Side Sub-Agent Creation**:
 1. **Client orchestrator** receives parallel_foreach step with task list
-2. **For each task**, spawn a new sub-agent using the provided `subagent_prompt`
+2. **For each task** (up to `max_parallel`), spawn a new sub-agent using the provided `subagent_prompt`
 3. **Sub-agents** call `workflow_get_next_step(workflow_id, task_id)` to get their specific steps
 4. **Sub-agents** execute steps defined in workflow's `sub_agent_tasks` section
 5. **Sub-agents** continue until `workflow_get_next_step` returns null (task complete)
 6. **Wait for ALL sub-agents** to complete before main agent continues
+
+#### Debug Serial Mode (`AROMCP_WORKFLOW_DEBUG=serial`)
+When you see this debug note in a parallel_foreach step:
+```
+🐛 DEBUG MODE: Execute as TODOs in main agent instead of spawning sub-agents. Process each item serially for easier debugging.
+```
+
+**🚨 CRITICAL: TODO Mode - NOT Sub-Agent Mode**:
+1. **DO NOT spawn any sub-agents** - stay in the main agent
+2. **Convert each task to a TODO item** in your task list
+3. **Process TODOs serially one at a time** using the sub-agent steps inline
+4. **Use TodoWrite tool** to track progress through each item
+5. **Execute sub-agent steps directly** in the main agent context
+
+**TODO Mode Execution Pattern**:
+```javascript
+// When you see debug_serial: true in parallel_foreach definition
+const step = {
+  type: "parallel_foreach",
+  definition: {
+    debug_serial: true,  // 🚨 This means TODO mode!
+    tasks: [
+      {task_id: "process_file.item0", context: {item: "file1.ts", ...}},
+      {task_id: "process_file.item1", context: {item: "file2.ts", ...}},
+      {task_id: "process_file.item2", context: {item: "file3.ts", ...}}
+    ]
+  }
+};
+
+// Execute as:
+// 1. TodoWrite: Add all items to TODO list  
+// 2. For each TODO item:
+//    - Mark as in_progress
+//    - Execute sub-agent steps directly in main agent
+//    - Use item context (file_path, etc.) for step execution
+//    - Mark as completed when done
+// 3. Continue to next workflow step
+```
+
+**Key Differences**:
+- **Production Mode**: Spawn sub-agents for parallel execution
+- **Debug Mode**: Execute as TODOs in main agent for visibility and control
+
+**Concrete TODO Mode Example**:
+```javascript
+// When you receive this in debug mode:
+{
+  "type": "parallel_foreach",  
+  "definition": {
+    "debug_serial": true,
+    "instructions": "🚨 DEBUG MODE: Execute as TODOs in main agent. DO NOT spawn sub-agents...",
+    "tasks": [
+      {"task_id": "process_file.item0", "context": {"item": "file1.ts", "file_path": "file1.ts"}},
+      {"task_id": "process_file.item1", "context": {"item": "file2.ts", "file_path": "file2.ts"}}
+    ],
+    "sub_agent_steps": [
+      {"id": "get_hints", "type": "mcp_call", "definition": {"tool": "aromcp.hints_for_files", "parameters": {"file_paths": ["{{ file_path }}"]}, "store_result": "raw.hints_output"}},
+      {"id": "apply_fixes", "type": "agent_task", "definition": {"prompt": "Apply the hints to fix {{ file_path }}"}},
+      {"id": "lint_check", "type": "mcp_call", "definition": {"tool": "aromcp.lint_project", "parameters": {"target_files": ["{{ file_path }}"]}, "store_result": "raw.lint_output"}}
+    ]
+  }
+}
+
+// Execute like this:
+// 1. TodoWrite: ["Process file1.ts with hints and lint", "Process file2.ts with hints and lint"] 
+// 2. Mark "Process file1.ts..." as in_progress
+// 3. Execute: aromcp.hints_for_files with file_paths=["file1.ts"] (result stored in raw.hints_output)
+// 4. Execute: agent_task "Apply the hints to fix file1.ts" (use available tools)
+// 5. Execute: aromcp.lint_project with target_files=["file1.ts"] (result stored in raw.lint_output)
+// 6. Mark "Process file1.ts..." as completed
+// 7. Mark "Process file2.ts..." as in_progress  
+// 8. Execute: aromcp.hints_for_files with file_paths=["file2.ts"] (result stored in raw.hints_output)
+// 9. Execute: agent_task "Apply the hints to fix file2.ts" (use available tools)
+// 10. Execute: aromcp.lint_project with target_files=["file2.ts"] (result stored in raw.lint_output)
+// 11. Mark "Process file2.ts..." as completed
+// 12. Continue to next workflow step
+```
 
 ### Shell Commands (`shell_command`)
 ```javascript
@@ -198,12 +305,12 @@ const step = {
    while task not complete:
      1. Call workflow_get_next_step(workflow_id, task_id)
      2. If step returned, execute it following main agent patterns:
-        - mcp_call: Execute the specified MCP tool
+        - mcp_call: Execute the specified MCP tool with store_result
+        - agent_task: Execute the prompt instruction using available tools
         - state_update: Call workflow_update_state
         - conditional: Follow branch logic
         - Other types: Follow step instructions
-     3. Call workflow_step_complete(workflow_id, step_id, result)
-     4. Continue until workflow_get_next_step returns null
+     3. Continue until workflow_get_next_step returns null
    ```
 
 3. **Key principles for sub-agents:**

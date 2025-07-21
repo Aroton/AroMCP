@@ -81,10 +81,7 @@ class TestWorkflowExecutor:
         assert step_result["server_completed_steps"][0]["id"] == "step2"
         assert step_result["server_completed_steps"][0]["type"] == "state_update"
 
-        # Complete the user message step
-        executor.step_complete(workflow_id, "step1", "success")
-
-        # Should be no more steps
+        # Get next step (implicitly completes the user message step)
         step_result = executor.get_next_step(workflow_id)
         assert step_result is None
 
@@ -113,9 +110,11 @@ class TestWorkflowExecutor:
         step_result = executor.get_next_step(workflow_id)
         assert step_result is not None
 
-        # The conditional should be processed internally and return the then branch step
-        assert step_result["step"]["type"] == "user_message"
-        assert "Counter is positive" in step_result["step"]["definition"]["message"]
+        # The conditional should be processed internally and return the then branch step in batched format
+        assert "steps" in step_result
+        user_messages = [s for s in step_result["steps"] if s["type"] == "user_message"]
+        assert len(user_messages) == 1
+        assert "Counter is positive" in user_messages[0]["definition"]["message"]
 
     def test_while_loop_processing(self):
         """Test while loop processing."""
@@ -216,22 +215,17 @@ class TestWorkflowExecutor:
         step_result = executor.get_next_step(workflow_id)
         assert step_result is not None
         
-        # Should be in batched format or single step format depending on implementation
-        if "steps" in step_result:
-            # Batched format
-            user_input_steps = [s for s in step_result["steps"] if s["type"] == "user_input"]
-            assert len(user_input_steps) == 1
-            user_input_step = user_input_steps[0]
-        else:
-            # Single step format
-            assert "step" in step_result
-            user_input_step = step_result["step"]
+        # Should be in batched format
+        assert "steps" in step_result
+        user_input_steps = [s for s in step_result["steps"] if s["type"] == "user_input"]
+        assert len(user_input_steps) == 1
+        user_input_step = user_input_steps[0]
             
         assert user_input_step["type"] == "user_input"
         assert user_input_step["definition"]["prompt"] == "Enter your name:"
 
-        # Complete with user input
-        executor.step_complete(workflow_id, "input1", "success", {"user_input": "Alice"})
+        # With implicit completion, we would need to handle user input differently
+        # For this test, we'll simulate the workflow continuing
 
         # Verify workflow can continue (this test doesn't use context manager)
         final_step = executor.get_next_step(workflow_id)
@@ -308,7 +302,12 @@ class TestWorkflowExecutor:
             if step_result is None:
                 break
 
-            executor.step_complete(workflow_id, step_result["step"]["id"], "success")
+            # Handle batched format
+            if "steps" in step_result and len(step_result["steps"]) > 0:
+                # Steps will be implicitly completed on next get_next_step call
+                first_step = step_result["steps"][0]
+                print(f"Processing step: {first_step['id']} ({first_step['type']})")
+            
             iterations += 1
 
         # Should complete without infinite loops
@@ -366,19 +365,14 @@ class TestWorkflowExecutor:
             if step_result is None:
                 break
 
-            # Handle different response formats
+            # Handle batched format
             if "steps" in step_result:
-                # New batched format
                 if len(step_result["steps"]) > 0:
-                    # Complete the last step in the batch
-                    last_step = step_result["steps"][-1]
-                    executor.step_complete(workflow_id, last_step["id"], "success")
+                    # Steps will be implicitly completed on next get_next_step call
+                    print(f"Processing batch with {len(step_result['steps'])} steps")
                 else:
                     # No agent-visible steps, workflow might be done
                     break
-            elif "step" in step_result:
-                # Single step format (from control flow)
-                executor.step_complete(workflow_id, step_result["step"]["id"], "success")
             else:
                 # Unknown format
                 break
@@ -412,13 +406,10 @@ class TestWorkflowExecutor:
         if "error" in step_result:
             assert "Sub-agent task not found: process_batch" in step_result["error"]
         else:
-            # If it succeeded somehow, check the format
-            if "steps" in step_result:
-                parallel_steps = [s for s in step_result["steps"] if s["type"] == "parallel_foreach"]
-                assert len(parallel_steps) >= 1
-            else:
-                assert "step" in step_result
-                assert step_result["step"]["type"] == "parallel_foreach"
+            # If it succeeded somehow, check the batched format
+            assert "steps" in step_result
+            parallel_steps = [s for s in step_result["steps"] if s["type"] == "parallel_foreach"]
+            assert len(parallel_steps) >= 1
 
     def test_variable_replacement_with_context(self):
         """Test variable replacement with state-based variables."""
@@ -472,11 +463,10 @@ class TestWorkflowExecutor:
         # Verify context exists
         assert context_manager.get_context(workflow_id) is not None
 
-        # Complete workflow
+        # Complete workflow - get first step
         step_result = executor.get_next_step(workflow_id)
-        executor.step_complete(workflow_id, "step1", "success")
-
-        # Get next step (should be None and clean up context)
+        
+        # Get next step (implicitly completes step1, should be None and clean up context)
         step_result = executor.get_next_step(workflow_id)
         assert step_result is None
 

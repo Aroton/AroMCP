@@ -41,7 +41,6 @@ class TestMainServer:
             "workflow_start",
             "workflow_list",
             "workflow_get_next_step",
-            "workflow_step_complete",
             "workflow_get_status",
             "workflow_update_state",
             "workflow_list_active",

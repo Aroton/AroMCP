@@ -3,6 +3,7 @@
 from typing import Any
 
 from ..state.manager import StateManager
+from ..utils.error_tracking import create_workflow_error, enhance_exception_message
 from .expressions import ExpressionEvaluator
 from .models import WorkflowInstance, WorkflowStep
 from .queue import WorkflowQueue
@@ -27,6 +28,7 @@ class StepProcessor:
         preserve_conditions = step.type == "conditional"
         # For control flow steps that evaluate expressions themselves, preserve template strings
         preserve_templates = step.type in ["foreach", "parallel_foreach", "while_loop"]
+        
         # Use nested state for template expressions (not flattened)
         # Pass instance to have access to workflow inputs
         processed_definition = self._replace_variables(step.definition, current_state, preserve_conditions, instance, preserve_templates)
@@ -49,13 +51,19 @@ class StepProcessor:
         elif step.type == "foreach":
             return self.process_foreach(instance, step, processed_definition, queue, current_state)
         
+        elif step.type == "debug_task_completion":
+            return self.process_debug_task_completion(instance, step, processed_definition, queue)
+        
+        elif step.type == "debug_step_advance":
+            return self.process_debug_step_advance(instance, step, processed_definition, queue)
+        
         elif step.type == "break":
             return self.process_break(queue)
         
         elif step.type == "continue":
             return self.process_continue(queue)
         
-        return {"error": f"Unsupported server step type: {step.type}"}
+        return create_workflow_error(f"Unsupported server step type: {step.type}", instance.id, step.id)
     
     def _process_state_update(self, instance: WorkflowInstance, step: WorkflowStep,
                              processed_definition: dict[str, Any]) -> dict[str, Any]:
@@ -65,7 +73,7 @@ class StepProcessor:
         operation = processed_definition.get("operation", "set")
         
         if not path:
-            return {"error": "Missing 'path' in state_update step"}
+            return create_workflow_error("Missing 'path' in state_update step", instance.id, step.id)
         
         updates = [{"path": path, "value": value, "operation": operation}]
         self.state_manager.update(instance.id, updates)
@@ -83,7 +91,7 @@ class StepProcessor:
         """Process a batch state update step."""
         updates = processed_definition.get("updates", [])
         if not updates:
-            return {"error": "Missing 'updates' in batch_state_update step"}
+            return create_workflow_error("Missing 'updates' in batch_state_update step", instance.id, step.id)
         
         self.state_manager.update(instance.id, updates)
         
@@ -116,7 +124,7 @@ class StepProcessor:
         """Process a conditional step by adding branch steps to queue."""
         condition = definition.get("condition", "")
         if not condition:
-            return {"error": "Missing 'condition' in conditional step"}
+            return create_workflow_error("Missing 'condition' in conditional step", instance.id, step.id)
         
         # Evaluate condition
         try:
@@ -131,7 +139,7 @@ class StepProcessor:
             result = self.expression_evaluator.evaluate(condition, eval_state)
             condition_result = bool(result)
         except Exception as e:
-            return {"error": f"Error evaluating condition: {str(e)}"}
+            return create_workflow_error(f"Error evaluating condition: {enhance_exception_message(e)}", instance.id, step.id)
         
         # Get branch steps
         if condition_result:
@@ -171,7 +179,7 @@ class StepProcessor:
         max_iterations = definition.get("max_iterations", 100)
         
         if not condition:
-            return {"error": "Missing 'condition' in while_loop step"}
+            return create_workflow_error("Missing 'condition' in while_loop step", instance.id, step.id)
         
         # Get or create loop context
         loop_context = None
@@ -207,7 +215,7 @@ class StepProcessor:
             condition_result = bool(result)
         except Exception as e:
             queue.pop_loop_context()
-            return {"error": f"Error evaluating while condition: {str(e)}"}
+            return create_workflow_error(f"Error evaluating while condition: {enhance_exception_message(e)}", instance.id, step.id)
         
         if condition_result and body:
             # Add body steps and loop step again
@@ -315,7 +323,7 @@ class StepProcessor:
         """Process a break statement by exiting the current loop."""
         current_loop = queue.get_current_loop()
         if not current_loop:
-            return {"error": "break used outside of loop"}
+            return create_workflow_error("break used outside of loop", None, None)
         
         # Remove all steps until we find the loop step
         loop_id = current_loop["context"]["loop_id"]
@@ -340,7 +348,7 @@ class StepProcessor:
         """Process a continue statement by skipping to next iteration."""
         current_loop = queue.get_current_loop()
         if not current_loop:
-            return {"error": "continue used outside of loop"}
+            return create_workflow_error("continue used outside of loop", None, None)
         
         # Remove all steps until we find the loop step
         loop_id = current_loop["context"]["loop_id"]
@@ -355,6 +363,60 @@ class StepProcessor:
             steps_removed += 1
         
         return {"executed": False, "steps_removed": steps_removed}
+    
+    def process_debug_task_completion(self, instance: WorkflowInstance, step: WorkflowStep,
+                                     definition: dict[str, Any], queue: WorkflowQueue) -> dict[str, Any]:
+        """Process debug task completion marker by re-triggering parallel_foreach if more tasks remain."""
+        task_id = definition.get("task_id", "")
+        total_tasks = definition.get("total_tasks", 0)
+        completed_task_index = definition.get("completed_task_index", 0)
+        
+        print(f"🐛 DEBUG: Completed task {completed_task_index + 1}/{total_tasks}: {task_id}")
+        
+        # Check if there are more tasks to process
+        if completed_task_index + 1 < total_tasks:
+            print(f"🐛 DEBUG: More tasks remaining, re-triggering parallel_foreach")
+            
+            # Find the original parallel_foreach step in the workflow definition
+            # and re-add it to the queue so it can process the next task
+            
+            # Look for parallel_foreach step that needs to continue processing
+            # We need to find it by scanning the instance's workflow definition
+            workflow_def = instance.definition
+            if workflow_def and hasattr(workflow_def, 'steps'):
+                for wf_step in workflow_def.steps:
+                    if wf_step.type == "parallel_foreach":
+                        # Re-add this step to continue processing
+                        print(f"🐛 DEBUG: Re-adding parallel_foreach step: {wf_step.id}")
+                        queue.main_queue.insert(0, wf_step)
+                        break
+        else:
+            print(f"🐛 DEBUG: All tasks completed!")
+        
+        return {"executed": True, "task_completion": True}
+    
+    def process_debug_step_advance(self, instance: WorkflowInstance, step: WorkflowStep,
+                                 definition: dict[str, Any], queue: WorkflowQueue) -> dict[str, Any]:
+        """Process debug step advancement marker by re-triggering parallel_foreach to get next step."""
+        task_id = definition.get("task_id", "")
+        current_step_index = definition.get("current_step_index", 0)
+        total_steps = definition.get("total_steps", 0)
+        current_task_index = definition.get("current_task_index", 0)
+        total_tasks = definition.get("total_tasks", 0)
+        
+        print(f"🐛 DEBUG: Advancing task {current_task_index + 1}/{total_tasks}: {task_id}")
+        print(f"🐛 DEBUG: Completed step {current_step_index + 1}/{total_steps}")
+        
+        # Re-trigger parallel_foreach to get the next step in the sequence
+        workflow_def = instance.definition
+        if workflow_def and hasattr(workflow_def, 'steps'):
+            for wf_step in workflow_def.steps:
+                if wf_step.type == "parallel_foreach":
+                    print(f"🐛 DEBUG: Re-adding parallel_foreach step for next step: {wf_step.id}")
+                    queue.main_queue.insert(0, wf_step)
+                    break
+        
+        return {"executed": True, "step_advance": True}
     
     def _replace_variables(self, obj: Any, state: dict[str, Any], preserve_conditions: bool = False, 
                           instance: WorkflowInstance | None = None, preserve_templates: bool = False) -> Any:
@@ -400,24 +462,50 @@ class StepProcessor:
                     try:
                         result = self.expression_evaluator.evaluate(expr, eval_context)
                         # For single expressions, return the actual value
-                        return result if result is not None else ""
-                    except:
-                        # For undefined variables, return empty string
-                        return ""
+                        if result is not None:
+                            return result
+                        # Handle None/undefined with smart fallbacks
+                        fallback = self._get_fallback_value(expr, eval_context)
+                        # Try to convert to appropriate type for single expressions
+                        if 'attempt' in expr and 'number' in expr:
+                            try:
+                                return int(fallback) if fallback.isdigit() else 0
+                            except:
+                                return 0
+                        if 'max_attempts' in expr:
+                            try:
+                                return int(fallback) if fallback.isdigit() else 10
+                            except:
+                                return 10
+                        return fallback
+                    except Exception as e:
+                        # For evaluation errors, provide fallbacks
+                        fallback = self._get_fallback_value(expr, eval_context)
+                        # Try to convert to appropriate type for single expressions
+                        if 'attempt' in expr and 'number' in expr:
+                            try:
+                                return int(fallback) if fallback.isdigit() else 0
+                            except:
+                                return 0
+                        if 'max_attempts' in expr:
+                            try:
+                                return int(fallback) if fallback.isdigit() else 10
+                            except:
+                                return 10
+                        return fallback
                 else:
                     # Multiple expressions or embedded in text - stringify results
                     def replace_template(match):
                         expr = match.group(1).strip()
                         try:
                             result = self.expression_evaluator.evaluate(expr, eval_context)
-                            # Handle None/undefined values
+                            # Handle None/undefined values with smart fallbacks
                             if result is None:
-                                # For undefined variables, return empty string for state updates
-                                return ""
+                                return self._get_fallback_value(expr, eval_context)
                             return str(result)
-                        except:
-                            # For undefined variables, return empty string
-                            return ""
+                        except Exception as e:
+                            # For evaluation errors, provide fallbacks
+                            return self._get_fallback_value(expr, eval_context)
                     
                     # Replace all {{expr}} patterns
                     result = re.sub(r'\{\{([^}]+)\}\}', replace_template, obj)
@@ -425,3 +513,55 @@ class StepProcessor:
             return obj
         else:
             return obj
+    
+    def _get_fallback_value(self, expr: str, state: dict[str, Any]) -> str:
+        """Provide intelligent fallback values for undefined template variables."""
+        # Common fallback patterns for better error messages
+        fallback_map = {
+            "raw.file_path": state.get("item", state.get("file_path", "unknown_file")),
+            "file_path": state.get("item", state.get("file_path", "unknown_file")),
+            "raw.attempt_number": str(state.get("attempt_number", "0")),
+            "raw.max_attempts": str(state.get("max_attempts", "10")),
+            "max_attempts": str(state.get("max_attempts", "10")),
+            "item": state.get("item", "unknown_item"),
+            "task_id": state.get("task_id", "unknown_task"),
+        }
+        
+        # Check for direct matches first
+        if expr in fallback_map:
+            return str(fallback_map[expr])
+        
+        # Check for nested property access patterns (e.g., raw.step_results.hints.success)
+        if "." in expr:
+            parts = expr.split(".")
+            if len(parts) >= 2:
+                # Try to get the value from nested state
+                current = state
+                try:
+                    for part in parts:
+                        if isinstance(current, dict):
+                            current = current.get(part)
+                        else:
+                            break
+                    if current is not None:
+                        return str(current)
+                except:
+                    pass
+                
+                # Fallback based on the root key
+                root_key = f"{parts[0]}.{parts[1]}" if len(parts) > 1 else parts[0]
+                if root_key in fallback_map:
+                    return str(fallback_map[root_key])
+        
+        # If it looks like a file path, try common state keys
+        if "file" in expr.lower() or "path" in expr.lower():
+            for key in ["item", "file_path", "target_file"]:
+                if key in state and state[key]:
+                    return str(state[key])
+        
+        # If it looks like an attempt number, provide a reasonable default
+        if "attempt" in expr.lower() and "number" in expr.lower():
+            return "unknown_attempt"
+        
+        # Return a descriptive placeholder instead of empty string
+        return f"<{expr}>"

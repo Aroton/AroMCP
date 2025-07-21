@@ -10,7 +10,6 @@ from .workflow_models import (
     WorkflowStartResponse,
     WorkflowStateUpdateResponse,
     WorkflowStatusResponse,
-    WorkflowStepCompleteResponse,
     WorkflowSubAgentCreateResponse,
     WorkflowSubAgentStatusResponse,
 )
@@ -19,7 +18,6 @@ __all__ = [
     "WorkflowInfoResponse",
     "WorkflowStartResponse",
     "WorkflowListResponse",
-    "WorkflowStepCompleteResponse",
     "WorkflowStatusResponse",
     "WorkflowStateUpdateResponse",
     "WorkflowActiveListResponse",

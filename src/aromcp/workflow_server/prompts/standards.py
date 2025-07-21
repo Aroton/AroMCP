@@ -4,6 +4,7 @@ This module provides standardized prompts that guide sub-agents in executing
 workflow tasks correctly.
 """
 
+import os
 from typing import Any
 
 
@@ -17,8 +18,7 @@ Process:
 1. Call workflow.get_next_step with your task_id to get the next atomic action
 2. Execute the action exactly as instructed
 3. Update state as directed in the step
-4. Mark the step complete
-5. Repeat until get_next_step returns null
+4. Repeat until get_next_step returns null
 
 The workflow will guide you through all necessary steps. Simply follow the instructions
 provided by each step. Do not make assumptions about what needs to be done - the
@@ -26,6 +26,38 @@ workflow will tell you everything.
 
 Context: You are processing item {{ item }} (index {{ index }} of {{ total }}).
 Your task_id is: {{ task_id }}
+{{ debug_note }}
+
+## Workflow Step Types You May Encounter:
+
+### MCP Tool Calls with store_result
+When you see a step like:
+```yaml
+- type: "mcp_call"
+  tool: "aromcp.hints_for_files"
+  parameters:
+    file_paths: ["{{ file_path }}"]
+  store_result: "raw.step_results.hints"
+```
+
+This means:
+1. Execute the MCP tool call as instructed
+2. The workflow system will automatically store the tool result at the specified state path
+3. You can then reference the result in subsequent steps using the state path
+
+### Agent Tasks
+When you see:
+```yaml
+- type: "agent_task"
+  prompt: "Fix any linting errors found in the file"
+```
+
+This is an instruction for YOU to execute. Follow the prompt and use your available tools.
+
+### State Management
+- Use `store_result: "raw.some_path"` to store MCP tool results in workflow state
+- Use `state_update` steps to manually set state values
+- Reference stored results using template syntax: `{{ raw.some_path.field }}`
 
 Important:
 - Always use your task_id when calling workflow tools
@@ -40,14 +72,13 @@ Your responsibilities:
 1. Call workflow.get_next_step with your unique task_id
 2. Execute each step exactly as instructed
 3. Update workflow state only as directed
-4. Mark steps complete when finished
-5. Continue until workflow.get_next_step returns null
+4. Continue until workflow.get_next_step returns null
 
 Key principles:
 - Follow workflow instructions precisely
 - Use your assigned task_id for all workflow operations
 - Do not modify state outside of directed updates
-- Report any errors through workflow.step_complete with failure status
+- Report any errors through workflow state or return to main agent
 - Trust the workflow to provide all necessary context
 
 Your task_id: {{ task_id }}
@@ -62,7 +93,7 @@ Process:
 2. The workflow will provide specific processing steps for your batch
 3. Execute each step in sequence
 4. Update shared state as instructed
-5. Mark completion when all steps are done
+5. Continue until workflow.get_next_step returns null
 
 Your batch contains {{ batch_size }} items.
 Batch context: {{ context }}
@@ -71,7 +102,7 @@ Remember:
 - Process items according to workflow steps, not your own logic
 - Use the exact task_id provided: {{ task_id }}
 - Follow state update instructions precisely
-- Report progress through workflow.step_complete"""
+- Continue execution by calling workflow.get_next_step"""
 
     QUALITY_CHECK_AGENT = """You are a quality assurance sub-agent for workflow execution.
 
@@ -82,7 +113,7 @@ Workflow process:
 2. Receive specific quality check instructions
 3. Execute checks as directed by workflow steps
 4. Record results in workflow state as instructed
-5. Complete each step before requesting the next
+5. Continue until workflow.get_next_step returns null
 
 Quality scope: {{ scope }}
 Check context: {{ context }}
@@ -113,7 +144,15 @@ Critical rules:
 - Use exact task_id: {{ task_id }}
 - Do not attempt unauthorized fixes
 - Update state only as workflow directs
-- Escalate unrecoverable errors through workflow.step_complete"""
+- Escalate unrecoverable errors through workflow state or return to main agent"""
+
+
+    @classmethod
+    def _get_debug_note(cls) -> str:
+        """Get debug mode note if enabled."""
+        if os.getenv("AROMCP_WORKFLOW_DEBUG", "").lower() == "serial":
+            return "\n🐛 DEBUG MODE: Execute as TODOs in main agent instead of spawning sub-agents. Process each item serially for easier debugging."
+        return ""
 
     @classmethod
     def get_prompt(cls, prompt_type: str, context: dict[str, Any] | None = None) -> str:
@@ -139,6 +178,11 @@ Critical rules:
         prompt_template = prompt_map.get(prompt_type)
         if not prompt_template:
             raise ValueError(f"Unknown prompt type: {prompt_type}")
+
+        # Add debug note if in debug mode
+        context = dict(context)  # Make a copy
+        if "debug_note" not in context:
+            context["debug_note"] = cls._get_debug_note()
 
         # Simple template replacement for {{ variable }} patterns
         formatted_prompt = prompt_template

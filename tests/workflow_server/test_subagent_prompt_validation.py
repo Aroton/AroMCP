@@ -24,7 +24,7 @@ class TestSubAgentPromptValidation:
 
         # Start workflow with proper inputs
         workflow_def = self.loader.load("test:sub-agents")
-        start_result = self.executor.start(workflow_def, {"files": ["test1.ts", "test2.ts"]})
+        start_result = self.executor.start(workflow_def, {"file_list": ["test1.ts", "test2.ts"]})
         workflow_id = start_result["workflow_id"]
 
         # Handle the initialize step properly (like in the working integration test)
@@ -41,19 +41,34 @@ class TestSubAgentPromptValidation:
             # Try again
             step = self.executor.get_next_step(workflow_id)
         
-        # Extract the step from different formats
-        if "steps" in step and len(step["steps"]) > 0:
-            step_def = step["steps"][0]
-        elif "step" in step:
-            step_def = step["step"]
-        else:
-            print(f"Unexpected step format: {step}")
-            return
+        # Find the parallel_foreach step in the response
+        parallel_step_def = None
+        if "steps" in step:
+            for s in step["steps"]:
+                if s["type"] == "parallel_foreach":
+                    parallel_step_def = s
+                    break
+        elif "step" in step and step["step"]["type"] == "parallel_foreach":
+            parallel_step_def = step["step"]
+        
+        if not parallel_step_def:
+            # Try getting next step if parallel_foreach wasn't in first batch
+            second_step = self.executor.get_next_step(workflow_id)
+            if second_step and "error" not in second_step:
+                if "steps" in second_step:
+                    for s in second_step["steps"]:
+                        if s["type"] == "parallel_foreach":
+                            parallel_step_def = s
+                            break
+                elif "step" in second_step and second_step["step"]["type"] == "parallel_foreach":
+                    parallel_step_def = second_step["step"]
+        
+        assert parallel_step_def is not None, "Should find parallel_foreach step"
+        step_def = parallel_step_def
 
-        assert step_def["type"] == "parallel_foreach", f"Expected parallel_foreach, got {step_def['type']}"
-
-        # Get the sub-agent prompt - might be in different locations
-        subagent_prompt = step_def.get("subagent_prompt") or step.get("subagent_prompt") or ""
+        # Get the sub-agent prompt - should be in the definition
+        definition = step_def.get("definition", {})
+        subagent_prompt = definition.get("subagent_prompt", "")
 
         print("=== FULL SUB-AGENT PROMPT ===")
         print(subagent_prompt)
@@ -63,10 +78,11 @@ class TestSubAgentPromptValidation:
         assert "SUB_AGENT_INPUTS" in subagent_prompt, "Prompt missing SUB_AGENT_INPUTS placeholder"
         assert "```json" in subagent_prompt, "Prompt missing JSON code block"
         assert '"inputs":' in subagent_prompt, "Prompt missing inputs section"
-        assert "Use the inputs above" in subagent_prompt, "Prompt missing usage instructions"
+        # The prompt should contain actual JSON template, not just placeholder
+        assert "{{ inputs }}" in subagent_prompt, "Prompt should contain inputs template replacement"
 
         # Get the tasks to see what inputs should be available
-        tasks = step["step"]["definition"]["tasks"]
+        tasks = definition.get("tasks", [])
 
         print("\n=== TASK INPUTS ===")
         for i, task in enumerate(tasks):
@@ -87,8 +103,6 @@ class TestSubAgentPromptValidation:
         # happens CLIENT-SIDE, not server-side. The server provides the template.
         print("\nℹ️  The SUB_AGENT_INPUTS placeholder will be replaced by the client")
         print("   with the actual inputs for each specific sub-agent task.")
-
-        return True
 
     def test_client_side_input_replacement_simulation(self):
         """Simulate how the client would replace the SUB_AGENT_INPUTS placeholder."""

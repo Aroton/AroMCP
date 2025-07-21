@@ -112,11 +112,19 @@ class TransformationEngine:
                 try:
                     # Try direct JSON conversion first
                     json_str = json.dumps(obj)
-                    return json.loads(json_str)
+                    result = json.loads(json_str)
+                    # Preserve integer types - JSON converts all numbers to float in Python
+                    if isinstance(result, float) and result.is_integer():
+                        return int(result)
+                    return result
                 except TypeError:
                     # If direct conversion fails, use default=str fallback
                     json_str = json.dumps(obj, default=str)
-                    return json.loads(json_str)
+                    result = json.loads(json_str)
+                    # Preserve integer types
+                    if isinstance(result, float) and result.is_integer():
+                        return int(result)
+                    return result
 
             # For containers, recursively convert contents
             elif isinstance(obj, dict):
@@ -126,7 +134,9 @@ class TransformationEngine:
             elif isinstance(obj, tuple):
                 return tuple(self._convert_to_native_python(item) for item in obj)
             else:
-                # For basic Python types, return as-is
+                # For basic Python types, preserve integers
+                if isinstance(obj, float) and obj.is_integer():
+                    return int(obj)
                 return obj
 
         except Exception as e:

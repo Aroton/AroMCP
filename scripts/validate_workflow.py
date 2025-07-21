@@ -37,6 +37,9 @@ def validate_file(file_path: Path) -> bool:
     validator = WorkflowValidator()
     is_valid = validator.validate(workflow)
     
+    # Also run schema-only validation for comparison
+    schema_valid, schema_errors = validator.validate_with_schema(workflow)
+    
     if validator.errors:
         print("❌ Validation FAILED")
         print("\nErrors:")
@@ -44,6 +47,15 @@ def validate_file(file_path: Path) -> bool:
             print(f"  - {error}")
     else:
         print("✅ Validation PASSED")
+    
+    # Show schema validation status
+    if validator.schema:
+        if not schema_valid and schema_errors:
+            print("\nJSON Schema validation errors:")
+            for error in schema_errors[:5]:  # Show first 5 schema errors
+                print(f"  - {error}")
+            if len(schema_errors) > 5:
+                print(f"  ... and {len(schema_errors) - 5} more schema errors")
         
     if validator.warnings:
         print("\nWarnings:")

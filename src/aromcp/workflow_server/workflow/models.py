@@ -36,6 +36,8 @@ class SubAgentTask:
     steps: list[WorkflowStep]
     context_template: dict[str, Any] = field(default_factory=dict)
     prompt_template: str = ""
+    default_state: dict[str, Any] = field(default_factory=dict)
+    state_schema: "StateSchema" = field(default_factory=lambda: StateSchema())
 
 
 @dataclass

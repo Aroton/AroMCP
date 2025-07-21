@@ -14,6 +14,7 @@ class WorkflowQueue:
         self.client_queue: list[dict[str, Any]] = []
         self.server_completed: list[dict[str, Any]] = []
         self.loop_stack: list[dict[str, Any]] = []  # Track loop contexts
+        self.pending_client_steps: list[dict[str, Any]] = []  # Track steps awaiting implicit completion
     
     def has_steps(self) -> bool:
         """Check if there are more steps to process."""
@@ -48,3 +49,12 @@ class WorkflowQueue:
         """Clear the client and server completed queues."""
         self.client_queue = []
         self.server_completed = []
+    
+    def move_client_steps_to_pending(self):
+        """Move current client steps to pending (awaiting implicit completion)."""
+        self.pending_client_steps = self.client_queue.copy()
+        self.client_queue = []
+    
+    def clear_pending_steps(self):
+        """Clear pending client steps (after implicit completion)."""
+        self.pending_client_steps = []

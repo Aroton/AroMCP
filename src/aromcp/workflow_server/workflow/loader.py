@@ -197,6 +197,8 @@ class WorkflowLoader:
 
             inputs = self._parse_inputs(task_data.get("inputs", {}))
             steps = self._parse_steps(task_data.get("steps", []))
+            default_state = task_data.get("default_state", {})
+            state_schema = self._parse_state_schema(task_data.get("state_schema", {}))
 
             tasks[name] = SubAgentTask(
                 name=name,
@@ -205,6 +207,8 @@ class WorkflowLoader:
                 steps=steps,
                 context_template=task_data.get("context_template", {}),
                 prompt_template=task_data.get("prompt_template", ""),
+                default_state=default_state,
+                state_schema=state_schema,
             )
 
         return tasks

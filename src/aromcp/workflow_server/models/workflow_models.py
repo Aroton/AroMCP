@@ -36,15 +36,6 @@ class WorkflowListResponse:
     count: int
 
 
-@dataclass
-class WorkflowStepCompleteResponse:
-    """Response schema for workflow_step_complete tool."""
-
-    workflow_id: str
-    status: str
-    current_step_index: int
-    step_result: dict[str, Any]
-    next_step: dict[str, Any] | None
 
 
 @dataclass

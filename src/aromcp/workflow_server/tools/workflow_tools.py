@@ -191,58 +191,6 @@ def register_workflow_tools(mcp):
         except Exception as e:
             return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to list workflows: {e}"}}
 
-    @mcp.tool
-    @json_convert
-    def workflow_step_complete(
-        workflow_id: str, step_id: str, status: str = "success", result: dict[str, Any] | str | None = None
-    ) -> dict[str, Any]:
-        """Mark a workflow step as complete and advance to next step.
-
-        Use this tool when:
-        - You have finished executing a workflow step
-        - You need to report step completion status
-        - You want to advance the workflow to the next step
-        - You have results or errors to report from step execution
-
-        Args:
-            workflow_id: ID of the workflow instance
-            step_id: ID of the completed step
-            status: "success" or "failed" (default: "success")
-            result: Optional result data from step execution
-
-        Returns:
-            Updated workflow status and progress
-
-        Example:
-            workflow_step_complete("wf_abc123", "step_1", "success", {"output": "..."})
-            → {"status": "running", "current_step_index": 1}
-        """
-        try:
-            executor = get_workflow_executor()
-
-            # Parse result if provided as string
-            if isinstance(result, str):
-                try:
-                    result = json.loads(result)
-                except json.JSONDecodeError:
-                    result = {"raw_result": result}
-
-            # Extract error message if step failed
-            error_message = None
-            if status == "failed" and result:
-                if isinstance(result, dict):
-                    error_message = result.get("error", "Step execution failed")
-                else:
-                    error_message = str(result)
-
-            completion_result = executor.step_complete(workflow_id, step_id, status, result, error_message)
-
-            return {"data": completion_result}
-
-        except WorkflowExecutionError as e:
-            return {"error": {"code": "OPERATION_FAILED", "message": str(e)}}
-        except Exception as e:
-            return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to complete step: {e}"}}
 
     @mcp.tool
     @json_convert
@@ -391,8 +339,8 @@ def register_workflow_tools(mcp):
             executor = get_workflow_executor()
             
             if task_id:
-                # Sub-agent execution
-                next_step = executor.get_next_sub_agent_step(task_id)
+                # Sub-agent execution - pass workflow_id to help with context lookup
+                next_step = executor.get_next_sub_agent_step(workflow_id, task_id)
             else:
                 # Main workflow execution
                 next_step = executor.get_next_step(workflow_id)

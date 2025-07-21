@@ -36,7 +36,7 @@ STEP_TYPES: dict[str, StepConfig] = {
         "description": "Execute MCP tool call",
         "supports_state_update": True,  # Via state_update field
         "required_fields": ["tool"],
-        "optional_fields": ["parameters", "state_update", "timeout"]
+        "optional_fields": ["parameters", "state_update", "store_result", "timeout"]
     },
     
     "user_input": {
@@ -82,6 +82,15 @@ STEP_TYPES: dict[str, StepConfig] = {
         "supports_state_update": False,
         "required_fields": ["condition", "message"],
         "optional_fields": ["message_type", "format"]
+    },
+    
+    "agent_task": {
+        "execution": "client",
+        "queuing": "blocking",
+        "description": "Task instruction for the agent to execute",
+        "supports_state_update": False,
+        "required_fields": ["prompt"],
+        "optional_fields": ["context"]
     },
     
     # Server-executed steps (processed internally)
@@ -155,6 +164,24 @@ STEP_TYPES: dict[str, StepConfig] = {
         "description": "Skip to next loop iteration",
         "supports_state_update": False,
         "required_fields": [],
+        "optional_fields": []
+    },
+    
+    "debug_task_completion": {
+        "execution": "server",
+        "queuing": "immediate",
+        "description": "Debug mode task completion marker",
+        "supports_state_update": False,
+        "required_fields": ["task_id", "total_tasks", "completed_task_index"],
+        "optional_fields": []
+    },
+    
+    "debug_step_advance": {
+        "execution": "server",
+        "queuing": "immediate",
+        "description": "Debug mode step advancement marker",
+        "supports_state_update": False,
+        "required_fields": ["task_id", "current_step_index", "total_steps", "total_tasks", "current_task_index"],
         "optional_fields": []
     }
 }

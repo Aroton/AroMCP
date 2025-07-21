@@ -195,11 +195,23 @@ class ExpressionLexer:
                 self.advance()
                 self.advance()
 
+            elif self.current_char == "=" and self.peek_next() == "=" and self.peek_next(2) == "=":
+                tokens.append(Token(TokenType.COMPARISON, "===", start_pos))
+                self.advance()
+                self.advance()
+                self.advance()
+                
             elif self.current_char == "=" and self.peek_next() == "=":
                 tokens.append(Token(TokenType.COMPARISON, "==", start_pos))
                 self.advance()
                 self.advance()
 
+            elif self.current_char == "!" and self.peek_next() == "=" and self.peek_next(2) == "=":
+                tokens.append(Token(TokenType.COMPARISON, "!==", start_pos))
+                self.advance()
+                self.advance()
+                self.advance()
+                
             elif self.current_char == "!" and self.peek_next() == "=":
                 tokens.append(Token(TokenType.COMPARISON, "!=", start_pos))
                 self.advance()
@@ -301,7 +313,7 @@ class ExpressionParser:
         """Parse equality operators (==, !=)."""
         left = self.comparison()
 
-        while self.current_token.type == TokenType.COMPARISON and self.current_token.value in ("==", "!="):
+        while self.current_token.type == TokenType.COMPARISON and self.current_token.value in ("==", "!=", "===", "!=="):
             op = self.current_token.value
             self.advance()
             right = self.comparison()
@@ -543,6 +555,10 @@ class ExpressionEvaluator:
             return self._loose_equals(left, right)
         elif op == "!=":
             return not self._loose_equals(left, right)
+        elif op == "===":
+            return self._strict_equals(left, right)
+        elif op == "!==":
+            return not self._strict_equals(left, right)
 
         # Comparison operators
         elif op == "<":
@@ -685,19 +701,25 @@ class ExpressionEvaluator:
         else:
             return bool(value)
 
-    def _to_number(self, value: Any) -> float:
+    def _to_number(self, value: Any) -> int | float:
         """Convert a value to number using JavaScript rules."""
         if value is None:
             return 0
         elif isinstance(value, bool):
             return 1 if value else 0
-        elif isinstance(value, int | float):
-            return float(value)
+        elif isinstance(value, int):
+            return value  # Preserve integers
+        elif isinstance(value, float):
+            return value
         elif isinstance(value, str):
             if value.strip() == "":
                 return 0
             try:
-                return float(value)
+                # Try to parse as int first, then float
+                if "." not in value:
+                    return int(value)
+                else:
+                    return float(value)
             except ValueError:
                 return float("nan")
         else:
@@ -731,4 +753,13 @@ class ExpressionEvaluator:
         elif isinstance(right, bool):
             return self._loose_equals(left, 1 if right else 0)
 
+        return False
+    
+    def _strict_equals(self, left: Any, right: Any) -> bool:
+        """Implement JavaScript === comparison (strict equality)."""
+        # Same type and value
+        if type(left) is type(right):
+            return left == right
+        
+        # No type coercion in strict equality
         return False
