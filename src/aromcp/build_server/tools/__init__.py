@@ -82,7 +82,7 @@ def register_build_tools(mcp):
     @mcp.tool
     @json_convert
     def lint_project(
-        use_standards: bool = True, target_files: str | list[str] | None = None, debug: bool = False
+        use_standards: bool = True, files: str | list[str] | None = None, debug: bool = False
     ) -> LintProjectResponse:  # noqa: F841
         """Run ESLint to find code style issues and potential bugs.
 
@@ -97,7 +97,7 @@ def register_build_tools(mcp):
 
         Args:
             use_standards: Whether to use standards server generated ESLint config (recommended)
-            target_files: Files, directories, or glob patterns (directories auto-glob with /*,
+            files: Files, directories, or glob patterns (directories auto-glob with /*,
                 glob patterns passed through)
             debug: Enable detailed debug output for troubleshooting linting issues
 
@@ -114,10 +114,10 @@ def register_build_tools(mcp):
             → {"issues": [{"file": "src/utils.js", "rule": "no-unused-vars", "line": 10}],
                "total": 8, "fixable": 5, "check_again": true}
 
-            lint_project(target_files="src/components")  # Auto-globs to src/components/*
+            lint_project(files="src/components")  # Auto-globs to src/components/*
             → {"issues": [], "check_again": false}
 
-            lint_project(target_files="src/**/*.ts")  # Glob patterns passed directly to eslint
+            lint_project(files="src/**/*.ts")  # Glob patterns passed directly to eslint
             → {"issues": [], "check_again": false}
 
         Note: ESSENTIAL quality gate - run this after EVERY code edit. Always use use_standards=True for best results.
@@ -126,7 +126,7 @@ def register_build_tools(mcp):
         """
         from ..models.build_models import LintIssue
 
-        result = lint_project_impl(use_standards, target_files, debug)
+        result = lint_project_impl(use_standards, files, debug)
 
         # Convert dict issues to LintIssue dataclasses
         issues = []

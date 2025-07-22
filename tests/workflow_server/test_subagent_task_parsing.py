@@ -25,9 +25,9 @@ class TestSubAgentTaskParsing:
         description: "Test workflow"
         version: "1.0.0"
         default_state:
-          raw: {}
+          state: {}
         state_schema:
-          raw: {}
+          state: {}
           computed: {}
         inputs: {}
         steps: []
@@ -40,7 +40,7 @@ class TestSubAgentTaskParsing:
                 description: "File path"
                 required: true
             default_state:
-              raw:
+              state:
                 attempt_number: 0
                 success: false
                 last_error: ""
@@ -64,10 +64,10 @@ class TestSubAgentTaskParsing:
         assert hasattr(task, 'default_state')
         assert task.default_state is not None
         assert "raw" in task.default_state
-        assert task.default_state["raw"]["attempt_number"] == 0
-        assert task.default_state["raw"]["success"] is False
-        assert task.default_state["raw"]["last_error"] == ""
-        assert task.default_state["raw"]["step_results"]["hints"] is None
+        assert task.default_state["state"]["attempt_number"] == 0
+        assert task.default_state["state"]["success"] is False
+        assert task.default_state["state"]["last_error"] == ""
+        assert task.default_state["state"]["step_results"]["hints"] is None
 
     def test_parse_sub_agent_task_with_state_schema(self):
         """Test parsing sub-agent task with state_schema field."""
@@ -76,9 +76,9 @@ class TestSubAgentTaskParsing:
         description: "Test workflow"
         version: "1.0.0"
         default_state:
-          raw: {}
+          state: {}
         state_schema:
-          raw: {}
+          state: {}
           computed: {}
         inputs: {}
         steps: []
@@ -135,9 +135,9 @@ class TestSubAgentTaskParsing:
         description: "Test workflow"
         version: "1.0.0"
         default_state:
-          raw: {}
+          state: {}
         state_schema:
-          raw: {}
+          state: {}
           computed: {}
         inputs: {}
         steps: []
@@ -155,7 +155,7 @@ class TestSubAgentTaskParsing:
                 required: false
                 default: 5
             default_state:
-              raw:
+              state:
                 attempt_number: 0
                 success: false
                 results: {}
@@ -186,9 +186,9 @@ class TestSubAgentTaskParsing:
         assert hasattr(task, 'state_schema')
         
         # Verify default_state
-        assert task.default_state["raw"]["attempt_number"] == 0
-        assert task.default_state["raw"]["success"] is False
-        assert isinstance(task.default_state["raw"]["results"], dict)
+        assert task.default_state["state"]["attempt_number"] == 0
+        assert task.default_state["state"]["success"] is False
+        assert isinstance(task.default_state["state"]["results"], dict)
         
         # Verify state_schema
         computed = task.state_schema.computed
@@ -206,9 +206,9 @@ class TestSubAgentTaskParsing:
         description: "Test workflow"
         version: "1.0.0"
         default_state:
-          raw: {}
+          state: {}
         state_schema:
-          raw: {}
+          state: {}
           computed: {}
         inputs: {}
         steps: []
@@ -245,9 +245,9 @@ class TestSubAgentTaskParsing:
         description: "Test workflow"
         version: "1.0.0"
         default_state:
-          raw: {}
+          state: {}
         state_schema:
-          raw: {}
+          state: {}
           computed: {}
         inputs: {}
         steps: []
@@ -281,9 +281,9 @@ class TestSubAgentTaskParsing:
         description: "Test workflow"
         version: "1.0.0"
         default_state:
-          raw: {}
+          state: {}
         state_schema:
-          raw: {}
+          state: {}
           computed: {}
         inputs: {}
         steps: []
@@ -296,7 +296,7 @@ class TestSubAgentTaskParsing:
                 description: "File path"
                 required: true
             default_state:
-              raw:
+              state:
                 counters:
                   attempts: 0
                   successes: 0
@@ -305,7 +305,7 @@ class TestSubAgentTaskParsing:
                 metadata:
                   created_at: "2024-01-01"
             state_schema:
-              raw:
+              state:
                 counters:
                   type: "object"
                   description: "Counter values"
@@ -335,7 +335,7 @@ class TestSubAgentTaskParsing:
         # Verify complex default_state structure
         assert "raw" in task.default_state
         assert "state" in task.default_state
-        assert task.default_state["raw"]["counters"]["attempts"] == 0
+        assert task.default_state["state"]["counters"]["attempts"] == 0
         assert task.default_state["state"]["metadata"]["created_at"] == "2024-01-01"
         
         # Verify complex state_schema structure
@@ -359,9 +359,9 @@ class TestSubAgentTaskParsing:
         description: "Test workflow"
         version: "1.0.0"
         default_state:
-          raw: {}
+          state: {}
         state_schema:
-          raw: {}
+          state: {}
           computed: {}
         inputs: {}
         steps: []
@@ -387,9 +387,9 @@ class TestSubAgentTaskParsing:
         description: "Code standards enforcement workflow"
         version: "1.0.0"
         default_state:
-          raw: {}
+          state: {}
         state_schema:
-          raw: {}
+          state: {}
           computed: {}
         inputs: {}
         steps: []
@@ -407,7 +407,7 @@ class TestSubAgentTaskParsing:
                 required: false
                 default: 10
             default_state:
-              raw:
+              state:
                 attempt_number: 0
                 success: false
                 last_error: ""
@@ -444,10 +444,10 @@ class TestSubAgentTaskParsing:
                   - id: "increment_attempt"
                     type: "state_update"
                     path: "raw.attempt_number"
-                    value: "{{ raw.attempt_number + 1 }}"
+                    value: "{{ state.attempt_number + 1 }}"
                   - id: "process_file"
                     type: "user_message"
-                    message: "Processing {{ file_path }} (attempt {{ raw.attempt_number }})"
+                    message: "Processing {{ file_path }} (attempt {{ state.attempt_number }})"
         """
         
         workflow_def = self.loader._parse_yaml(yaml_content, "<test>", "test")
@@ -462,8 +462,8 @@ class TestSubAgentTaskParsing:
         assert task.inputs["max_attempts"].default == 10
         
         # Verify default_state structure
-        assert task.default_state["raw"]["attempt_number"] == 0
-        assert task.default_state["raw"]["step_results"]["hints"] is None
+        assert task.default_state["state"]["attempt_number"] == 0
+        assert task.default_state["state"]["step_results"]["hints"] is None
         
         # Verify computed fields
         computed = task.state_schema.computed

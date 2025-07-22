@@ -41,8 +41,8 @@ class TestShellCommandExecution:
             name="test:shell",
             description="Test shell commands",
             version="1.0.0",
-            default_state={"raw": {}},
-            state_schema=StateSchema(raw={}, computed={}, state={}),
+            default_state={"inputs": {}, "state": {}, "computed": {}},
+            state_schema=StateSchema(inputs={}, computed={}, state={}),
             inputs={},
             steps=steps
         )
@@ -80,7 +80,8 @@ class TestShellCommandExecution:
                     "command": "echo 'test-value-123'",
                     "output_format": "text",
                     "state_update": {
-                        "path": "raw.package_version"
+                        "path": "inputs.package_version",
+                        "value": "stdout"
                     }
                 }
             ),
@@ -88,7 +89,7 @@ class TestShellCommandExecution:
                 id="msg1",
                 type="user_message",
                 definition={
-                    "message": "Package version: {{ raw.package_version }}"
+                    "message": "Package version: {{ inputs.package_version }}"
                 }
             )
         ]
@@ -97,8 +98,8 @@ class TestShellCommandExecution:
             name="test:shell_state",
             description="Test shell with state update",
             version="1.0.0",
-            default_state={"raw": {}},
-            state_schema=StateSchema(raw={"package_version": "string"}, computed={}, state={}),
+            default_state={"inputs": {}, "state": {}, "computed": {}},
+            state_schema=StateSchema(inputs={"package_version": "string"}, computed={}, state={}),
             inputs={},
             steps=steps
         )
@@ -150,8 +151,8 @@ class TestShellCommandExecution:
                 name="test:shell_dir",
                 description="Test shell with working directory",
                 version="1.0.0",
-                default_state={"raw": {}},
-                state_schema=StateSchema(raw={}, computed={}, state={}),
+                default_state={"inputs": {}, "state": {}, "computed": {}},
+                state_schema=StateSchema(inputs={}, computed={}, state={}),
                 inputs={},
                 steps=steps
             )
@@ -189,12 +190,12 @@ class TestBatchStateUpdate:
         steps = [
             WorkflowStep(
                 id="batch1",
-                type="batch_state_update",
+                type="agent_response",
                 definition={
-                    "updates": [
-                        {"path": "raw.counter", "value": 10},
-                        {"path": "raw.message", "value": "Hello"},
-                        {"path": "raw.enabled", "value": True}
+                    "state_updates": [
+                        {"path": "inputs.counter", "value": 10},
+                        {"path": "inputs.message", "value": "Hello"},
+                        {"path": "inputs.enabled", "value": True}
                     ]
                 }
             ),
@@ -202,7 +203,7 @@ class TestBatchStateUpdate:
                 id="msg1",
                 type="user_message",
                 definition={
-                    "message": "Counter: {{ raw.counter }}, Message: {{ raw.message }}, Enabled: {{ raw.enabled }}"
+                    "message": "Counter: {{ inputs.counter }}, Message: {{ inputs.message }}, Enabled: {{ inputs.enabled }}"
                 }
             )
         ]
@@ -211,9 +212,9 @@ class TestBatchStateUpdate:
             name="test:batch_update",
             description="Test batch state updates",
             version="1.0.0",
-            default_state={"raw": {"counter": 0, "message": "", "enabled": False}},
+            default_state={"inputs": {"counter": 0, "message": "", "enabled": False}},
             state_schema=StateSchema(
-                raw={"counter": "number", "message": "string", "enabled": "boolean"},
+                inputs={"counter": "number", "message": "string", "enabled": "boolean"},
                 computed={},
                 state={}
             ),
@@ -243,17 +244,17 @@ class TestBatchStateUpdate:
         steps = [
             WorkflowStep(
                 id="init",
-                type="state_update",
-                definition={"path": "raw.counter", "value": 5}
+                type="shell_command",
+                definition={"command": "echo 'init'", "state_update": {"path": "inputs.counter", "value": "stdout"}}
             ),
             WorkflowStep(
                 id="batch1",
-                type="batch_state_update",
+                type="agent_response",
                 definition={
-                    "updates": [
-                        {"path": "raw.counter", "value": 3, "operation": "increment"},
-                        {"path": "raw.items", "value": ["a", "b", "c"], "operation": "set"},
-                        {"path": "raw.items", "value": "d", "operation": "append"}
+                    "state_updates": [
+                        {"path": "inputs.counter", "value": 3, "operation": "increment"},
+                        {"path": "inputs.items", "value": ["a", "b", "c"], "operation": "set"},
+                        {"path": "inputs.items", "value": "d", "operation": "append"}
                     ]
                 }
             ),
@@ -261,7 +262,7 @@ class TestBatchStateUpdate:
                 id="msg1",
                 type="user_message",
                 definition={
-                    "message": "Counter: {{ raw.counter }}, Items: {{ raw.items }}"
+                    "message": "Counter: {{ inputs.counter }}, Items: {{ inputs.items }}"
                 }
             )
         ]
@@ -270,9 +271,9 @@ class TestBatchStateUpdate:
             name="test:batch_ops",
             description="Test batch operations",
             version="1.0.0",
-            default_state={"raw": {"counter": 0, "items": []}},
+            default_state={"inputs": {"counter": 0, "items": []}},
             state_schema=StateSchema(
-                raw={"counter": "number", "items": "array"},
+                inputs={"counter": "number", "items": "array"},
                 computed={},
                 state={}
             ),
@@ -310,17 +311,17 @@ class TestComplexComputedFields:
         """Test computed fields with multiple dependencies like in analyze:dependencies workflow."""
         # Simulate the analyze:dependencies workflow structure
         state_schema = StateSchema(
-            raw={
+            inputs={
                 "package_json": "string",
                 "npm_list": "string"
             },
             computed={
                 "dependencies": {
-                    "from": "raw.package_json",
+                    "from": "inputs.package_json",
                     "transform": "JSON.parse(input).dependencies || {}"
                 },
                 "outdated_deps": {
-                    "from": "raw.npm_list",
+                    "from": "inputs.npm_list",
                     "transform": """
                         input.split('\\n')
                           .filter(line => line.includes('outdated'))
@@ -351,18 +352,24 @@ class TestComplexComputedFields:
         steps = [
             WorkflowStep(
                 id="set_package",
-                type="state_update",
+                type="shell_command",
                 definition={
-                    "path": "raw.package_json",
-                    "value": '{"dependencies": {"lodash": "3.10.1", "express": "4.17.1"}}'
+                    "command": "echo 'setting package'",
+                    "state_update": {
+                        "path": "inputs.package_json",
+                        "value": '{"dependencies": {"lodash": "3.10.1", "express": "4.17.1"}}'
+                    }
                 }
             ),
             WorkflowStep(
                 id="set_npm_list",
-                type="state_update",
+                type="shell_command",
                 definition={
-                    "path": "raw.npm_list",
-                    "value": "lodash 3.10.1 3.10.1 4.17.21 outdated\nexpress 4.17.1 4.17.1 4.18.2"
+                    "command": "echo 'setting npm list'",
+                    "state_update": {
+                        "path": "inputs.npm_list",
+                        "value": "lodash 3.10.1 3.10.1 4.17.21 outdated\nexpress 4.17.1 4.17.1 4.18.2"
+                    }
                 }
             ),
             WorkflowStep(
@@ -378,7 +385,7 @@ class TestComplexComputedFields:
             name="test:complex_computed",
             description="Test complex computed fields",
             version="1.0.0",
-            default_state={"raw": {"package_json": "", "npm_list": ""}},
+            default_state={"inputs": {"package_json": "", "npm_list": ""}},
             state_schema=state_schema,
             inputs={},
             steps=steps
@@ -404,12 +411,12 @@ class TestComplexComputedFields:
     def test_nested_computed_field_access(self):
         """Test accessing nested computed fields in templates."""
         state_schema = StateSchema(
-            raw={
+            inputs={
                 "files": "array"
             },
             computed={
                 "file_stats": {
-                    "from": "raw.files",
+                    "from": "inputs.files",
                     "transform": """
                         {
                             total: input.length,
@@ -425,10 +432,13 @@ class TestComplexComputedFields:
         steps = [
             WorkflowStep(
                 id="set_files",
-                type="state_update",
+                type="shell_command",
                 definition={
-                    "path": "raw.files",
-                    "value": ["main.ts", "util.js", "test.ts", "config.js"]
+                    "command": "echo 'setting files'",
+                    "state_update": {
+                        "path": "inputs.files",
+                        "value": ["main.ts", "util.js", "test.ts", "config.js"]
+                    }
                 }
             ),
             WorkflowStep(
@@ -444,7 +454,7 @@ class TestComplexComputedFields:
             name="test:nested_computed",
             description="Test nested computed field access",
             version="1.0.0",
-            default_state={"raw": {"files": []}},
+            default_state={"inputs": {"files": []}},
             state_schema=state_schema,
             inputs={},
             steps=steps
@@ -505,17 +515,20 @@ class TestParallelForeachWithSubAgents:
         steps = [
             WorkflowStep(
                 id="set_files",
-                type="state_update",
+                type="shell_command",
                 definition={
-                    "path": "raw.files",
-                    "value": ["file1.txt", "file2.txt", "file3.txt"]
+                    "command": "echo 'setting files'",
+                    "state_update": {
+                        "path": "inputs.files",
+                        "value": ["file1.txt", "file2.txt", "file3.txt"]
+                    }
                 }
             ),
             WorkflowStep(
                 id="parallel_process",
                 type="parallel_foreach",
                 definition={
-                    "items": "raw.files",  # Expression without template braces
+                    "items": "inputs.files",  # Expression without template braces
                     "sub_agent_task": "process_file",
                     "max_parallel": 2
                 }
@@ -526,8 +539,8 @@ class TestParallelForeachWithSubAgents:
             name="test:parallel_sub",
             description="Test parallel sub-agents",
             version="1.0.0",
-            default_state={"raw": {"files": []}},
-            state_schema=StateSchema(raw={"files": "array"}, computed={}, state={}),
+            default_state={"inputs": {"files": []}},
+            state_schema=StateSchema(inputs={"files": "array"}, computed={}, state={}),
             inputs={},
             steps=steps,
             sub_agent_tasks={"process_file": sub_agent_task}

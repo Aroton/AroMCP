@@ -27,6 +27,7 @@ class TokenType(Enum):
     RBRACKET = "RBRACKET"
     LPAREN = "LPAREN"
     RPAREN = "RPAREN"
+    COMMA = "COMMA"
     OPERATOR = "OPERATOR"
     LOGICAL = "LOGICAL"
     COMPARISON = "COMPARISON"
@@ -174,6 +175,10 @@ class ExpressionLexer:
 
             elif self.current_char == ")":
                 tokens.append(Token(TokenType.RPAREN, ")", start_pos))
+                self.advance()
+
+            elif self.current_char == ",":
+                tokens.append(Token(TokenType.COMMA, ",", start_pos))
                 self.advance()
 
             elif self.current_char == "?":
@@ -459,6 +464,34 @@ class ExpressionParser:
 
             return expr
 
+        elif self.current_token.type == TokenType.LBRACKET:
+            # Array literal [item1, item2, ...]
+            self.advance()
+            elements = []
+            
+            # Handle empty array []
+            if self.current_token.type == TokenType.RBRACKET:
+                self.advance()
+                return {"type": "array_literal", "elements": elements}
+            
+            # Parse array elements
+            while True:
+                elements.append(self.ternary())
+                
+                if self.current_token.type == TokenType.RBRACKET:
+                    self.advance()
+                    break
+                elif self.current_token.type == TokenType.COMMA:
+                    self.advance()
+                    # Handle trailing comma
+                    if self.current_token.type == TokenType.RBRACKET:
+                        self.advance()
+                        break
+                else:
+                    raise ExpressionError("Expected ',' or ']' in array literal")
+            
+            return {"type": "array_literal", "elements": elements}
+
         else:
             raise ExpressionError(f"Unexpected token: {self.current_token}")
 
@@ -468,10 +501,18 @@ class ExpressionEvaluator:
 
     def __init__(self):
         self.context = {}
+        self.scoped_context = {}
 
-    def evaluate(self, expression: str, context: dict[str, Any]) -> Any:
-        """Evaluate an expression string against a context."""
+    def evaluate(self, expression: str, context: dict[str, Any], scoped_context: dict[str, dict[str, Any]] | None = None) -> Any:
+        """Evaluate an expression string against a context.
+        
+        Args:
+            expression: The expression string to evaluate
+            context: Legacy context for backward compatibility
+            scoped_context: Optional scoped context with keys like 'this', 'global', 'loop', 'inputs'
+        """
         self.context = context
+        self.scoped_context = scoped_context or {}
 
         if not expression.strip():
             return None
@@ -494,11 +535,17 @@ class ExpressionEvaluator:
 
         elif node_type == "identifier":
             name = node["name"]
+            
+            # For simple identifiers, use legacy context resolution
             if name in self.context:
                 return self.context[name]
             else:
                 # JavaScript-like behavior: undefined variables return undefined
                 return None
+
+        elif node_type == "array_literal":
+            # Evaluate each element in the array
+            return [self._evaluate_node(element) for element in node["elements"]]
 
         elif node_type == "binary":
             left = self._evaluate_node(node["left"])
@@ -514,15 +561,39 @@ class ExpressionEvaluator:
             return self._evaluate_unary_op(op, operand)
 
         elif node_type == "property_access":
-            obj = self._evaluate_node(node["object"])
+            # Check if this is a scoped variable access (e.g., this.variable)
+            obj_node = node["object"]
             prop = node["property"]
-
+            
+            if (obj_node["type"] == "identifier" and 
+                obj_node["name"] in ["this", "global", "loop", "inputs"] and
+                self.scoped_context):
+                # This is a scoped variable access
+                scope_name = obj_node["name"]
+                return self._get_scoped_variable(scope_name, prop)
+            
+            # Regular property access - evaluate the object first
+            obj = self._evaluate_node(obj_node)
             return self._get_property(obj, prop)
 
         elif node_type == "array_access":
-            obj = self._evaluate_node(node["object"])
+            # Check if the object is a scoped variable
+            obj_node = node["object"]
+            
+            # Handle nested scoped access (e.g., this.items[0])
+            if (obj_node["type"] == "property_access" and
+                obj_node["object"]["type"] == "identifier" and
+                obj_node["object"]["name"] in ["this", "global", "loop", "inputs"] and
+                self.scoped_context):
+                # Get the scoped object first
+                scope_name = obj_node["object"]["name"]
+                prop = obj_node["property"]
+                obj = self._get_scoped_variable(scope_name, prop)
+            else:
+                # Regular object evaluation
+                obj = self._evaluate_node(obj_node)
+            
             index = self._evaluate_node(node["index"])
-
             return self._get_array_element(obj, index)
 
         elif node_type == "method_call":
@@ -541,6 +612,64 @@ class ExpressionEvaluator:
 
         else:
             raise ExpressionError(f"Unknown node type: {node_type}")
+
+    def _get_scoped_variable(self, scope_name: str, variable_path: str) -> Any:
+        """Get a variable from a scoped context.
+        
+        Args:
+            scope_name: The scope name ('this', 'global', 'loop', 'inputs')
+            variable_path: The path within that scope (e.g., 'config.settings.value')
+            
+        Returns:
+            The value at the specified path, or None if not found
+        """
+        if scope_name not in self.scoped_context:
+            return None
+            
+        scope_data = self.scoped_context[scope_name]
+        if scope_data is None:
+            return None
+            
+        return self._navigate_path(scope_data, variable_path)
+    
+    def _navigate_path(self, obj: Any, path: str) -> Any:
+        """Navigate a nested object path like 'config.settings.value'.
+        
+        Args:
+            obj: The object to navigate
+            path: Dot-separated path string
+            
+        Returns:
+            The value at the path, or None if not found
+        """
+        if obj is None:
+            return None
+            
+        current = obj
+        path_parts = path.split(".")
+        
+        for part in path_parts:
+            if current is None:
+                return None
+                
+            if isinstance(current, dict):
+                current = current.get(part)
+            elif isinstance(current, list):
+                # Handle array properties like 'length'
+                if part == "length":
+                    current = len(current)
+                else:
+                    # Try to convert to int for array index
+                    try:
+                        index = int(part)
+                        current = current[index] if 0 <= index < len(current) else None
+                    except (ValueError, IndexError):
+                        current = None
+            else:
+                # Try to get attribute for other objects
+                current = getattr(current, part, None)
+                
+        return current
 
     def _evaluate_binary_op(self, op: str, left: Any, right: Any) -> Any:
         """Evaluate a binary operation."""
@@ -674,15 +803,54 @@ class ExpressionEvaluator:
         elif isinstance(obj, list):
             if method == "includes":
                 return args[0] in obj if args else False
+            elif method == "concat":
+                # Concatenate arrays or values to create a new array
+                result = obj.copy()
+                for arg in args:
+                    if isinstance(arg, list):
+                        result.extend(arg)
+                    else:
+                        result.append(arg)
+                return result
             elif method == "filter":
-                # Simple filter implementation - would need function evaluation for full support
-                return obj  # Placeholder
+                # Filter array based on a boolean function or property
+                if not args:
+                    return obj
+                # For now, support simple property-based filtering
+                filter_value = args[0]
+                if isinstance(filter_value, str):
+                    # Filter by property existence or truthiness
+                    return [item for item in obj if isinstance(item, dict) and item.get(filter_value)]
+                else:
+                    # Filter by equality
+                    return [item for item in obj if item == filter_value]
             elif method == "map":
-                # Simple map implementation - would need function evaluation for full support
-                return obj  # Placeholder
+                # Map array elements (basic implementation for common use cases)
+                if not args:
+                    return obj
+                map_value = args[0]
+                if isinstance(map_value, str):
+                    # Map by property extraction
+                    return [item.get(map_value) if isinstance(item, dict) else str(item) for item in obj]
+                else:
+                    # Simple transformation (convert to string, etc.)
+                    return [str(item) for item in obj]
+            elif method == "slice":
+                # Slice array like JavaScript Array.slice(start, end)
+                start = int(args[0]) if args and args[0] is not None else 0
+                end = int(args[1]) if len(args) > 1 and args[1] is not None else len(obj)
+                return obj[start:end]
             elif method == "join":
                 delimiter = str(args[0]) if args else ","
                 return delimiter.join(str(item) for item in obj)
+            elif method == "push":
+                # Add elements to end of array (mutates original)
+                for arg in args:
+                    obj.append(arg)
+                return len(obj)  # Return new length like JavaScript
+            elif method == "pop":
+                # Remove and return last element
+                return obj.pop() if obj else None
 
         return None
 

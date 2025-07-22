@@ -127,8 +127,8 @@ class TestCodeStandardsWorkflow:
         print(f"   First sub-agent step: {step_info['id']} ({step_info['type']})")
         print(f"   Definition keys: {list(step_info['definition'].keys())}")
         
-        # The first step should be from the while_loop body, likely a state_update
-        expected_step_types = ["state_update", "user_message", "conditional"]  # Possible first step types
+        # The first step should be from the while_loop body, likely a shell_command with state_update
+        expected_step_types = ["shell_command with state_update", "user_message", "conditional"]  # Possible first step types
         assert step_info["type"] in expected_step_types, f"Unexpected first step type: {step_info['type']}"
         assert task_id in step_info["id"], f"Step ID should contain task_id: {step_info['id']}"
         

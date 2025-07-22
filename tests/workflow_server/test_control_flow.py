@@ -39,7 +39,7 @@ class TestControlFlowModels:
 
     def test_while_loop_step_creation(self):
         """Test WhileLoopStep creation and conversion."""
-        body_step = WorkflowStep(id="body1", type="state_update", definition={"path": "raw.counter"})
+        body_step = WorkflowStep(id="body1", type="shell_command", definition={"command": "echo 'updating counter'", "state_update": {"path": "raw.counter", "value": "$(({{ raw.counter }} + 1))"}})
 
         while_loop = WhileLoopStep(condition="counter < 10", max_iterations=50, body=[body_step])
 
@@ -160,7 +160,7 @@ class TestExecutionContext:
         # Create and push frames
         steps = [
             WorkflowStep(id="step1", type="user_message", definition={}),
-            WorkflowStep(id="step2", type="state_update", definition={}),
+            WorkflowStep(id="step2", type="shell_command", definition={"command": "echo 'test'", "state_update": {"path": "state.test", "value": "updated"}}),
         ]
 
         frame = context.create_workflow_frame(steps)

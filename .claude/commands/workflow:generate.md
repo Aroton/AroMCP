@@ -27,14 +27,13 @@ version: string                 # Semantic version (e.g., "1.0.0")
 # Optional fields
 config: object                  # Workflow configuration options
 default_state:                  # Initial state values
-  raw: object                   # Direct writable values
-  computed: object             # Read-only (usually empty initially)
-  state: object                # Alternative writable tier
+  inputs: object               # Initial input values (read-only after initialization)
+  state: object                # Initial mutable state values
 
 state_schema:                   # State field definitions
-  raw: object                  # Type definitions for raw fields
-  computed: object             # Computed field transformations
+  inputs: object               # Type definitions for input fields
   state: object                # Type definitions for state fields
+  computed: object             # Computed field transformations
 
 inputs: object                  # Input parameter definitions
 steps: array                    # Workflow steps to execute
@@ -44,13 +43,16 @@ sub_agent_tasks: object        # Tasks for parallel sub-agent execution
 ### State Schema
 ```yaml
 state_schema:
-  raw:
+  inputs:
+    field_name: "string"        # Types: string, number, boolean, object, array
+  
+  state:
     field_name: "string"        # Types: string, number, boolean, object, array
     
   computed:
     field_name:
-      from: string | array      # Source path(s): "raw.value" or ["raw.a", "raw.b"]
-      transform: string         # JavaScript expression
+      from: string | array      # Source path(s): "this.value" or ["this.a", "inputs.b", "global.c"]
+      transform: string         # JavaScript expression with scoped variable support
       on_error: string          # "use_fallback", "propagate", or "ignore"
       fallback: any             # Default value for errors
 ```
@@ -72,9 +74,10 @@ inputs:
 ```yaml
 - type: "state_update"
   id: string                   # Optional (auto-generated if omitted)
-  path: string                 # State path (e.g., "raw.counter")
+  path: string                 # State path using scoped syntax (e.g., "this.counter", "global.retry_count")
   value: any                   # Value to set
   operation: string            # set (default), increment, decrement, append, multiply
+  execution_context: string    # server (default) or client
 ```
 
 #### 2. mcp_call
@@ -82,8 +85,12 @@ inputs:
 - type: "mcp_call"
   tool: string                 # MCP tool name
   parameters: object           # Tool parameters
-  store_result: string         # State path to store tool result (e.g., "raw.tool_output")
+  store_result: string         # State path to store tool result (e.g., "this.tool_output")
   timeout: number              # Optional timeout in seconds
+  execution_context: string    # server (default) or client
+  error_handling:              # Optional error handling
+    strategy: string           # retry, continue, fail (default), fallback
+    max_retries: number        # Default: 3
 ```
 
 #### 3. user_message
@@ -192,11 +199,44 @@ inputs:
   format: string               # Message format
 ```
 
-#### 15. agent_task
+#### 15. agent_task (DEPRECATED - use agent_prompt)
 ```yaml
 - type: "agent_task"
   prompt: string               # Task instruction for the agent
   context: object              # Optional additional context
+```
+
+#### 16. agent_prompt
+```yaml
+- type: "agent_prompt"
+  id: string                   # Optional step ID
+  prompt: string               # Task instruction for the agent
+  context: object              # Optional context data for the agent
+  expected_response:           # Optional expected response schema
+    type: string               # string, number, boolean, object, array
+    required: array            # Required fields for object responses
+    properties: object         # Property definitions for object responses
+  timeout: number              # Timeout in seconds (default: 300)
+  max_retries: number          # Maximum retry attempts (default: 3)
+  execution_context: string    # client (AI agent executes this)
+```
+
+#### 17. agent_response
+```yaml
+- type: "agent_response"
+  id: string                   # Optional step ID
+  response_schema:             # Schema to validate agent response
+    type: string               # Expected response type
+    required: array            # Required fields
+    properties: object         # Property definitions
+  state_updates:               # State updates based on response
+    - path: string             # State path to update
+      value: string            # Value expression or response field
+      operation: string        # set (default), append, etc.
+  store_response: string       # Path to store full response
+  error_handling:              # Error handling configuration
+    strategy: string           # retry, continue, fail, fallback
+  execution_context: string    # client (AI agent provides response)
 ```
 
 ### Sub-Agent Tasks
@@ -209,12 +249,15 @@ sub_agent_tasks:
     prompt_template: string   # Prompt template
 ```
 
-### Variable Templates
-Use `{{ variable_name }}` in strings to reference:
-- State values: `{{ raw.counter }}`, `{{ computed.total }}`
-- Input parameters: `{{ project_path }}`
-- Loop variables: `{{ item }}`, `{{ index }}`
+### Variable Templates (UPDATED - Scoped Syntax)
+Use `{{ variable_name }}` in strings to reference scoped variables:
+- Current context: `{{ this.counter }}`, `{{ this.total }}` (combines state + computed)
+- Global variables: `{{ global.retry_count }}`, `{{ global.shared_data }}`
+- Input values: `{{ inputs.project_path }}` (unchanged)
+- Loop variables: `{{ loop.item }}`, `{{ loop.index }}`, `{{ loop.iteration }}`
 - Special functions: `{{ now() }}` for current timestamp
+
+**BREAKING CHANGE**: Replace `{{ state.field }}` and `{{ computed.field }}` with `{{ this.field }}`
 
 ### State Update Operations
 For `state_update` steps, the `operation` field supports:
@@ -233,42 +276,57 @@ JavaScript expressions in conditions and transforms have access to:
 
 ### Common Patterns
 ```yaml
-# Counter increment
+# Counter increment (NEW: scoped syntax)
 - type: "state_update"
-  path: "raw.counter"
+  path: "this.counter"
   operation: "increment"
 
-# MCP tool call with result storage
+# MCP tool call with result storage (NEW: scoped syntax)
 - type: "mcp_call"
   tool: "aromcp.lint_project"
   parameters:
     use_eslint_standards: true
-  store_result: "raw.lint_output"
+  store_result: "this.lint_output"
 
-# Agent task instruction
-- type: "agent_task"
-  prompt: "Fix any linting errors found in the file"
+# Agent task with response handling (NEW: scoped syntax)
+- type: "agent_prompt"
+  prompt: "Analyze the lint errors and suggest fixes"
+  context:
+    lint_output: "{{ this.lint_output }}"
+  expected_response:
+    type: "object"
+    required: ["fixes", "summary"]
 
-# Conditional with state check
+- type: "agent_response"
+  response_schema:
+    type: "object"
+    required: ["fixes", "summary"]
+  state_updates:
+    - path: "this.suggested_fixes"
+      value: "response.fixes"
+    - path: "this.analysis_summary"
+      value: "response.summary"
+
+# Conditional with state check (NEW: scoped syntax)
 - type: "conditional"
-  condition: "{{ computed.has_errors }}"
+  condition: "{{ this.has_errors }}"
   then_steps:
     - type: "user_message"
-      message: "Found {{ raw.errors.length }} errors"
+      message: "Found {{ this.errors.length }} errors"
       type: "error"
 
-# Parallel file processing
+# Parallel file processing (NEW: scoped syntax)
 - type: "parallel_foreach"
-  items: "{{ computed.valid_files }}"
+  items: "{{ this.valid_files }}"
   max_parallel: 5
   sub_agent_task: "process_file"
 
-# User choice handling
+# User choice handling (NEW: scoped syntax)
 - type: "user_input"
   prompt: "Continue with deployment? (yes/no)"
   validation_pattern: "^(yes|no)$"
   state_update:
-    path: "raw.user_choice"
+    path: "this.user_choice"
 ```
 
 ## Execution Process
@@ -355,11 +413,11 @@ sequenceDiagram
 Present diagram and ask: "Does this accurately represent your workflow? Any adjustments needed?"
 
 ### 5. Design State Schema [TODO: design-state]
-Create the state structure:
+Create the state structure using the new scoped variable system:
 ```yaml
 default_state:
-  raw:
-    # Direct values
+  state:
+    # Direct values (accessible via this.*)
     start_time: "{{ now() }}"
     items_to_process: []
     results: {}
@@ -367,18 +425,23 @@ default_state:
     
 state_schema:
   computed:
-    # Derived values
+    # Derived values (accessible via this.*)
     total_items:
-      from: "raw.items_to_process"
+      from: "this.items_to_process"
       transform: "input.length"
     
     success_count:
-      from: "raw.results"
+      from: "this.results"
       transform: "Object.values(input).filter(r => r.success).length"
     
     has_errors:
-      from: "raw.errors"
+      from: "this.errors"
       transform: "input.length > 0"
+    
+    # Global variables example (persistent across contexts)
+    retry_allowed:
+      from: ["global.max_retries", "this.current_attempt"]
+      transform: "input[1] < input[0]"
 ```
 
 ### 6. Generate Workflow YAML [TODO: generate-yaml]
@@ -394,12 +457,12 @@ config:
   max_retries: 3
   timeout_seconds: 300
 
-# Initial state
+# Initial state (NEW: scoped variable system)
 default_state:
-  raw:
+  state:
     [state_fields]
 
-# State transformations
+# State transformations (NEW: scoped syntax)
 state_schema:
   computed:
     [computed_fields]

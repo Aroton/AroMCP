@@ -22,8 +22,9 @@ class WorkflowStep:
     """A single step in a workflow."""
 
     id: str
-    type: str  # "mcp_call", "state_update", "user_message", "shell_command"
+    type: str  # "mcp_call", "user_message", "shell_command", "agent_prompt", "agent_response", etc.
     definition: dict[str, Any]
+    execution_context: str = "server"  # "server" or "client" - where the step executes (only used for shell_command)
 
 
 @dataclass
@@ -99,5 +100,11 @@ class WorkflowValidationError(Exception):
 
 class WorkflowExecutionError(Exception):
     """Raised when workflow execution fails."""
+
+    pass
+
+
+class WorkflowStateError(Exception):
+    """Raised when workflow state operations fail."""
 
     pass

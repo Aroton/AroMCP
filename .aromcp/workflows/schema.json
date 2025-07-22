@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "MCP Workflow Schema",
-  "description": "Schema for MCP Workflow YAML files",
+  "description": "Schema for MCP Workflow YAML files enabling bi-directional agent communication",
   "type": "object",
   "required": ["name", "description", "version", "steps"],
   "properties": {
@@ -38,7 +38,7 @@
     },
     "inputs": {
       "type": "object",
-      "description": "Input parameter definitions for the workflow",
+      "description": "Input parameter definitions for the workflow (read-only after initialization)",
       "patternProperties": {
         "^[a-zA-Z_][a-zA-Z0-9_]*$": {
           "$ref": "#/definitions/inputDefinition"
@@ -50,13 +50,17 @@
       "type": "object",
       "description": "Initial state values for the workflow",
       "properties": {
-        "raw": {
-          "type": "object",
-          "description": "Initial raw state values (agent-writable)"
-        },
         "state": {
           "type": "object",
-          "description": "Initial legacy state values (backward compatibility)"
+          "description": "Initial mutable state values"
+        },
+        "inputs": {
+          "type": "object",
+          "description": "Initial input values (read-only after initialization)"
+        },
+        "raw": {
+          "type": "object",
+          "description": "Legacy alias for inputs (deprecated, use inputs instead)"
         }
       },
       "additionalProperties": false
@@ -65,9 +69,18 @@
       "type": "object",
       "description": "Schema defining computed fields and state structure",
       "properties": {
-        "raw": {
+        "inputs": {
           "type": "object",
-          "description": "Raw field type definitions",
+          "description": "Input field type definitions",
+          "patternProperties": {
+            ".*": {
+              "type": "string"
+            }
+          }
+        },
+        "state": {
+          "type": "object",
+          "description": "State field type definitions",
           "patternProperties": {
             ".*": {
               "type": "string"
@@ -80,15 +93,6 @@
           "patternProperties": {
             "^[a-zA-Z_][a-zA-Z0-9_]*$": {
               "$ref": "#/definitions/computedFieldDefinition"
-            }
-          }
-        },
-        "state": {
-          "type": "object",
-          "description": "State field type definitions",
-          "patternProperties": {
-            ".*": {
-              "type": "string"
             }
           }
         }
@@ -161,11 +165,11 @@
               "description": "Multiple dependency paths"
             }
           ],
-          "description": "Path(s) to the source data for computation"
+          "description": "Path(s) to the source data for computation using scoped syntax (e.g., 'this.field', 'global.var', 'inputs.param', 'loop.item'). Legacy 'state.' and 'computed.' prefixes are deprecated."
         },
         "transform": {
           "type": "string",
-          "description": "JavaScript expression to transform the input data"
+          "description": "JavaScript expression to transform the input data. Supports variable references using scoped syntax: {{ this.field }}, {{ global.var }}, {{ inputs.param }}, {{ loop.item }}."
         },
         "on_error": {
           "type": "string",
@@ -178,6 +182,28 @@
         }
       },
       "additionalProperties": false
+    },
+    "responseSchema": {
+      "type": "object",
+      "description": "Schema for validating agent responses",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean", "object", "array"],
+          "description": "Expected response type"
+        },
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Required fields for object responses"
+        },
+        "properties": {
+          "type": "object",
+          "description": "Property definitions for object responses"
+        }
+      }
     },
     "workflowStep": {
       "type": "object",
@@ -194,21 +220,16 @@
             "user_message",
             "mcp_call",
             "user_input",
+            "agent_prompt",
+            "agent_response",
             "parallel_foreach",
-            "agent_shell_command",
-            "internal_mcp_call",
-            "conditional_message",
-            "agent_task",
             "shell_command",
-            "state_update",
-            "batch_state_update",
             "conditional",
             "while_loop",
             "foreach",
             "break",
             "continue",
-            "debug_task_completion",
-            "debug_step_advance"
+            "wait_step"
           ],
           "description": "Type of workflow step"
         }
@@ -227,11 +248,13 @@
               "message_type": {
                 "type": "string",
                 "enum": ["info", "warning", "error", "success"],
+                "default": "info",
                 "description": "Type of message"
               },
               "format": {
                 "type": "string",
                 "enum": ["text", "markdown", "code"],
+                "default": "text",
                 "description": "Message format"
               }
             },
@@ -263,6 +286,10 @@
               "timeout": {
                 "type": "number",
                 "description": "Timeout in seconds for the tool call"
+              },
+              "error_handling": {
+                "$ref": "#/definitions/errorHandling",
+                "description": "Error handling configuration"
               }
             },
             "required": ["tool"]
@@ -282,8 +309,10 @@
                 "type": "string",
                 "description": "Additional instructions for the user"
               },
-              "type": {
+              "input_type": {
                 "type": "string",
+                "enum": ["string", "number", "boolean", "choice"],
+                "default": "string",
                 "description": "Expected input type"
               },
               "choices": {
@@ -304,10 +333,76 @@
               "max_retries": {
                 "type": "integer",
                 "minimum": 0,
+                "default": 3,
                 "description": "Maximum retry attempts for validation"
               }
             },
             "required": ["prompt"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "agent_prompt" } }
+          },
+          "then": {
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "description": "Task instruction for the agent"
+              },
+              "context": {
+                "type": "object",
+                "description": "Additional context data for the agent"
+              },
+              "expected_response": {
+                "$ref": "#/definitions/responseSchema",
+                "description": "Schema for expected agent response"
+              },
+              "timeout": {
+                "type": "number",
+                "default": 300,
+                "description": "Timeout in seconds for agent response"
+              },
+              "max_retries": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 3,
+                "description": "Maximum retry attempts for agent task"
+              }
+            },
+            "required": ["prompt"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "agent_response" } }
+          },
+          "then": {
+            "properties": {
+              "response_schema": {
+                "$ref": "#/definitions/responseSchema",
+                "description": "Schema to validate agent response"
+              },
+              "state_updates": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/stateUpdateSpec"
+                },
+                "description": "State updates to apply based on response"
+              },
+              "store_response": {
+                "type": "string",
+                "description": "State path to store the full response"
+              },
+              "validation": {
+                "type": "object",
+                "description": "Additional validation rules for the response"
+              },
+              "error_handling": {
+                "$ref": "#/definitions/errorHandling",
+                "description": "Error handling configuration"
+              }
+            }
           }
         },
         {
@@ -318,7 +413,7 @@
             "properties": {
               "items": {
                 "type": "string",
-                "description": "Expression that evaluates to an array of items"
+                "description": "Expression that evaluates to an array of items. Supports scoped variable syntax: {{ this.field }}, {{ global.var }}, {{ inputs.param }}."
               },
               "sub_agent_task": {
                 "type": "string",
@@ -327,108 +422,16 @@
               "max_parallel": {
                 "type": "integer",
                 "minimum": 1,
+                "default": 5,
                 "description": "Maximum number of parallel executions"
               },
               "timeout_seconds": {
                 "type": "number",
+                "default": 300,
                 "description": "Timeout for each sub-agent execution"
               }
             },
             "required": ["items", "sub_agent_task"]
-          }
-        },
-        {
-          "if": {
-            "properties": { "type": { "const": "agent_shell_command" } }
-          },
-          "then": {
-            "properties": {
-              "command": {
-                "type": "string",
-                "description": "Shell command for agent to execute"
-              },
-              "reason": {
-                "type": "string",
-                "description": "Reason for executing this command"
-              },
-              "working_directory": {
-                "type": "string",
-                "description": "Working directory for command execution"
-              },
-              "state_update": {
-                "$ref": "#/definitions/stateUpdateSpec",
-                "description": "How to update state with command output"
-              }
-            },
-            "required": ["command"]
-          }
-        },
-        {
-          "if": {
-            "properties": { "type": { "const": "internal_mcp_call" } }
-          },
-          "then": {
-            "properties": {
-              "tool": {
-                "type": "string",
-                "description": "Internal MCP tool to invoke"
-              },
-              "parameters": {
-                "type": "object",
-                "description": "Parameters for the tool"
-              },
-              "state_update": {
-                "$ref": "#/definitions/stateUpdateSpec",
-                "description": "How to update state with the result"
-              }
-            },
-            "required": ["tool"]
-          }
-        },
-        {
-          "if": {
-            "properties": { "type": { "const": "conditional_message" } }
-          },
-          "then": {
-            "properties": {
-              "condition": {
-                "type": "string",
-                "description": "Condition expression to evaluate"
-              },
-              "message": {
-                "type": "string",
-                "description": "Message to display if condition is true"
-              },
-              "message_type": {
-                "type": "string",
-                "enum": ["info", "warning", "error", "success"],
-                "description": "Type of message"
-              },
-              "format": {
-                "type": "string",
-                "enum": ["text", "markdown", "code"],
-                "description": "Message format"
-              }
-            },
-            "required": ["condition", "message"]
-          }
-        },
-        {
-          "if": {
-            "properties": { "type": { "const": "agent_task" } }
-          },
-          "then": {
-            "properties": {
-              "prompt": {
-                "type": "string",
-                "description": "Task instruction for the agent"
-              },
-              "context": {
-                "type": "object",
-                "description": "Additional context for the task"
-              }
-            },
-            "required": ["prompt"]
           }
         },
         {
@@ -439,7 +442,7 @@
             "properties": {
               "command": {
                 "type": "string",
-                "description": "Shell command to execute on server"
+                "description": "Shell command to execute"
               },
               "working_directory": {
                 "type": "string",
@@ -447,69 +450,25 @@
               },
               "timeout": {
                 "type": "number",
+                "default": 60,
                 "description": "Command timeout in seconds"
               },
               "state_update": {
                 "$ref": "#/definitions/stateUpdateSpec",
                 "description": "How to update state with command output"
+              },
+              "error_handling": {
+                "$ref": "#/definitions/errorHandling",
+                "description": "Error handling configuration"
+              },
+              "execution_context": {
+                "type": "string",
+                "enum": ["client", "server"],
+                "default": "server",
+                "description": "Where to execute the shell command (client = AI agent, server = MCP workflow server)"
               }
             },
             "required": ["command"]
-          }
-        },
-        {
-          "if": {
-            "properties": { "type": { "const": "state_update" } }
-          },
-          "then": {
-            "properties": {
-              "path": {
-                "type": "string",
-                "description": "State path to update (e.g., 'raw.counter')"
-              },
-              "value": {
-                "description": "Value to set at the path"
-              },
-              "operation": {
-                "type": "string",
-                "enum": ["set", "increment", "decrement", "append", "multiply"],
-                "default": "set",
-                "description": "Update operation to perform"
-              }
-            },
-            "required": ["path", "value"]
-          }
-        },
-        {
-          "if": {
-            "properties": { "type": { "const": "batch_state_update" } }
-          },
-          "then": {
-            "properties": {
-              "updates": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "required": ["path", "value"],
-                  "properties": {
-                    "path": {
-                      "type": "string",
-                      "description": "State path to update"
-                    },
-                    "value": {
-                      "description": "Value to set"
-                    },
-                    "operation": {
-                      "type": "string",
-                      "enum": ["set", "increment", "decrement", "append", "multiply"],
-                      "default": "set"
-                    }
-                  }
-                },
-                "description": "List of state updates to apply"
-              }
-            },
-            "required": ["updates"]
           }
         },
         {
@@ -520,7 +479,7 @@
             "properties": {
               "condition": {
                 "type": "string",
-                "description": "JavaScript expression to evaluate"
+                "description": "JavaScript expression to evaluate. Supports scoped variable syntax: {{ this.field }}, {{ global.var }}, {{ inputs.param }}, {{ loop.item }}, {{ loop.index }}, {{ loop.iteration }}."
               },
               "then_steps": {
                 "type": "array",
@@ -548,7 +507,7 @@
             "properties": {
               "condition": {
                 "type": "string",
-                "description": "Loop condition expression"
+                "description": "Loop condition expression. Supports scoped variable syntax: {{ this.field }}, {{ global.var }}, {{ inputs.param }}, {{ loop.iteration }}."
               },
               "body": {
                 "type": "array",
@@ -575,7 +534,7 @@
             "properties": {
               "items": {
                 "type": "string",
-                "description": "Expression that evaluates to an array"
+                "description": "Expression that evaluates to an array. Supports scoped variable syntax: {{ this.field }}, {{ global.var }}, {{ inputs.param }}."
               },
               "body": {
                 "type": "array",
@@ -619,54 +578,23 @@
         },
         {
           "if": {
-            "properties": { "type": { "const": "debug_task_completion" } }
+            "properties": { "type": { "const": "wait_step" } }
           },
           "then": {
             "properties": {
-              "task_id": {
+              "id": true,
+              "type": true,
+              "message": {
                 "type": "string",
-                "description": "ID of the completed task"
+                "description": "Optional message to display while waiting"
               },
-              "total_tasks": {
-                "type": "integer",
-                "description": "Total number of tasks"
-              },
-              "completed_task_index": {
-                "type": "integer",
-                "description": "Index of the completed task"
+              "timeout_seconds": {
+                "type": "number",
+                "description": "Optional timeout in seconds (future enhancement)",
+                "minimum": 1
               }
             },
-            "required": ["task_id", "total_tasks", "completed_task_index"]
-          }
-        },
-        {
-          "if": {
-            "properties": { "type": { "const": "debug_step_advance" } }
-          },
-          "then": {
-            "properties": {
-              "task_id": {
-                "type": "string",
-                "description": "ID of the current task"
-              },
-              "current_step_index": {
-                "type": "integer",
-                "description": "Current step index"
-              },
-              "total_steps": {
-                "type": "integer",
-                "description": "Total steps in task"
-              },
-              "total_tasks": {
-                "type": "integer",
-                "description": "Total number of tasks"
-              },
-              "current_task_index": {
-                "type": "integer",
-                "description": "Current task index"
-              }
-            },
-            "required": ["task_id", "current_step_index", "total_steps", "total_tasks", "current_task_index"]
+            "additionalProperties": false
           }
         }
       ]
@@ -677,7 +605,7 @@
       "properties": {
         "path": {
           "type": "string",
-          "description": "State path to update"
+          "description": "State path to update using scoped syntax (e.g., 'this.fieldName', 'global.varName', 'inputs.paramName'). Legacy 'state.' prefix is deprecated, use 'this.' instead."
         },
         "value": {
           "type": "string",
@@ -687,6 +615,31 @@
           "type": "string",
           "enum": ["set", "increment", "decrement", "append", "multiply"],
           "default": "set"
+        }
+      }
+    },
+    "errorHandling": {
+      "type": "object",
+      "description": "Error handling configuration for a step",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["retry", "continue", "fail", "fallback"],
+          "default": "fail",
+          "description": "How to handle errors"
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 3,
+          "description": "Maximum retry attempts (when strategy is 'retry')"
+        },
+        "fallback_value": {
+          "description": "Value to use when strategy is 'fallback'"
+        },
+        "error_message": {
+          "type": "string",
+          "description": "Custom error message to display"
         }
       }
     },

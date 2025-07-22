@@ -46,13 +46,16 @@ class TestSubAgentStateUpdates:
             }
         }
         
-        # Create a state_update step like the one in the workflow
+        # Create a shell_command with state_update step like the one in the workflow
         state_update_step = WorkflowStep(
             id="analyze_failure_reason",
-            type="state_update",
+            type="shell_command",
             definition={
-                "path": "raw.failure_analysis",
-                "value": "Test failure reason"
+                "command": "echo 'analyzing failure'",
+                "state_update": {
+                    "path": "raw.failure_analysis",
+                    "value": "Test failure reason"
+                }
             }
         )
         

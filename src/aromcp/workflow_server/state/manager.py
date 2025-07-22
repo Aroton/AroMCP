@@ -11,6 +11,7 @@ from typing import Any
 
 from .models import ComputedFieldError, InvalidPathError, StateSchema, WorkflowState
 from .transformer import CascadingUpdateCalculator, DependencyResolver, TransformationEngine
+from ..workflow.context import ExecutionContext
 
 
 class StateManager:
@@ -37,7 +38,15 @@ class StateManager:
 
         # Set up schema and transformation components
         if isinstance(schema, dict):
-            self._schema = StateSchema(**schema)
+            # Handle backward compatibility: map "raw" to "inputs" in schema
+            schema_dict = schema.copy()
+            if "raw" in schema_dict:
+                # Map "raw" field definitions to "inputs"
+                if "inputs" not in schema_dict:
+                    schema_dict["inputs"] = {}
+                schema_dict["inputs"].update(schema_dict["raw"])
+                del schema_dict["raw"]
+            self._schema = StateSchema(**schema_dict)
         elif isinstance(schema, StateSchema):
             self._schema = schema
         else:
@@ -53,7 +62,7 @@ class StateManager:
 
     def _setup_transformations(self) -> None:
         """Initialize transformation and dependency resolution components"""
-        schema_dict = {"computed": self._schema.computed, "raw": self._schema.raw, "state": self._schema.state}
+        schema_dict = {"computed": self._schema.computed, "inputs": self._schema.inputs, "state": self._schema.state}
 
         self._dependency_resolver = DependencyResolver(schema_dict)
         resolved_deps = self._dependency_resolver.resolve()
@@ -76,7 +85,7 @@ class StateManager:
         """
         Generate flattened view of state for reading
 
-        Precedence order: computed > raw > state
+        Precedence order: computed > inputs > state
 
         Args:
             state: WorkflowState to flatten
@@ -90,8 +99,8 @@ class StateManager:
         # Start with state tier (lowest precedence)
         flattened.update(self._flatten_dict(state.state))
 
-        # Add raw tier (middle precedence)
-        flattened.update(self._flatten_dict(state.raw))
+        # Add inputs tier (middle precedence)
+        flattened.update(self._flatten_dict(state.inputs))
 
         # Add computed tier (highest precedence)
         flattened.update(self._flatten_dict(state.computed))
@@ -123,11 +132,15 @@ class StateManager:
         """
         Validate that a path can be written to
 
-        Only paths starting with "raw." or "state." are writable.
-        Computed paths are read-only.
+        Supports both legacy paths ("inputs.", "state.") and new scoped paths:
+        - "this.variable" -> state.state (writable)
+        - "global.variable" -> ExecutionContext.global_variables (writable)
+        - "inputs.variable" -> state.inputs (read-only, for validation only)
+        - "loop.variable" -> ExecutionContext current loop (read-only, auto-managed)
+        - "state.variable" -> state.state (legacy support)
 
         Args:
-            path: Path to validate (e.g., "raw.counter", "state.version")
+            path: Path to validate (e.g., "this.counter", "global.version")
 
         Returns:
             True if path is writable, False otherwise
@@ -143,17 +156,29 @@ class StateManager:
         if len(parts) != 2:
             return False
 
-        tier, field = parts
+        scope, field = parts
 
-        # Check tier is valid and field is not empty
-        if tier not in ("raw", "state") or not field or field.startswith("."):
+        # Check field is valid (not empty, doesn't start with dot)
+        if not field or field.startswith("."):
             return False
 
         # Check for invalid patterns like double dots
         if ".." in path or path.endswith("."):
             return False
 
-        return True
+        # Check scope validity and writability
+        if scope in ("this", "global"):
+            # New scoped paths - writable
+            return True
+        elif scope in ("inputs", "state", "raw"):
+            # Legacy paths - inputs/raw/state writable for backward compatibility
+            return True
+        elif scope == "loop":
+            # Read-only scope - not writable in normal operations
+            return False
+        else:
+            # Unknown scope
+            return False
 
     def read(self, workflow_id: str, paths: list[str] | None = None) -> dict[str, Any]:
         """
@@ -166,7 +191,8 @@ class StateManager:
             paths: Optional list of specific paths to read (not implemented for nested state)
 
         Returns:
-            Nested state dictionary with structure: {raw: {...}, computed: {...}, state: {...}}
+            Nested state dictionary with structure: {inputs: {...}, computed: {...}, state: {...}, raw: {...}}
+            raw is an alias for inputs for backward compatibility.
 
         Raises:
             KeyError: If workflow doesn't exist
@@ -182,26 +208,29 @@ class StateManager:
             # Ensure all computed fields are up to date
             self._ensure_computed_fields_current(state)
             
-            # Return nested structure
+            # Return nested structure with backward compatibility
             return {
-                "raw": dict(state.raw),
+                "inputs": dict(state.inputs),
                 "computed": dict(state.computed), 
-                "state": dict(state.state)
+                "state": dict(state.state),
+                "raw": dict(state.inputs)  # Backward compatibility alias
             }
 
-    def update(self, workflow_id: str, updates: list[dict[str, Any]]) -> dict[str, Any]:
+    def update(self, workflow_id: str, updates: list[dict[str, Any]], context: ExecutionContext | None = None) -> dict[str, Any]:
         """
         Apply atomic updates to workflow state
 
         Updates are applied atomically - either all succeed or none are applied.
         After successful updates, cascading transformations are triggered.
+        Supports both legacy paths and new scoped paths.
 
         Args:
             workflow_id: Unique workflow identifier
             updates: List of update operations, each containing:
-                - path: State path to update (e.g., "raw.counter")
+                - path: State path to update (e.g., "this.counter", "global.version")
                 - value: New value to set
                 - operation: Optional operation ("set", "append", "increment", "merge")
+            context: Optional ExecutionContext for scoped variable updates
 
         Returns:
             Updated flattened state
@@ -233,7 +262,17 @@ class StateManager:
                     value = update["value"]
                     operation = update.get("operation", "set")
 
-                    self._apply_single_update(state, path, value, operation)
+                    # Check if this is a scoped path that needs special handling
+                    if "." in path:
+                        scope = path.split(".", 1)[0]
+                        if scope in ("this", "global"):
+                            self._apply_scoped_update(state, path, value, operation, context)
+                        else:
+                            # Legacy path handling
+                            self._apply_single_update(state, path, value, operation)
+                    else:
+                        self._apply_single_update(state, path, value, operation)
+                    
                     changed_paths.append(path)
 
                 # Trigger cascading transformations if schema is defined
@@ -257,20 +296,110 @@ class StateManager:
 
         Args:
             state: WorkflowState to modify
-            path: Path to update (e.g., "raw.counter")
+            path: Path to update (e.g., "inputs.counter", "raw.counter")
             value: Value to apply
             operation: Operation type ("set", "append", "increment", "merge")
         """
         tier, field_path = path.split(".", 1)
 
-        # Get the appropriate tier
+        # Handle backward compatibility: map "raw" to "inputs"
         if tier == "raw":
-            target_dict = state.raw
+            tier = "inputs"
+
+        # Get the appropriate tier
+        if tier == "inputs":
+            target_dict = state.inputs
         elif tier == "state":
             target_dict = state.state
         else:
             raise InvalidPathError(f"Cannot write to tier: {tier}")
 
+        # Handle nested paths
+        if "." in field_path:
+            # Navigate to parent object
+            path_parts = field_path.split(".")
+            current = target_dict
+
+            for part in path_parts[:-1]:
+                if part not in current:
+                    current[part] = {}
+                elif not isinstance(current[part], dict):
+                    raise ValueError(f"Cannot set nested property on non-object: {part}")
+                current = current[part]
+
+            final_key = path_parts[-1]
+        else:
+            current = target_dict
+            final_key = field_path
+
+        # Apply operation
+        if operation == "set":
+            current[final_key] = value
+        elif operation == "append":
+            if final_key not in current:
+                current[final_key] = []
+            if not isinstance(current[final_key], list):
+                raise ValueError(f"Cannot append to non-list: {final_key}")
+            current[final_key].append(value)
+        elif operation == "increment":
+            if final_key not in current:
+                current[final_key] = 0
+            if not isinstance(current[final_key], int | float):
+                raise ValueError(f"Cannot increment non-number: {final_key}")
+            # Default increment value is 1 if not provided
+            increment_value = 1 if value is None else value
+            current[final_key] += increment_value
+        elif operation == "merge":
+            if final_key not in current:
+                current[final_key] = {}
+            if not isinstance(current[final_key], dict) or not isinstance(value, dict):
+                raise ValueError(f"Cannot merge non-objects: {final_key}")
+            current[final_key].update(value)
+        else:
+            raise ValueError(f"Unknown operation: {operation}")
+
+    def _apply_scoped_update(self, state: WorkflowState, path: str, value: Any, 
+                           operation: str, context: ExecutionContext | None = None) -> None:
+        """
+        Apply a scoped update operation to the appropriate storage location
+
+        Args:
+            state: WorkflowState to modify
+            path: Scoped path (e.g., "this.counter", "global.version")
+            value: Value to apply
+            operation: Operation type ("set", "append", "increment", "merge")
+            context: ExecutionContext for global variable access
+        """
+        if "." not in path:
+            raise InvalidPathError(f"Invalid scoped path: {path}")
+        
+        scope, field_path = path.split(".", 1)
+        
+        if scope == "this":
+            # Route to workflow state
+            self._apply_nested_update(state.state, field_path, value, operation)
+        elif scope == "global":
+            # Route to ExecutionContext global variables
+            if context is None:
+                raise ValueError("ExecutionContext required for global variable updates")
+            self._apply_nested_update(context.global_variables, field_path, value, operation)
+        elif scope in ("inputs", "loop"):
+            # Read-only scopes should not reach here due to validation, but handle gracefully
+            raise InvalidPathError(f"Cannot write to read-only scope: {scope}")
+        else:
+            raise InvalidPathError(f"Unknown scope: {scope}")
+
+    def _apply_nested_update(self, target_dict: dict[str, Any], field_path: str, 
+                           value: Any, operation: str) -> None:
+        """
+        Apply update operation to nested dictionary structure
+
+        Args:
+            target_dict: Dictionary to update
+            field_path: Nested field path (e.g., "user.name", "counter")
+            value: Value to apply
+            operation: Operation type ("set", "append", "increment", "merge")
+        """
         # Handle nested paths
         if "." in field_path:
             # Navigate to parent object
@@ -391,7 +520,7 @@ class StateManager:
 
     def _get_value_from_path(self, state: WorkflowState, path: str) -> Any:
         """
-        Get value from state using a path like "raw.counter" or "computed.double"
+        Get value from state using a path like "inputs.counter", "computed.double", or "raw.counter"
 
         Args:
             state: WorkflowState to read from
@@ -405,8 +534,12 @@ class StateManager:
 
         tier, field_path = path.split(".", 1)
 
+        # Handle backward compatibility: map "raw" to "inputs"
         if tier == "raw":
-            source = state.raw
+            tier = "inputs"
+
+        if tier == "inputs":
+            source = state.inputs
         elif tier == "computed":
             source = state.computed
         elif tier == "state":

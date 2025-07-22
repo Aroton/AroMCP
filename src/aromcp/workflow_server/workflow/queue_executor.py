@@ -38,7 +38,7 @@ class QueueBasedWorkflowExecutor:
         # Add locks for thread safety
         self._workflow_locks: dict[str, threading.Lock] = {}
         self._global_lock = threading.Lock()
-        
+
         # Debug mode detection
         self._debug_serial = os.getenv("AROMCP_WORKFLOW_DEBUG", "").lower() == "serial"
 
@@ -69,12 +69,13 @@ class QueueBasedWorkflowExecutor:
         except Exception as e:
             raise ValueError(f"Failed to read state for workflow {workflow_id}: {str(e)}") from e
 
-    def _update_state(self, workflow_id: str, updates: list[dict[str, Any]]) -> dict[str, Any]:
+    def _update_state(self, workflow_id: str, updates: list[dict[str, Any]], context: ExecutionContext | None = None) -> dict[str, Any]:
         """Update workflow state with proper error handling.
 
         Args:
             workflow_id: The workflow ID
             updates: List of state updates to apply
+            context: Optional ExecutionContext for scoped variable updates
 
         Returns:
             The result of the update operation
@@ -83,7 +84,7 @@ class QueueBasedWorkflowExecutor:
             ValueError: If update fails
         """
         try:
-            return self.state_manager.update(workflow_id, updates)
+            return self.state_manager.update(workflow_id, updates, context)
         except Exception as e:
             raise ValueError(f"Failed to update state for workflow {workflow_id}: {str(e)}") from e
 
@@ -94,10 +95,10 @@ class QueueBasedWorkflowExecutor:
         # Initialize state
         initial_state = workflow_def.default_state.copy()
         if inputs:
-            # Merge inputs into raw state
-            if "raw" not in initial_state:
-                initial_state["raw"] = {}
-            initial_state["raw"].update(inputs)
+            # Merge inputs into inputs state
+            if "inputs" not in initial_state:
+                initial_state["inputs"] = {}
+            initial_state["inputs"].update(inputs)
 
         # Create workflow instance
         instance = WorkflowInstance(
@@ -119,7 +120,7 @@ class QueueBasedWorkflowExecutor:
         updates = []
         if initial_state:
             for tier_name, tier_data in initial_state.items():
-                if tier_name in ["raw", "state"] and isinstance(tier_data, dict):
+                if tier_name in ["inputs", "state"] and isinstance(tier_data, dict):
                     for key, value in tier_data.items():
                         updates.append({"path": f"{tier_name}.{key}", "value": value})
 
@@ -150,7 +151,7 @@ class QueueBasedWorkflowExecutor:
             "status": "running",
             "state": current_state,
             "total_steps": len(workflow_def.steps),
-            "execution_context": context.get_execution_summary(),
+            "execution_context": self._create_simplified_execution_context(context),
         }
 
     def get_next_step(self, workflow_id: str) -> dict[str, Any] | None:
@@ -177,38 +178,62 @@ class QueueBasedWorkflowExecutor:
 
                 step_config = self.step_registry.get(step.type)
                 if not step_config:
-                    # Unknown step type - treat as client step
-                    queue.pop_next()
-                    queue.client_queue.append(
-                        {
-                            "id": step.id,
-                            "type": step.type,
-                            "definition": step.definition,
-                            "error": f"Unknown step type: {step.type}",
-                        }
-                    )
-                    break
+                    # Check if it's a debug step that should be handled server-side
+                    if step.type.startswith("debug_"):
+                        # Process debug steps on server side
+                        queue.pop_next()
+                        result = self._process_server_step(instance, step, queue)
+                        if result.get("executed"):
+                            queue.server_completed.append(result)
+                        continue
+                    else:
+                        # Unknown step type - treat as client step
+                        queue.pop_next()
+                        queue.client_queue.append(
+                            {
+                                "id": step.id,
+                                "type": step.type,
+                                "definition": step.definition,
+                                "error": f"Unknown step type: {step.type}",
+                            }
+                        )
+                        break
 
-                if step_config["execution"] == "server":
-                    # Process server step
+                # Determine execution context: use step_config by default, override for shell_command with execution_context
+                execution_context = step_config["execution"]
+                if step.type == "shell_command" and "execution_context" in step.definition:
+                    execution_context = step.definition["execution_context"]
+
+                if execution_context == "server":
+                    # Special handling for wait_step
+                    if step.type == "wait_step":
+                        # Don't process wait_step - just return it to client
+                        queue.pop_next()
+                        message = step.definition.get("message", "Waiting for next client request...")
+                        queue.client_queue.append({
+                            "id": step.id,
+                            "type": "wait_step",
+                            "definition": {"message": message},
+                            "is_wait": True
+                        })
+                        # Stop processing - wait_step should be the only thing returned
+                        break
+                    
+                    # Process other server steps
                     queue.pop_next()
                     result = self._process_server_step(instance, step, queue)
 
                     if result.get("error"):
                         # Server step failed - return error to client
-                        # For backward compatibility, flatten the error structure
-                        error_data = result["error"]
-                        if isinstance(error_data, dict) and "message" in error_data:
-                            error_message = error_data["message"]
-                        else:
-                            error_message = str(error_data)
+                        # Use concise error message for token efficiency
+                        error_message = self._create_concise_error_message(result["error"], workflow_id, step.id)
                         return {"error": error_message, "step_id": step.id, "workflow_id": workflow_id}
 
                     # Add to server completed if it produced a result
                     if result.get("executed"):
                         queue.server_completed.append(result)
 
-                elif step_config["execution"] == "client":
+                elif execution_context == "client":
                     # Move to client queue
                     queue.pop_next()
 
@@ -227,12 +252,8 @@ class QueueBasedWorkflowExecutor:
                     if step.type == "parallel_foreach":
                         result = self._prepare_parallel_foreach(instance, step, processed_definition, current_state)
                         if result.get("error"):
-                            # For backward compatibility, flatten the error structure
-                            error_data = result["error"]
-                            if isinstance(error_data, dict) and "message" in error_data:
-                                error_message = error_data["message"]
-                            else:
-                                error_message = str(error_data)
+                            # Use concise error message for token efficiency
+                            error_message = self._create_concise_error_message(result["error"], workflow_id, step.id)
                             return {"error": error_message, "step_id": step.id, "workflow_id": workflow_id}
                         # Add enhanced definition with tasks
                         processed_definition = result["definition"]
@@ -242,13 +263,13 @@ class QueueBasedWorkflowExecutor:
                             # Extract temporary debug data and store in queue
                             temp_sub_agent_steps = processed_definition.pop("_temp_debug_sub_agent_steps", [])
                             temp_sub_agent_task_def = processed_definition.pop("_temp_debug_sub_agent_task_def", None)
-                            
+
                             if temp_sub_agent_steps:
                                 # Store in queue for debug expansion access
                                 debug_key = f"_debug_{step.id}"
                                 setattr(queue, f"{debug_key}_sub_agent_steps", temp_sub_agent_steps)
                                 setattr(queue, f"{debug_key}_sub_agent_task_def", temp_sub_agent_task_def)
-                            
+
                             # Now handle debug expansion with clean definition
                             debug_result = self._handle_debug_serial_foreach(
                                 instance, step, processed_definition, queue
@@ -280,7 +301,7 @@ class QueueBasedWorkflowExecutor:
             if queue.client_queue:
                 response = {
                     "steps": queue.client_queue,
-                    "server_completed_steps": queue.server_completed,
+                    # "server_completed_steps": queue.server_completed,
                     "workflow_id": workflow_id,
                     "execution_context": self._get_execution_context(workflow_id),
                 }
@@ -305,13 +326,13 @@ class QueueBasedWorkflowExecutor:
 
     def _implicitly_complete_step(self, workflow_id: str, step_id: str, instance: "WorkflowInstance") -> None:
         """Implicitly complete a client step (called when get_next_step is called again).
-        
+
         This handles the same logic as the old step_complete method but without returning anything.
         """
         # Special handling for parallel_foreach steps in debug mode
         if self._debug_serial and workflow_id in self.queues:
-            queue = self.queues[workflow_id] 
-            
+            queue = self.queues[workflow_id]
+
             # Check if this is a parallel_foreach step that needs to be re-processed for expansion
             for workflow_step in instance.definition.steps:
                 if workflow_step.id == step_id and workflow_step.type == "parallel_foreach":
@@ -342,7 +363,7 @@ class QueueBasedWorkflowExecutor:
     ) -> dict[str, Any]:
         """Handle debug serial execution of parallel_foreach by expanding sub-agent steps ONE AT A TIME."""
         tasks = definition.get("tasks", [])
-        
+
         # Get sub-agent steps from queue storage (not from definition)
         debug_key = f"_debug_{step.id}"
         sub_agent_steps = getattr(queue, f"{debug_key}_sub_agent_steps", [])
@@ -357,33 +378,33 @@ class QueueBasedWorkflowExecutor:
         # Check if this is the first time we're seeing this parallel_foreach step
         debug_step_key = f"_debug_seen_{step.id}"
         first_time_seeing_step = not hasattr(queue, debug_step_key)
-        
+
         if first_time_seeing_step:
             # First time - mark as seen and return None to let the parallel_foreach step be shown with debug info
             setattr(queue, debug_step_key, True)
             return None
-        
+
         # Track current task and step positions (subsequent calls)
         processed_task_count = getattr(queue, '_debug_processed_tasks', 0)
         current_step_index = getattr(queue, '_debug_current_step_index', 0)
-        
+
         if processed_task_count >= len(tasks):
             # All tasks completed - continue with next workflow step
             return {"debug_expansion_completed": True}
-        
+
         # Get current task
         current_task = tasks[processed_task_count]
         task_id = current_task["task_id"]
         task_context = current_task["context"]
-        
+
         # Get the ordered list of actionable steps for this task
         flattened_steps = self._flatten_sub_agent_steps_for_debug(sub_agent_steps)
-        
+
         if current_step_index >= len(flattened_steps):
             # All steps for current task completed - move to next task
             queue._debug_processed_tasks = processed_task_count + 1
             queue._debug_current_step_index = 0
-            
+
             # Add task completion marker and re-trigger foreach for next task
             task_completion_step = WorkflowStep(
                 id=f"{task_id}.completion_marker",
@@ -396,13 +417,13 @@ class QueueBasedWorkflowExecutor:
             )
             queue.main_queue.insert(0, task_completion_step)
             return None
-        
+
         # Get the NEXT step for the current task
         next_step_def = flattened_steps[current_step_index]
-        
+
         # Create enhanced context for this specific step
         enhanced_context = task_context.copy()
-        
+
         # Add sub-agent task inputs with defaults from queue storage
         sub_agent_task = getattr(queue, f"{debug_key}_sub_agent_task_def", None)
         if sub_agent_task and hasattr(sub_agent_task, 'inputs'):
@@ -413,7 +434,7 @@ class QueueBasedWorkflowExecutor:
                     enhanced_context[input_name] = input_def.default
                 elif input_name in task_context:
                     enhanced_context[input_name] = task_context[input_name]
-        
+
         # Convert raw YAML step format to WorkflowStep definition format
         # Raw steps have properties at top level, but WorkflowStep expects them in definition
         if "definition" in next_step_def:
@@ -422,17 +443,17 @@ class QueueBasedWorkflowExecutor:
         else:
             # Convert from raw YAML format to WorkflowStep definition format
             step_definition = {k: v for k, v in next_step_def.items() if k not in ["id", "type"]}
-        
+
         # Merge enhanced context into step definition
         merged_definition = self._merge_context(step_definition, enhanced_context, next_step_def.get("type"))
-        
+
         # Create the single next step
         next_step = WorkflowStep(
-            id=f"{task_id}.{next_step_def['id']}", 
-            type=next_step_def["type"], 
+            id=f"{task_id}.{next_step_def['id']}",
+            type=next_step_def["type"],
             definition=merged_definition
         )
-        
+
         # Add step advancement marker that will trigger the next step in sequence
         step_advancement_step = WorkflowStep(
             id=f"{task_id}.step_advance_marker",
@@ -445,21 +466,21 @@ class QueueBasedWorkflowExecutor:
                 "current_task_index": processed_task_count
             }
         )
-        
+
         # Add both steps to queue in reverse order (advancement marker first, then actual step)
         queue.main_queue.insert(0, step_advancement_step)
         queue.main_queue.insert(0, next_step)
-        
+
         # Increment step index for next call
         queue._debug_current_step_index = current_step_index + 1
-        
+
         # Return debug_expansion_completed to skip parallel_foreach and continue with expanded steps
         return {"debug_expansion_completed": True}
 
     def _flatten_sub_agent_steps_for_debug(self, sub_agent_steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Flatten nested control flow steps to get actionable steps for debug mode."""
         flattened = []
-        
+
         def extract_actionable_steps(steps: list[dict[str, Any]], depth: int = 0) -> None:
             """Recursively extract actionable steps from nested structures."""
             indent = "  " * depth
@@ -467,7 +488,7 @@ class QueueBasedWorkflowExecutor:
                 step_type = step.get('type', '')
                 step_id = step.get('id', '')
                 print(f"🐛 DEBUG: {indent}Examining: {step_id} ({step_type})")
-                
+
                 if step_type in ['mcp_call', 'user_message', 'shell_command']:
                     # This is an actionable step
                     flattened.append(step)
@@ -484,7 +505,7 @@ class QueueBasedWorkflowExecutor:
                         # Raw dict from YAML
                         then_steps = step.get('then_steps', [])
                         else_steps = step.get('else_steps', [])
-                    
+
                     print(f"🐛 DEBUG: {indent}  Diving into conditional: {len(then_steps)} then, {len(else_steps)} else")
                     print(f"🐛 DEBUG: {indent}    Step keys: {list(step.keys())}")
                     extract_actionable_steps(then_steps, depth + 1)
@@ -501,24 +522,24 @@ class QueueBasedWorkflowExecutor:
                     extract_actionable_steps(body, depth + 1)
                 else:
                     print(f"🐛 DEBUG: {indent}  Skipping {step_type}")
-        
+
         print(f"🐛 DEBUG: Starting flattening process for {len(sub_agent_steps)} steps")
         extract_actionable_steps(sub_agent_steps)
         print(f"🐛 DEBUG: Flattening complete: found {len(flattened)} actionable steps")
-        
+
         return flattened
 
     def _merge_context(self, definition: dict[str, Any], task_context: dict[str, Any], step_type: str = None) -> dict[str, Any]:
         """Merge task context into step definition for debug mode."""
         # Get the sub-agent's initialized state from the sub-agent manager
         task_id = task_context.get("task_id", "")
-        
+
         if task_id and hasattr(self, 'subagent_manager'):
             # Try to get sub-agent state
             with self.subagent_manager._lock:
                 sub_agent_context = self.subagent_manager.sub_agent_contexts.get(task_id, {})
                 sub_agent_state = sub_agent_context.get("sub_agent_state", {})
-                
+
                 if sub_agent_state:
                     # Use sub-agent's initialized state which includes computed fields
                     context_state = sub_agent_state.copy()
@@ -533,7 +554,7 @@ class QueueBasedWorkflowExecutor:
         # For control flow steps, preserve templates that reference computed state
         # that may not be available in the task context
         preserve_templates = step_type in ["while_loop", "foreach", "conditional"]
-        
+
         # Use the step processor to replace variables in the definition
         result = self.step_processor._replace_variables(
             definition,
@@ -549,13 +570,13 @@ class QueueBasedWorkflowExecutor:
         """Handle store_result functionality for mcp_call steps."""
         # Find the original step definition to check for store_result field
         original_step = None
-        
+
         # Check in main workflow steps
         for step in instance.definition.steps:
             if step.id == step_id:
                 original_step = step
                 break
-                
+
         # Check in sub-agent task steps
         if not original_step and "." in step_id:
             # This might be a sub-agent step like "enforce_standards_on_file.item0.get_hints"
@@ -563,7 +584,7 @@ class QueueBasedWorkflowExecutor:
             if len(parts) >= 3:
                 sub_task_name = parts[0]
                 step_name = parts[2]  # Skip the item identifier
-                
+
                 if hasattr(instance.definition, 'sub_agent_tasks') and sub_task_name in instance.definition.sub_agent_tasks:
                     sub_task = instance.definition.sub_agent_tasks[sub_task_name]
                     if hasattr(sub_task, 'steps'):
@@ -571,17 +592,17 @@ class QueueBasedWorkflowExecutor:
                             if sub_step.id == step_name:
                                 original_step = sub_step
                                 break
-        
+
         # If we found the step and it has store_result, store the result
         if original_step and hasattr(original_step, 'definition') and original_step.definition.get('store_result'):
             store_path = original_step.definition['store_result']
-            
+
             # Store the entire result at the specified path
             state_updates = [{
                 "path": store_path,
                 "value": result
             }]
-            
+
             self._update_state(workflow_id, state_updates)
 
     def _skip_parallel_waiting_loops(self, queue: WorkflowQueue) -> None:
@@ -608,21 +629,135 @@ class QueueBasedWorkflowExecutor:
             queue.main_queue.pop(i)
 
     def _get_execution_context(self, workflow_id: str) -> dict[str, Any]:
-        """Get execution context for a workflow."""
+        """Get simplified execution context for AI agents."""
         context = context_manager.get_context(workflow_id)
         if context:
-            return context.get_execution_summary()
+            return self._create_simplified_execution_context(context)
 
         # Fallback context
         queue = self.queues.get(workflow_id)
         if queue:
             return {
-                "workflow_id": workflow_id,
-                "steps_remaining": len(queue.main_queue),
-                "loop_depth": len(queue.loop_stack),
+                "progress": {
+                    "steps_remaining": len(queue.main_queue),
+                    "in_loop": len(queue.loop_stack) > 0
+                },
+                "status": "running"
             }
 
-        return {"workflow_id": workflow_id}
+        return {"status": "not_found"}
+
+    def _create_simplified_execution_context(self, context) -> dict[str, Any]:
+        """Create a simplified execution context with only data needed by AI agents."""
+        # Get current workflow state for progress tracking
+        workflow_state = self.state_manager._get_or_create_state(context.workflow_id)
+        
+        # Calculate progress information
+        queue = self.queues.get(context.workflow_id)
+        progress_info = {
+            "steps_remaining": len(queue.main_queue) if queue else 0,
+            "in_loop": context.is_in_loop(),
+        }
+        
+        # Get actual variable values (limit to essential data)
+        variables = {}
+        if context.current_frame():
+            # Include global variables
+            variables.update(context.global_variables)
+            # Include current local variables  
+            variables.update(context.current_frame().local_variables)
+            # Include loop variables if in a loop
+            if context.current_loop():
+                variables.update(context.current_loop().variable_bindings)
+        
+        # Get sub-agent status (actual task names, not just counts)
+        sub_agents = {}
+        if context.sub_agent_contexts:
+            pending_tasks = context.get_pending_sub_agent_tasks()
+            completed_tasks = context.get_completed_sub_agent_tasks()
+            sub_agents = {
+                "pending_tasks": [task.get('task_id', 'unknown') for task in pending_tasks],
+                "completed_count": len(completed_tasks),
+                "total_count": len(context.sub_agent_contexts)
+            }
+        
+        return {
+            "progress": progress_info,
+            "variables": variables,
+            "sub_agents": sub_agents,
+            "status": "running",
+            "last_updated": context.last_updated.isoformat()
+        }
+
+    def _create_concise_state_summary(self, state: dict[str, Any], max_fields: int = 5) -> dict[str, Any]:
+        """Create a concise state summary for token efficiency.
+
+        Args:
+            state: Full state object
+            max_fields: Maximum number of fields to include per tier
+
+        Returns:
+            Concise state summary
+        """
+        summary = {}
+
+        for tier_name, tier_data in state.items():
+            if isinstance(tier_data, dict):
+                # Include only the most important fields for each tier
+                tier_summary = {}
+                field_count = 0
+
+                for key, value in tier_data.items():
+                    if field_count >= max_fields:
+                        tier_summary["..."] = f"({len(tier_data) - max_fields} more fields)"
+                        break
+
+                    # Summarize large values
+                    if isinstance(value, str) and len(value) > 100:
+                        tier_summary[key] = f"{value[:97]}..."
+                    elif isinstance(value, list) and len(value) > 10:
+                        tier_summary[key] = f"[array with {len(value)} items]"
+                    elif isinstance(value, dict) and len(value) > 5:
+                        tier_summary[key] = f"{{object with {len(value)} fields}}"
+                    else:
+                        tier_summary[key] = value
+
+                    field_count += 1
+
+                summary[tier_name] = tier_summary
+            else:
+                summary[tier_name] = tier_data
+
+        return summary
+
+    def _create_concise_error_message(self, error: dict[str, Any] | str, workflow_id: str, step_id: str | None = None) -> str:
+        """Create a concise error message for token efficiency.
+
+        Args:
+            error: Error information
+            workflow_id: Workflow ID
+            step_id: Optional step ID
+
+        Returns:
+            Concise error message
+        """
+        if isinstance(error, dict):
+            error_msg = error.get("message", str(error))
+        else:
+            error_msg = str(error)
+
+        # Remove redundant workflow/step information if already in context
+        if workflow_id in error_msg:
+            error_msg = error_msg.replace(f"workflow {workflow_id}", "workflow")
+
+        if step_id and step_id in error_msg:
+            error_msg = error_msg.replace(f"step {step_id}", "step")
+
+        # Truncate very long error messages
+        if len(error_msg) > 500:
+            error_msg = f"{error_msg[:497]}..."
+
+        return error_msg
 
     def get_workflow_status(self, workflow_id: str) -> dict[str, Any]:
         """Get the status of a workflow."""
@@ -648,7 +783,7 @@ class QueueBasedWorkflowExecutor:
             # Add execution context if available
             context = context_manager.get_context(workflow_id)
             if context:
-                result["execution_context"] = context.get_execution_summary()
+                result["execution_context"] = self._create_simplified_execution_context(context)
 
             return result
 
@@ -686,3 +821,43 @@ class QueueBasedWorkflowExecutor:
     ) -> dict[str, Any]:
         """Execute a sub-agent step with the given result."""
         return self.subagent_manager.execute_sub_agent_step(workflow_id, task_id, step_id, result)
+
+    def complete_step_with_result(self, workflow_id: str, step_id: str, result: dict[str, Any]) -> dict[str, Any]:
+        """Complete a step with a result from the client (e.g., agent_response).
+
+        Args:
+            workflow_id: The workflow ID
+            step_id: The step ID that was completed
+            result: The result data from the client
+
+        Returns:
+            Result of processing the step completion
+        """
+        if workflow_id not in self.workflows:
+            return {"error": f"Workflow {workflow_id} not found"}
+
+        lock = self._get_workflow_lock(workflow_id)
+        with lock:
+            instance = self.workflows[workflow_id]
+
+            # Find the step in the workflow definition
+            target_step = None
+            for step in instance.definition.steps:
+                if step.id == step_id:
+                    target_step = step
+                    break
+
+            if not target_step:
+                return {"error": f"Step {step_id} not found in workflow {workflow_id}"}
+
+            # Process based on step type
+            if target_step.type == "agent_response":
+                # Process agent response through step processor
+                return self.step_processor.process_agent_response_result(instance, target_step, result)
+            elif target_step.type == "mcp_call":
+                # Handle store_result functionality for mcp_call steps
+                self._handle_store_result(workflow_id, step_id, result, instance)
+                return {"executed": True, "id": step_id, "type": "mcp_call", "result": result}
+            else:
+                # For other step types, just acknowledge completion
+                return {"executed": True, "id": step_id, "type": target_step.type, "result": result}

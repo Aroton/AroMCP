@@ -47,15 +47,18 @@ inputs:
 
 # Initial state values
 default_state:
-  raw:
+  state:
     counter: 0
     results: {}
 
 # Computed state fields
 state_schema:
+  state:
+    counter: "number"
+    results: "object"
   computed:
     field_name:
-      from: "raw.counter"
+      from: "state.counter"
       transform: "input * 2"
 
 # Workflow steps (required)
@@ -73,54 +76,107 @@ sub_agent_tasks:
 
 ## State Management
 
-The workflow system uses a three-tier state model:
+The workflow system uses a four-scope variable model with modern scoped syntax:
 
-### 1. Raw State (`raw`)
-- Directly writable by agents and steps
-- Persists throughout workflow execution
-- Access via `raw.field_name`
+### Scoped Variable Syntax (NEW)
 
-### 2. Computed State (`computed`)
-- Automatically derived from other state values
-- Updated when dependencies change
-- Defined using JavaScript expressions
-- Access via `computed.field_name`
+Variables are now accessed using scoped prefixes for better clarity and conflict prevention:
 
-### 3. Legacy State (`state`)
-- For backward compatibility
-- Similar to raw state
-- Access via `state.field_name`
+```yaml
+# Current workflow state and computed values
+message: "Processing {{ this.file_name }}"
+condition: "{{ this.total_count > 0 }}"
 
-### Computed Field Definition
+# Global variables shared across workflow contexts  
+value: "{{ global.retry_count }}"
+
+# Workflow input parameters (read-only)
+path: "{{ inputs.project_path }}"
+
+# Loop context variables (automatic)
+message: "Processing item {{ loop.item }}"
+condition: "{{ loop.iteration < 5 }}"
+```
+
+### The Four Variable Scopes
+
+#### 1. `this` Scope - Current Context
+- Contains both state and computed fields from the current workflow context
+- Combines what was previously `state.field` and `computed.field`
+- Access via `{{ this.field_name }}`
+- Updated through `state_update` paths like `this.field_name`
+
+#### 2. `global` Scope - Shared Variables  
+- Global variables persisted across workflow execution contexts
+- Useful for counters, caches, and shared state
+- Access via `{{ global.variable_name }}`
+- Updated through `state_update` paths like `global.variable_name`
+
+#### 3. `inputs` Scope - Input Parameters
+- Read-only parameters passed to the workflow
+- Defined at workflow start, cannot be modified during execution
+- Access via `{{ inputs.parameter_name }}`
+- Cannot be updated (read-only)
+
+#### 4. `loop` Scope - Loop Context (Automatic)
+- Automatically managed loop variables
+- Available only within loop contexts (while_loop, foreach)
+- Access via `{{ loop.item }}`, `{{ loop.index }}`, `{{ loop.iteration }}`
+- Cannot be manually updated (automatically managed)
+
+### Computed Field Definition (Updated Syntax)
 
 ```yaml
 state_schema:
   computed:
-    # Simple transformation
+    # Simple transformation (NEW: uses 'this' scope)
     doubled_value:
-      from: "raw.value"
+      from: "this.value"
       transform: "input * 2"
     
-    # Multiple dependencies
+    # Multiple dependencies (NEW: updated scope references)
     total_count:
-      from: ["raw.success_count", "raw.failure_count"]
+      from: ["this.success_count", "this.failure_count"]
       transform: "input[0] + input[1]"
     
     # Complex transformation with filtering
     code_files:
-      from: "raw.all_files"
+      from: "this.all_files"
       transform: |
         input.filter(file => {
           const codeExts = ['.py', '.js', '.ts'];
           return codeExts.some(ext => file.endsWith(ext));
         })
     
+    # Using global variables and inputs
+    retry_decision:
+      from: ["global.max_retries", "inputs.retry_enabled", "this.current_attempt"]
+      transform: "input[1] && input[2] < input[0]"
+    
     # Error handling
     safe_division:
-      from: ["raw.numerator", "raw.denominator"]
+      from: ["this.numerator", "this.denominator"]
       transform: "input[0] / input[1]"
       on_error: "use_fallback"
       fallback: 0
+```
+
+### Legacy Syntax Migration
+
+⚠️ **Breaking Change**: The old `state.` and `computed.` prefixes have been replaced:
+
+```yaml
+# OLD (deprecated)
+from: "state.value"
+condition: "{{ computed.total_count > 0 }}"
+state_update:
+  path: "state.result"
+
+# NEW (required)
+from: "this.value"
+condition: "{{ this.total_count > 0 }}"
+state_update:
+  path: "this.result"
 ```
 
 ## Step Types
@@ -148,9 +204,9 @@ Execute an MCP tool call.
   parameters:
     path: "/src"
   state_update:
-    path: "raw.files"
+    path: "this.files"
     value: "data.files"  # Access result.data.files
-  store_result: "raw.full_result"  # Store entire result
+  store_result: "this.full_result"  # Store entire result
   timeout: 30
 ```
 
@@ -165,7 +221,7 @@ Collect input from the user.
   choices: ["option1", "option2", "option3"]
   default: "option1"
   state_update:
-    path: "raw.user_choice"
+    path: "this.user_choice"
     value: "input"
   max_retries: 3
 ```
@@ -176,41 +232,49 @@ Execute sub-agents in parallel for each item.
 ```yaml
 - id: "process_files"
   type: "parallel_foreach"
-  items: "{{ computed.code_files }}"
+  items: "{{ this.code_files }}"
   sub_agent_task: "process_single_file"
   max_parallel: 5
   timeout_seconds: 300
 ```
 
-#### `agent_shell_command`
-Have the agent execute a shell command.
-
-```yaml
-- id: "run_tests"
-  type: "agent_shell_command"
-  command: "npm test"
-  reason: "Running test suite to verify changes"
-  working_directory: "/project"
-  state_update:
-    path: "raw.test_output"
-    value: "stdout"
-```
-
-#### `agent_task`
-Give the agent a task to complete.
+#### `agent_prompt`
+Provide a task instruction for the agent.
 
 ```yaml
 - id: "fix_errors"
-  type: "agent_task"
-  prompt: "Fix any linting errors found in {{ file_path }}"
+  type: "agent_prompt"
+  prompt: "Fix any linting errors found in {{ inputs.file_path }}"
   context:
-    errors: "{{ raw.lint_errors }}"
+    errors: "{{ this.lint_errors }}"
+  expected_response:
+    type: "object"
+    required: ["success", "changes_made"]
+  timeout: 300
+  max_retries: 3
+```
+
+#### `agent_response`
+Process and validate agent response.
+
+```yaml
+- id: "process_response"
+  type: "agent_response"
+  response_schema:
+    type: "object"
+    required: ["analysis", "recommendations"]
+  state_updates:
+    - path: "this.analysis"
+      value: "response.analysis"
+    - path: "this.recommendations"
+      value: "response.recommendations"
+  store_response: "this.full_response"
 ```
 
 ### Server-Executed Steps (processed internally)
 
 #### `shell_command`
-Execute a shell command on the server.
+Execute a shell command.
 
 ```yaml
 - id: "git_status"
@@ -219,34 +283,40 @@ Execute a shell command on the server.
   working_directory: "/repo"
   timeout: 10
   state_update:
-    path: "raw.git_output"
+    path: "this.git_output"
     value: "stdout"
+  execution_context: "server"  # "server" (default) or "client"
 ```
 
-#### `state_update`
-Update a single state value.
+**Note: Standalone state update steps have been removed. State updates are now embedded within other step types using the `state_update` or `state_updates` field.**
+
+Examples of state updates in other steps:
 
 ```yaml
-- id: "increment_counter"
-  type: "state_update"
-  path: "raw.counter"
-  value: "{{ raw.counter + 1 }}"
-  operation: "set"  # set, increment, decrement, append, multiply
-```
+# In mcp_call
+- id: "get_data"
+  type: "mcp_call"
+  tool: "fetch_data"
+  state_update:
+    path: "this.data"
+    value: "result"
 
-#### `batch_state_update`
-Update multiple state values at once.
+# In user_input
+- id: "get_choice"
+  type: "user_input"
+  prompt: "Choose an option:"
+  state_update:
+    path: "this.choice"
+    value: "input"
 
-```yaml
-- id: "reset_counters"
-  type: "batch_state_update"
-  updates:
-    - path: "raw.success_count"
-      value: 0
-    - path: "raw.failure_count"
-      value: 0
-    - path: "raw.results"
-      value: {}
+# In agent_response with multiple updates
+- id: "process_response"
+  type: "agent_response"
+  state_updates:
+    - path: "this.field1"
+      value: "response.data1"
+    - path: "this.field2"
+      value: "response.data2"
 ```
 
 ### Control Flow Steps
@@ -257,11 +327,11 @@ Execute steps based on a condition.
 ```yaml
 - id: "check_files"
   type: "conditional"
-  condition: "{{ computed.has_files }}"
+  condition: "{{ this.has_files }}"
   then_steps:
     - id: "process_files"
       type: "user_message"
-      message: "Processing {{ computed.total_files }} files..."
+      message: "Processing {{ this.total_files }} files..."
   else_steps:
     - id: "no_files"
       type: "user_message"
@@ -271,34 +341,37 @@ Execute steps based on a condition.
 ```
 
 #### `while_loop`
-Repeat steps while a condition is true.
+Repeat steps while a condition is true. The loop automatically tracks iteration count via `{{ loop.iteration }}`.
 
 ```yaml
 - id: "retry_loop"
   type: "while_loop"
-  condition: "{{ raw.attempts < 3 && !raw.success }}"
+  condition: "{{ loop.iteration < 3 && !this.success }}"
   max_iterations: 10
   body:
-    - id: "attempt"
-      type: "state_update"
-      path: "raw.attempts"
-      value: "{{ raw.attempts + 1 }}"
+    # The iteration count is automatically managed by the loop
+    - id: "show_attempt"
+      type: "user_message"
+      message: "Attempt {{ loop.iteration }}"
     # ... more steps
 ```
 
+**Important**: While loops automatically provide `{{ loop.iteration }}` (1-based counter) for loop control. No initialization needed in `default_state`.
+
 #### `foreach`
-Iterate over items in an array.
+Iterate over items in an array. The current item and index are available via loop scope variables.
 
 ```yaml
 - id: "process_each"
   type: "foreach"
-  items: "{{ computed.failed_files }}"
-  variable_name: "file"
+  items: "{{ this.failed_files }}"
   body:
     - id: "show_file"
       type: "user_message"
-      message: "Failed: {{ file }}"
+      message: "Failed: {{ loop.item }} (index {{ loop.index }})"
 ```
+
+**Loop Variables**: Use `{{ loop.item }}` for the current item and `{{ loop.index }}` for the 0-based index.
 
 #### `break` and `continue`
 Control loop execution.
@@ -313,25 +386,33 @@ Control loop execution.
 
 ## Expressions and Templates
 
-### Template Variables
+### Template Variables (Updated Scoped Syntax)
 
-Use `{{ expression }}` to reference state values and evaluate expressions:
+Use `{{ expression }}` to reference scoped variables and evaluate expressions:
 
 ```yaml
-# Simple references
-message: "Processing {{ raw.file_name }}"
+# Current workflow context (combines state + computed)
+message: "Processing {{ this.file_name }}"
+condition: "{{ this.count > 0 }}"
 
-# Expressions
-value: "{{ raw.count + 1 }}"
+# Input parameters (read-only)
+value: "{{ inputs.compare_to || 'main' }}"  # Use input or default
+
+# Global variables (persistent across contexts)
+message: "Retry {{ global.attempt_count }}"
+
+# Current workflow values with expressions
+value: "{{ this.count + 1 }}"
 
 # Conditional expressions
-message: "{{ raw.count > 0 ? 'Found items' : 'No items found' }}"
+message: "{{ this.count > 0 ? 'Found items' : 'No items found' }}"
 
-# Array operations
-items: "{{ computed.files.filter(f => f.endsWith('.py')) }}"
+# Array operations using scoped syntax
+items: "{{ this.files.filter(f => f.endsWith('.py')) }}"
 
-# Input parameters
-value: "{{ compare_to || 'main' }}"  # Use input or default
+# Loop variables (automatic in loop contexts)
+message: "Processing: {{ loop.item }} at index {{ loop.index }}"
+condition: "{{ loop.iteration < 5 }}"
 ```
 
 ### JavaScript Expressions
@@ -375,15 +456,15 @@ sub_agent_tasks:
     
     # Initial state for sub-agent
     default_state:
-      raw:
-        attempts: 0
+      state:
+        attempt_number: 0
         success: false
     
     # Computed fields for sub-agent
     state_schema:
       computed:
         can_retry:
-          from: ["raw.attempts", "{{ max_attempts }}"]
+          from: ["loop.iteration", "inputs.max_attempts"]
           transform: "input[0] < input[1]"
     
     # Either provide a prompt template...
@@ -447,12 +528,12 @@ steps:
     type: "user_input"
     prompt: "What's your name?"
     state_update:
-      path: "raw.user_name"
+      path: "this.user_name"
       value: "input"
   
   - id: "personalized_greeting"
     type: "user_message"
-    message: "Nice to meet you, {{ raw.user_name }}!"
+    message: "Nice to meet you, {{ this.user_name }}!"
 ```
 
 ### Conditional Workflow
@@ -463,38 +544,38 @@ description: "Process files based on type"
 version: "1.0.0"
 
 default_state:
-  raw:
+  state:
     file_path: ""
 
 state_schema:
   computed:
     is_python:
-      from: "raw.file_path"
+      from: "this.file_path"
       transform: "input.endsWith('.py')"
     is_javascript:
-      from: "raw.file_path"
+      from: "this.file_path"
       transform: "input.endsWith('.js') || input.endsWith('.ts')"
 
 steps:
   - id: "check_file_type"
     type: "conditional"
-    condition: "{{ computed.is_python }}"
+    condition: "{{ this.is_python }}"
     then_steps:
       - id: "process_python"
         type: "mcp_call"
         tool: "python_linter"
         parameters:
-          file: "{{ raw.file_path }}"
+          file: "{{ this.file_path }}"
     else_steps:
       - id: "check_js"
         type: "conditional"
-        condition: "{{ computed.is_javascript }}"
+        condition: "{{ this.is_javascript }}"
         then_steps:
           - id: "process_js"
             type: "mcp_call"
             tool: "eslint"
             parameters:
-              file: "{{ raw.file_path }}"
+              file: "{{ this.file_path }}"
 ```
 
 ### Parallel Processing Workflow
@@ -505,7 +586,7 @@ description: "Process multiple files in parallel"
 version: "1.0.0"
 
 default_state:
-  raw:
+  state:
     files: []
     results: {}
 
@@ -514,12 +595,12 @@ steps:
     type: "shell_command"
     command: "find . -name '*.py' -type f"
     state_update:
-      path: "raw.files"
+      path: "this.files"
       value: "stdout.split('\\n').filter(f => f)"
   
   - id: "process_files"
     type: "parallel_foreach"
-    items: "{{ raw.files }}"
+    items: "{{ this.files }}"
     sub_agent_task: "analyze_file"
     max_parallel: 5
 
@@ -559,3 +640,28 @@ The validator checks for:
 ## Schema Reference
 
 The complete JSON Schema for workflow files is available at `.aromcp/workflows/schema.json`. This schema defines all valid fields, step types, and their constraints.
+
+### Recent Schema Changes (2025 - Variable Scoping System)
+
+The workflow schema has been completely updated with a new scoped variable system:
+
+1. **New Scoped Variable System** ⚠️ **BREAKING CHANGE**:
+   - **`this` scope**: Replaces `state.field` and `computed.field` → use `{{ this.field }}`
+   - **`global` scope**: New persistent global variables → use `{{ global.variable }}`
+   - **`inputs` scope**: Unchanged input parameters → use `{{ inputs.parameter }}`
+   - **`loop` scope**: New automatic loop variables → use `{{ loop.item }}`, `{{ loop.index }}`, `{{ loop.iteration }}`
+
+2. **Migration Required**:
+   - `{{ state.field }}` → `{{ this.field }}`
+   - `{{ computed.field }}` → `{{ this.field }}`
+   - `state_update: { path: "state.field" }` → `state_update: { path: "this.field" }`
+   - `from: "state.field"` → `from: "this.field"`
+
+3. **Enhanced Loop Management**: 
+   - While loops: `{{ loop.iteration }}` (1-based counter, no initialization needed)
+   - Foreach loops: `{{ loop.item }}` and `{{ loop.index }}` (0-based index)
+   - Legacy `state.attempt_number` is deprecated
+
+4. **Backward Compatibility**: Legacy syntax still works but shows deprecation warnings. All examples have been updated to use the new scoped syntax.
+
+5. **Validation Updates**: The validator now checks scoped variable references and provides helpful error messages for invalid scope usage.

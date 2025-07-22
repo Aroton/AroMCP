@@ -75,20 +75,39 @@ class TransformationEngine:
         """Execute transformation using JavaScript engine"""
         if self._engine_type == "pythonmonkey":
             # PythonMonkey supports modern JavaScript directly
-            # Set the input value in the global context
-            self._js_engine.globalThis.input = input_value
+            try:
+                # Set the input value in the global context
+                self._js_engine.globalThis.input = input_value
 
-            # Execute the transform expression and return result directly
-            # Wrap in parentheses to ensure it's treated as an expression
-            js_code = f"({transform})"
-            result = self._js_engine.eval(js_code)
+                # Execute the transform expression and return result directly
+                # Wrap in parentheses to ensure it's treated as an expression
+                js_code = f"({transform})"
+                result = self._js_engine.eval(js_code)
 
-            # Clean up global context
-            delattr(self._js_engine.globalThis, "input")
-
-            # Convert PythonMonkey objects to native Python objects to avoid deepcopy issues
-            native_result = self._convert_to_native_python(result)
-            return native_result
+                # Convert PythonMonkey objects to native Python objects to avoid deepcopy issues
+                native_result = self._convert_to_native_python(result)
+                
+                # Clean up global context
+                delattr(self._js_engine.globalThis, "input")
+                
+                return native_result
+            except Exception as e:
+                # Clean up global context even on error
+                try:
+                    delattr(self._js_engine.globalThis, "input")
+                except:
+                    pass  # Ignore cleanup errors
+                
+                # Provide meaningful error message for common PythonMonkey issues
+                error_msg = str(e)
+                if "segmentation fault" in error_msg.lower() or "sigsegv" in error_msg.lower():
+                    raise ComputedFieldError(f"JavaScript execution crashed: {transform} - try using Python fallback syntax") from e
+                elif "syntax" in error_msg.lower():
+                    raise SyntaxError(f"JavaScript syntax error in transform: {transform} - {error_msg}") from e
+                elif "reference" in error_msg.lower() and "not defined" in error_msg.lower():
+                    raise NameError(f"JavaScript reference error in transform: {transform} - {error_msg}") from e
+                else:
+                    raise ComputedFieldError(f"JavaScript execution failed: {transform} - {error_msg}") from e
 
     def _convert_to_native_python(self, obj: Any) -> Any:
         """

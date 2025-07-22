@@ -3,14 +3,17 @@ description: "Test basic sequential execution"
 version: "1.0.0"
 
 default_state:
-  raw:
-    counter: 0
+  state:
+    counter: 5  # Initialize with the desired value
     message: ""
 
 state_schema:
+  state:
+    counter: "number"
+    message: "string"
   computed:
     doubled:
-      from: "raw.counter"
+      from: "state.counter"
       transform: "input * 2"
 
 inputs:
@@ -20,18 +23,14 @@ inputs:
     required: true
 
 steps:
-  - id: "set_counter"
-    type: "state_update"
-    path: "raw.counter"
-    value: 5
     
   - id: "show_counter"
     type: "user_message"
-    message: "Counter is {{ counter }}, doubled is {{ doubled }}"
+    message: "Counter is {{ this.counter }}, doubled is {{ this.doubled }}"
     
   - id: "run_echo"
     type: "shell_command"
     command: "echo 'Hello from workflow'"
     state_update:
-      path: "raw.message"
+      path: "this.message"
       value: "stdout"

@@ -53,10 +53,19 @@ class SubAgentManager:
         
         # Evaluate items expression
         try:
-            if items_expr.startswith("{{") and items_expr.endswith("}}"):
-                items_expr = items_expr[2:-2].strip()
+            # Handle both string expressions and direct list values
+            if isinstance(items_expr, list):
+                # items is already a list - use directly
+                items = items_expr
+            elif isinstance(items_expr, str):
+                # items is a string expression - evaluate it
+                if items_expr.startswith("{{") and items_expr.endswith("}}"):
+                    items_expr = items_expr[2:-2].strip()
+                
+                items = self.expression_evaluator.evaluate(items_expr, state)
+            else:
+                return create_workflow_error(f"parallel_foreach items must be a string expression or list, got {type(items_expr)}", instance.id, step.id)
             
-            items = self.expression_evaluator.evaluate(items_expr, state)
             if not isinstance(items, list):
                 return create_workflow_error(f"parallel_foreach items must be a list, got {type(items)}", instance.id, step.id)
         except Exception as e:
@@ -684,10 +693,19 @@ class SubAgentManager:
                 elif input_name not in context_with_inputs and hasattr(input_def, 'default'):
                     context_with_inputs[input_name] = input_def.default
         
-        # Add task context variables to raw state (don't overwrite defaults)
+        # Ensure inputs tier exists  
+        if "inputs" not in sub_agent_state:
+            sub_agent_state["inputs"] = {}
+        
+        # Add task context variables to appropriate tiers
         for key, value in context_with_inputs.items():
             if key not in ["item", "index", "total", "task_id", "parent_step_id", "workflow_id"]:
-                sub_agent_state["raw"][key] = value
+                # Put actual sub-agent inputs in the inputs tier
+                if hasattr(sub_agent_task, 'inputs') and key in sub_agent_task.inputs:
+                    sub_agent_state["inputs"][key] = value
+                else:
+                    # Other context variables go to raw
+                    sub_agent_state["raw"][key] = value
         
         # Compute state fields if sub-agent has state_schema
         if hasattr(sub_agent_task, 'state_schema') and sub_agent_task.state_schema:

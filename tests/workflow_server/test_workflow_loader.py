@@ -109,7 +109,7 @@ description: "Test workflow"
 version: "1.0.0"
 
 default_state:
-  raw:
+  state:
     counter: 0
     message: ""
 
@@ -138,7 +138,7 @@ steps:
         assert workflow.name == "test:simple"
         assert workflow.description == "Test workflow"
         assert workflow.version == "1.0.0"
-        assert workflow.default_state["raw"]["counter"] == 0
+        assert workflow.default_state["state"]["counter"] == 0
         assert len(workflow.steps) == 2
         assert workflow.steps[0].type == "state_update"
         assert workflow.steps[1].type == "user_message"

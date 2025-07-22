@@ -310,7 +310,7 @@ class TestSubAgentManager:
         # Given
         manager = SubAgentManager()
         steps = [
-            {"type": "state_update", "path": "raw.progress", "value": "started"},
+            {"type": "shell_command", "command": "echo 'Updating raw.progress'", "state_update": {"path": "raw.progress", "value": "started"}},
             {"type": "mcp_call", "method": "lint_project", "params": {}},
         ]
 
@@ -817,7 +817,7 @@ class TestPhase4AcceptanceCriteria:
         # Given
         manager = SubAgentManager()
         manager.register_task_definition(
-            "process_batch", [{"type": "state_update", "path": "raw.{{ task_id }}.status", "value": "processing"}]
+            "process_batch", [{"type": "shell_command", "command": "echo 'Updating raw.{{ task_id }}.status'", "state_update": {"path": "raw.{{ task_id }}.status", "value": "processing"}}]
         )
 
         context = {"files": ["a.ts", "b.ts"], "batch_id": "batch_0"}

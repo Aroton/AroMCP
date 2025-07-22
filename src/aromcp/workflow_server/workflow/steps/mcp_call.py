@@ -24,6 +24,7 @@ class MCPCallProcessor:
 
         parameters = step_definition.get("parameters", {})
         state_update = step_definition.get("state_update")
+        store_result = step_definition.get("store_result")
 
         # Format for agent execution
         mcp_call = {"type": "mcp_call", "tool": tool, "parameters": parameters}
@@ -31,6 +32,10 @@ class MCPCallProcessor:
         # Add state update instructions if specified
         if state_update:
             mcp_call["state_update"] = state_update
+        
+        # Add store_result instructions if specified
+        if store_result:
+            mcp_call["store_result"] = store_result
 
         return {"status": "success", "agent_action": mcp_call, "execution_type": "agent"}
 
@@ -57,6 +62,7 @@ class InternalMCPCallProcessor:
 
         parameters = step_definition.get("parameters", {})
         state_update = step_definition.get("state_update")
+        store_result = step_definition.get("store_result")
 
         try:
             # For now, we'll format this for agent execution since we don't have
@@ -72,15 +78,21 @@ class InternalMCPCallProcessor:
             #     return result
 
             # For Phase 2, treat as agent action
+            agent_action = {
+                "type": "mcp_call",
+                "tool": tool,
+                "parameters": parameters,
+                "execution_mode": "internal",
+            }
+            
+            if state_update:
+                agent_action["state_update"] = state_update
+            if store_result:
+                agent_action["store_result"] = store_result
+                
             return {
                 "status": "success",
-                "agent_action": {
-                    "type": "mcp_call",
-                    "tool": tool,
-                    "parameters": parameters,
-                    "state_update": state_update,
-                    "execution_mode": "internal",
-                },
+                "agent_action": agent_action,
                 "execution_type": "agent",
             }
 

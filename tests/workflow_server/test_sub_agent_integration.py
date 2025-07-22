@@ -48,7 +48,7 @@ class TestSubAgentIntegration:
         assert "raw" in start_result["state"]
         assert "computed" in start_result["state"]
 
-        # Step 2: Get first step (QueueBasedWorkflowExecutor processes state_update steps internally)
+        # Step 2: Get first step (QueueBasedWorkflowExecutor processes shell_command with state_update steps internally)
         step1 = self.executor.get_next_step(workflow_id)
         print(f"\nStep 1: {step1}")
 
@@ -70,7 +70,7 @@ class TestSubAgentIntegration:
         else:
             raise AssertionError(f"Unexpected step response format: {step1}")
             
-        # The first step should be either state_update or the first client step
+        # The first step should be either shell_command with state_update or the first client step
         print(f"Step type: {step_info['type']}, Step ID: {step_info['id']}")
 
         # Step 3: With implicit completion, steps are executed automatically

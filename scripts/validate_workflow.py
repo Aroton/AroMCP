@@ -17,10 +17,10 @@ from src.aromcp.workflow_server.workflow.validator import WorkflowValidator
 
 def validate_file(file_path: Path) -> bool:
     """Validate a workflow YAML file.
-    
+
     Args:
         file_path: Path to the workflow file
-        
+
     Returns:
         True if valid, False otherwise
     """
@@ -33,13 +33,13 @@ def validate_file(file_path: Path) -> bool:
     except Exception as e:
         print(f"❌ Failed to read file: {e}")
         return False
-    
+
     validator = WorkflowValidator()
     is_valid = validator.validate(workflow)
-    
+
     # Also run schema-only validation for comparison
     schema_valid, schema_errors = validator.validate_with_schema(workflow)
-    
+
     if validator.errors:
         print("❌ Validation FAILED")
         print("\nErrors:")
@@ -47,7 +47,7 @@ def validate_file(file_path: Path) -> bool:
             print(f"  - {error}")
     else:
         print("✅ Validation PASSED")
-    
+
     # Show schema validation status
     if validator.schema:
         if not schema_valid and schema_errors:
@@ -56,15 +56,12 @@ def validate_file(file_path: Path) -> bool:
                 print(f"  - {error}")
             if len(schema_errors) > 5:
                 print(f"  ... and {len(schema_errors) - 5} more schema errors")
-        
+
     if validator.warnings:
         print("\nWarnings:")
         for warning in validator.warnings:
             print(f"  - {warning}")
-            
-    if not validator.errors and not validator.warnings:
-        print("\nWorkflow is valid and follows best practices!")
-        
+
     return is_valid
 
 
@@ -74,25 +71,25 @@ def main():
         print("Usage: python validate_workflow.py <workflow.yaml> [workflow2.yaml ...]")
         print("\nValidates MCP workflow YAML files for correctness.")
         sys.exit(1)
-        
+
     all_valid = True
-    
+
     for file_path in sys.argv[1:]:
         path = Path(file_path)
-        
+
         print(f"\nValidating: {path}")
         print("=" * (len(str(path)) + 12))
-        
+
         if not path.exists():
             print(f"❌ File not found: {path}")
             all_valid = False
             continue
-            
+
         is_valid = validate_file(path)
-        
+
         if not is_valid:
             all_valid = False
-            
+
     sys.exit(0 if all_valid else 1)
 
 

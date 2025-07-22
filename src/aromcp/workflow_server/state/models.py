@@ -13,23 +13,23 @@ class WorkflowState:
     """
     Three-tier state model for workflow execution
 
-    - raw: Agent-writable values (direct input from agents)
+    - inputs: Read-only input parameters (initialized once) 
+    - state: Mutable state values (updated during execution)
     - computed: MCP-computed values (derived from transformations)
-    - state: Legacy/manual values (backward compatibility)
     """
 
-    raw: dict[str, Any] = field(default_factory=dict)
-    computed: dict[str, Any] = field(default_factory=dict)
+    inputs: dict[str, Any] = field(default_factory=dict)
     state: dict[str, Any] = field(default_factory=dict)
+    computed: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Ensure all tiers are dictionaries"""
-        if not isinstance(self.raw, dict):
-            self.raw = {}
-        if not isinstance(self.computed, dict):
-            self.computed = {}
+        if not isinstance(self.inputs, dict):
+            self.inputs = {}
         if not isinstance(self.state, dict):
             self.state = {}
+        if not isinstance(self.computed, dict):
+            self.computed = {}
 
 
 @dataclass
@@ -42,7 +42,7 @@ class ComputedFieldDefinition:
     """
 
     from_paths: list[str]
-    """List of dependency paths (e.g., ["raw.value", "state.multiplier"])"""
+    """List of dependency paths (e.g., ["inputs.value", "state.multiplier"])"""
 
     transform: str
     """JavaScript expression for transformation (e.g., "input * 2" or "input[0] + input[1]")"""
@@ -72,14 +72,14 @@ class StateSchema:
     Schema defining the structure and computed fields for a workflow state
     """
 
-    raw: dict[str, str] = field(default_factory=dict)
-    """Raw field type definitions (for validation)"""
-
-    computed: dict[str, dict[str, Any]] = field(default_factory=dict)
-    """Computed field definitions"""
+    inputs: dict[str, str] = field(default_factory=dict)
+    """Input field type definitions (for validation)"""
 
     state: dict[str, str] = field(default_factory=dict)
     """State field type definitions (for validation)"""
+
+    computed: dict[str, dict[str, Any]] = field(default_factory=dict)
+    """Computed field definitions"""
 
     def get_computed_field_definitions(self) -> dict[str, ComputedFieldDefinition]:
         """
@@ -110,7 +110,7 @@ class StateUpdate:
     """Represents a single state update operation."""
 
     path: str
-    """State path to update (e.g., "raw.counter", "state.version")"""
+    """State path to update (e.g., "state.counter", "inputs.version")"""
 
     value: Any
     """Value to set at the path"""

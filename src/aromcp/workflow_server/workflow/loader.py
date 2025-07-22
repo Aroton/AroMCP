@@ -24,14 +24,16 @@ logger = logging.getLogger(__name__)
 class WorkflowLoader:
     """Loads workflows from YAML files with name-based resolution."""
 
-    def __init__(self, project_root: str | None = None):
+    def __init__(self, project_root: str | None = None, strict_schema: bool = False):
         """Initialize the workflow loader.
 
         Args:
             project_root: Override project root for testing
+            strict_schema: If True, enforce strict JSON schema validation
         """
         self.project_root = project_root or os.getcwd()
         self.user_home = os.path.expanduser("~")
+        self.strict_schema = strict_schema
 
     def load(self, workflow_name: str) -> WorkflowDefinition:
         """Load a workflow by name with fallback resolution.
@@ -105,12 +107,19 @@ class WorkflowLoader:
 
         # Validate workflow structure using the validator
         validator = WorkflowValidator()
-        if not validator.validate(data):
-            raise WorkflowValidationError(validator.get_validation_error())
+        
+        if self.strict_schema:
+            # Use strict JSON schema validation only
+            if not validator.validate_strict_schema_only(data):
+                raise WorkflowValidationError(validator.get_validation_error())
+        else:
+            # Use traditional validation with JSON schema as supplement
+            if not validator.validate(data):
+                raise WorkflowValidationError(validator.get_validation_error())
 
         # Parse components
         try:
-            default_state = data.get("default_state", {})
+            default_state = self._parse_default_state(data.get("default_state", {}))
             state_schema = self._parse_state_schema(data.get("state_schema", {}))
             inputs = self._parse_inputs(data.get("inputs", {}))
             steps = self._parse_steps(data.get("steps", []))
@@ -132,9 +141,24 @@ class WorkflowLoader:
         except Exception as e:
             raise WorkflowValidationError(f"Error parsing workflow definition: {e}") from e
 
+    def _parse_default_state(self, default_state_data: dict[str, Any]) -> dict[str, Any]:
+        """Parse default state with backward compatibility for 'raw' tier."""
+        default_state = default_state_data.copy()
+        
+        # Handle backward compatibility: map "raw" to "inputs"
+        if "raw" in default_state:
+            if "inputs" not in default_state:
+                default_state["inputs"] = {}
+            # Merge raw values into inputs
+            default_state["inputs"].update(default_state["raw"])
+            # Remove raw to maintain clean state structure
+            del default_state["raw"]
+        
+        return default_state
+
     def _parse_state_schema(self, schema_data: dict[str, Any]) -> StateSchema:
         """Parse state schema from YAML data."""
-        raw = schema_data.get("raw", {})
+        inputs = schema_data.get("inputs", {})
         state = schema_data.get("state", {})
         computed_data = schema_data.get("computed", {})
 
@@ -147,7 +171,7 @@ class WorkflowLoader:
                 # Simple type definition
                 computed[field_name] = {"from": [], "transform": "input"}
 
-        return StateSchema(raw=raw, computed=computed, state=state)
+        return StateSchema(inputs=inputs, computed=computed, state=state)
 
     def _parse_inputs(self, inputs_data: dict[str, Any]) -> dict[str, InputDefinition]:
         """Parse input definitions from YAML data."""
@@ -181,10 +205,20 @@ class WorkflowLoader:
             # Generate ID if not provided
             step_id = step_data.get("id", f"step_{i}")
 
-            # Extract definition (everything except id and type)
-            definition = {k: v for k, v in step_data.items() if k not in ["id", "type"]}
+            # Extract execution_context only for shell_command steps, as per schema requirements
+            execution_context = "server"  # Default for all steps
+            if step_type == "shell_command":
+                execution_context = step_data.get("execution_context", "server")
+            
+            # Extract definition (everything except id, type, and execution_context)
+            definition = {k: v for k, v in step_data.items() if k not in ["id", "type", "execution_context"]}
 
-            steps.append(WorkflowStep(id=step_id, type=step_type, definition=definition))
+            steps.append(WorkflowStep(
+                id=step_id, 
+                type=step_type, 
+                definition=definition,
+                execution_context=execution_context
+            ))
 
         return steps
 

@@ -3,23 +3,23 @@ description: "Analyze npm dependencies"
 version: "1.0.0"
 
 default_state:
-  raw:
+  state:
     package_json: ""
     npm_list: ""
 
 state_schema:
-  raw:
+  state:
     package_json: string
     npm_list: string
 
   computed:
     dependencies:
-      from: "raw.package_json"
+      from: "this.package_json"
       transform: |
         JSON.parse(input).dependencies || {}
 
     outdated_deps:
-      from: "raw.npm_list"
+      from: "this.npm_list"
       transform: |
         input.split('\n')
           .filter(line => line.includes('outdated'))
@@ -34,7 +34,7 @@ state_schema:
           })
 
     security_risks:
-      from: ["computed.outdated_deps", "computed.dependencies"]
+      from: ["this.outdated_deps", "this.dependencies"]
       transform: |
         input[0].filter(dep => {
           const current = input[1][dep.name];
@@ -46,18 +46,18 @@ steps:
     type: "shell_command"
     command: "cat package.json"
     state_update:
-      path: "raw.package_json"
+      path: "this.package_json"
       value: "stdout"
 
   - id: "check_outdated"
     type: "shell_command"
     command: "npm outdated --json || true"
     state_update:
-      path: "raw.npm_list"
+      path: "this.npm_list"
       value: "stdout"
 
   - id: "report"
     type: "user_message"
     message: |
-      Found {{ outdated_deps.length }} outdated dependencies
-      Major version updates needed: {{ security_risks.length }}
+      Found {{ this.outdated_deps.length }} outdated dependencies
+      Major version updates needed: {{ this.security_risks.length }}

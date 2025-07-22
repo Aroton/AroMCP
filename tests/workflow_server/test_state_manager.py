@@ -25,7 +25,7 @@ class TestStateManager:
         """Test state flattening for read operations"""
         # Given
         state = WorkflowState(
-            raw={"counter": 5, "name": "test"}, computed={"double": 10, "name": "computed"}, state={"version": "1.0"}
+            inputs={"counter": 5, "name": "test"}, computed={"double": 10, "name": "computed"}, state={"version": "1.0"}
         )
         manager = StateManager()
 
@@ -39,10 +39,10 @@ class TestStateManager:
         assert flattened["version"] == "1.0"
 
     def test_flattened_view_precedence_order(self):
-        """Test that computed values take precedence over raw and state"""
+        """Test that computed values take precedence over inputs and state"""
         # Given
         state = WorkflowState(
-            raw={"shared_key": "raw_value", "raw_only": "raw"},
+            inputs={"shared_key": "inputs_value", "inputs_only": "inputs"},
             computed={"shared_key": "computed_value", "computed_only": "computed"},
             state={"shared_key": "state_value", "state_only": "state"},
         )
@@ -53,7 +53,7 @@ class TestStateManager:
 
         # Then
         assert flattened["shared_key"] == "computed_value"  # computed wins
-        assert flattened["raw_only"] == "raw"
+        assert flattened["inputs_only"] == "inputs"
         assert flattened["computed_only"] == "computed"
         assert flattened["state_only"] == "state"
 
@@ -61,7 +61,7 @@ class TestStateManager:
         """Test flattening with nested objects"""
         # Given
         state = WorkflowState(
-            raw={"user": {"name": "Alice", "age": 30}},
+            inputs={"user": {"name": "Alice", "age": 30}},
             computed={"user": {"name": "Alice Smith", "score": 95}},
             state={"config": {"debug": True}},
         )
@@ -71,10 +71,10 @@ class TestStateManager:
         flattened = manager.get_flattened_view(state)
 
         # Then
-        # Computed user object should completely replace raw user object
+        # Computed user object should completely replace inputs user object
         assert flattened["user"]["name"] == "Alice Smith"
         assert flattened["user"]["score"] == 95
-        assert "age" not in flattened["user"]  # Raw user.age not included
+        assert "age" not in flattened["user"]  # Inputs user.age not included
         assert flattened["config"]["debug"] is True
 
 
@@ -82,14 +82,14 @@ class TestStateUpdateValidation:
     """Test path validation for state updates"""
 
     def test_state_update_validation(self):
-        """Test that only raw/state paths can be written"""
+        """Test that only inputs/state paths can be written"""
         # Given
         manager = StateManager()
 
         # When/Then - Valid updates
-        assert manager.validate_update_path("raw.counter") is True
+        assert manager.validate_update_path("inputs.counter") is True
         assert manager.validate_update_path("state.version") is True
-        assert manager.validate_update_path("raw.user.name") is True
+        assert manager.validate_update_path("inputs.user.name") is True
         assert manager.validate_update_path("state.config.debug") is True
 
         # When/Then - Invalid updates
@@ -104,12 +104,12 @@ class TestStateUpdateValidation:
         manager = StateManager()
 
         # When/Then
-        assert manager.validate_update_path("raw") is False  # No field specified
+        assert manager.validate_update_path("inputs") is False  # No field specified
         assert manager.validate_update_path("state") is False  # No field specified
-        assert manager.validate_update_path("raw.") is False  # Empty field name
+        assert manager.validate_update_path("inputs.") is False  # Empty field name
         assert manager.validate_update_path("state.") is False  # Empty field name
         assert manager.validate_update_path(".field") is False  # No tier
-        assert manager.validate_update_path("raw..field") is False  # Double dot
+        assert manager.validate_update_path("inputs..field") is False  # Double dot
 
 
 class TestStateUpdates:

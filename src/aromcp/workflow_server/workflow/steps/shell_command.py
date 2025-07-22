@@ -26,22 +26,36 @@ class ShellCommandProcessor:
         if not command:
             return {"status": "failed", "error": "Missing 'command' in shell_command step"}
 
+        # Get timeout and error handling configuration
+        timeout = step_definition.get("timeout", 30)  # Default 30 seconds
+        error_handling = step_definition.get("error_handling", {"strategy": "fail"})
+        working_directory = step_definition.get("working_directory")
+
         try:
-            # Get the correct project directory to run the command in
-            project_root = get_project_root()
+            # Determine working directory
+            if working_directory:
+                # Use specified working directory
+                work_dir = working_directory
+                if not os.path.isabs(work_dir):
+                    # Make relative paths relative to project root
+                    project_root = get_project_root()
+                    work_dir = os.path.join(project_root, work_dir)
+            else:
+                # Use project root as default
+                work_dir = get_project_root()
 
-            # Ensure the project directory exists, fallback to current directory if not
-            if not os.path.exists(project_root) or not os.path.isdir(project_root):
-                project_root = os.getcwd()
+            # Ensure the working directory exists, fallback to current directory if not
+            if not os.path.exists(work_dir) or not os.path.isdir(work_dir):
+                work_dir = os.getcwd()
 
-            # Execute command in the project directory (shell=True is intentional for workflow step execution)
+            # Execute command in the working directory (shell=True is intentional for workflow step execution)
             result = subprocess.run(  # noqa: S602
                 command,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=30,  # 30 second timeout
-                cwd=project_root,  # Run in the correct project directory
+                timeout=timeout,
+                cwd=work_dir,
             )
 
             output = {
@@ -51,35 +65,58 @@ class ShellCommandProcessor:
                 "command": command,
             }
 
-            # Update state if specified
-            state_update = step_definition.get("state_update")
-            if state_update:
-                path = state_update.get("path")
-                value_source = state_update.get("value", "stdout")
+            # Check if command failed and handle according to error_handling strategy
+            if result.returncode != 0:
+                strategy = error_handling.get("strategy", "fail")
+                
+                if strategy == "fail":
+                    # Fail immediately
+                    return {
+                        "status": "failed", 
+                        "error": f"Command failed with exit code {result.returncode}: {result.stderr}",
+                        "output": output
+                    }
+                elif strategy == "continue":
+                    # Continue execution despite failure
+                    output["warning"] = f"Command failed with exit code {result.returncode} but continuing due to error_handling strategy"
+                elif strategy == "fallback":
+                    # Use fallback value
+                    fallback_value = error_handling.get("fallback_value", "")
+                    output["stdout"] = str(fallback_value)
+                    output["stderr"] = ""
+                    output["returncode"] = 0
 
-                if path:
-                    # Determine value to store
-                    if value_source == "stdout":
-                        value = result.stdout.strip()
-                    elif value_source == "stderr":
-                        value = result.stderr.strip()
-                    elif value_source == "returncode":
-                        value = result.returncode
-                    elif value_source == "full_output":
-                        value = output
-                    else:
-                        value = value_source  # Literal value
-
-                    # Apply state update
-                    updates = [{"path": path, "value": value}]
-                    state_manager.update(workflow_id, updates)
+            # State updates are now handled by the embedded state update processor
+            # in step_processors.py, so we don't need to handle them here.
+            # The embedded processor will examine state_update and state_updates fields
+            # and apply them after the shell command completes.
 
             return {"status": "success", "output": output, "execution_type": "internal"}
 
         except subprocess.TimeoutExpired:
-            return {"status": "failed", "error": f"Command timed out after 30 seconds: {command}"}
+            strategy = error_handling.get("strategy", "fail")
+            
+            if strategy == "fail":
+                return {"status": "failed", "error": f"Command timed out after {timeout} seconds: {command}"}
+            elif strategy == "continue":
+                return {"status": "success", "output": {"warning": f"Command timed out after {timeout} seconds but continuing"}}
+            elif strategy == "fallback":
+                fallback_value = error_handling.get("fallback_value", "")
+                return {"status": "success", "output": {"stdout": str(fallback_value), "stderr": "", "returncode": 0}}
+            else:
+                return {"status": "failed", "error": f"Command timed out after {timeout} seconds: {command}"}
         except Exception as e:
-            return {"status": "failed", "error": f"Command execution failed: {e}"}
+            strategy = error_handling.get("strategy", "fail")
+            
+            if strategy == "fail":
+                return {"status": "failed", "error": f"Command execution failed: {e}"}
+            elif strategy == "continue":
+                return {"status": "success", "output": {"warning": f"Command execution failed but continuing: {e}"}}
+            elif strategy == "fallback":
+                fallback_value = error_handling.get("fallback_value", "")
+                return {"status": "success", "output": {"stdout": str(fallback_value), "stderr": "", "returncode": 0}}
+            else:
+                return {"status": "failed", "error": f"Command execution failed: {e}"}
 
 
 class AgentShellCommandProcessor:

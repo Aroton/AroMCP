@@ -120,14 +120,18 @@ class ExecutionContext:
         )
 
     def enter_loop(self, loop_state: LoopState):
-        """Enter a new loop context."""
+        """Enter a new loop context with proper variable isolation."""
+        # Ensure loop variables are prepared
+        loop_state.prepare_for_iteration()
         self.loop_stack.append(loop_state)
         self.last_updated = datetime.now()
 
     def exit_loop(self) -> LoopState | None:
-        """Exit the current loop context."""
+        """Exit the current loop context and clean up loop variables."""
         if self.loop_stack:
             loop_state = self.loop_stack.pop()
+            # Clear loop variables when exiting
+            loop_state.clear_loop_variables()
             self.last_updated = datetime.now()
             return loop_state
         return None
@@ -139,6 +143,19 @@ class ExecutionContext:
     def is_in_loop(self) -> bool:
         """Check if currently executing within a loop."""
         return len(self.loop_stack) > 0
+
+    def get_nested_loop_variables(self) -> dict[str, Any]:
+        """Get loop variables from all nested loops, with innermost taking precedence.
+        
+        Returns:
+            Dictionary containing loop variables from all active loops
+        """
+        loop_vars = {}
+        # Process from outermost to innermost so inner loops override outer ones
+        for loop_state in self.loop_stack:
+            if loop_state.variable_bindings:
+                loop_vars.update(loop_state.variable_bindings)
+        return loop_vars
 
     def signal_loop_control(self, signal: str) -> bool:
         """Signal break or continue for the current loop."""
@@ -164,6 +181,38 @@ class ExecutionContext:
 
         self.last_updated = datetime.now()
 
+    def set_global_variable(self, name: str, value: Any):
+        """Set a global variable directly."""
+        self.global_variables[name] = value
+        self.last_updated = datetime.now()
+
+    def get_global_variable(self, name: str, default: Any = None) -> Any:
+        """Get a global variable value."""
+        return self.global_variables.get(name, default)
+
+    def get_scoped_variables(self) -> dict[str, dict[str, Any]]:
+        """
+        Get all variables organized by scope for template evaluation.
+        
+        Returns:
+            Dictionary with scopes: global, local (current frame), loop (nested loops)
+        """
+        scoped_vars = {
+            "global": dict(self.global_variables),
+            "local": {},
+            "loop": {}
+        }
+        
+        # Add current frame's local variables
+        current_frame = self.current_frame()
+        if current_frame:
+            scoped_vars["local"] = dict(current_frame.local_variables)
+        
+        # Add nested loop variables (innermost takes precedence)
+        scoped_vars["loop"] = self.get_nested_loop_variables()
+        
+        return scoped_vars
+
     def get_variable(self, name: str) -> Any:
         """Get a variable value, checking local scope first, then global."""
         # Check current frame's local variables first
@@ -183,9 +232,8 @@ class ExecutionContext:
         """Get all variables in scope, with local variables taking precedence."""
         variables = dict(self.global_variables)
 
-        # Add loop variables
-        for loop_state in self.loop_stack:
-            variables.update(loop_state.variable_bindings)
+        # Add nested loop variables (innermost takes precedence)
+        variables.update(self.get_nested_loop_variables())
 
         # Add local variables from all frames (outer to inner)
         for frame in self.execution_stack:
@@ -256,29 +304,6 @@ class ExecutionContext:
         """Check if the entire execution is complete."""
         return len(self.execution_stack) == 0 and self.all_sub_agent_tasks_complete()
 
-    def get_execution_summary(self) -> dict[str, Any]:
-        """Get a summary of the current execution state."""
-        return {
-            "workflow_id": self.workflow_id,
-            "execution_depth": self.execution_depth,
-            "stack_frames": len(self.execution_stack),
-            "current_frame_type": self.current_frame().frame_type if self.current_frame() else None,
-            "in_loop": self.is_in_loop(),
-            "current_loop_type": self.current_loop().loop_type if self.current_loop() else None,
-            "loop_depth": len(self.loop_stack),
-            "sub_agent_tasks": {
-                "total": len(self.sub_agent_contexts),
-                "pending": len(self.get_pending_sub_agent_tasks()),
-                "completed": len(self.get_completed_sub_agent_tasks()),
-            },
-            "variables": {
-                "global": len(self.global_variables),
-                "local": len(self.current_frame().local_variables) if self.current_frame() else 0,
-                "loop": len(self.current_loop().variable_bindings) if self.current_loop() else 0,
-            },
-            "created_at": self.created_at.isoformat(),
-            "last_updated": self.last_updated.isoformat(),
-        }
 
 
 class ExecutionContextManager:

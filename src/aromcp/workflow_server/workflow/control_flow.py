@@ -185,12 +185,36 @@ class LoopState:
             return self.items[self.current_item_index]
         return None
 
+    def update_loop_variables(self):
+        """Update loop variables in variable_bindings based on current state."""
+        if self.loop_type == "foreach":
+            # Set loop.item and loop.index for foreach loops
+            current_item = self.get_current_item()
+            self.variable_bindings.update({
+                "item": current_item,
+                "index": self.current_item_index
+            })
+        elif self.loop_type == "while":
+            # Set loop.iteration for while loops (1-based iteration counter)
+            self.variable_bindings["iteration"] = self.current_iteration + 1
+
     def advance_iteration(self):
-        """Advance to the next iteration."""
+        """Advance to the next iteration and update loop variables."""
         self.current_iteration += 1
         if self.loop_type == "foreach":
             self.current_item_index += 1
         self.control_signal = None  # Reset control signal
+        
+        # Update loop variables after advancing
+        self.update_loop_variables()
+
+    def prepare_for_iteration(self):
+        """Prepare loop variables for the current iteration without advancing."""
+        self.update_loop_variables()
+
+    def clear_loop_variables(self):
+        """Clear all loop variables when the loop exits."""
+        self.variable_bindings.clear()
 
 
 @dataclass

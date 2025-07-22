@@ -69,15 +69,24 @@ When enabled:
      1. Call workflow_get_next_step(workflow_id)
      2. If no step returned, workflow is complete
      3. Execute the step based on its type:
-        - mcp_call: Execute the specified MCP tool with store_result
-        - agent_task: Execute the prompt instruction using available tools
-        - shell_command: (Handled internally by server - skip to next step)
-        - state_update: Call workflow_update_state
+        - mcp_call: Execute MCP tool, store result if needed
+        - agent_task: Execute the prompt instruction
+        - shell_command: (Server handles - just continue)
         - user_message: Display message to user
         - user_input: Prompt user for input
         - parallel_foreach: Create sub-agents
         - Other types: Follow step instructions
      4. Handle any errors and report status
+   ```
+   
+   **MCP Call Pattern with store_result**:
+   ```javascript
+   // When step.type === "mcp_call" && step.store_result:
+   const result = await execute_mcp_tool(step.tool, step.parameters);
+   await workflow_update_state(workflow_id, [{
+     path: step.store_result,
+     value: result
+   }]);
    ```
 6. Report workflow completion status and final state
 
@@ -113,8 +122,32 @@ const step = {
 1. Extract tool name and parameters
 2. Interpolate any template variables ({{ variable }})
 3. Call the specified MCP tool
-4. Store result in state at store_result path if specified
-5. Mark step complete with result
+4. **CRITICAL**: If step has `store_result`, use `workflow_update_state` to store the result at that path
+5. Continue with `workflow_get_next_step()` to advance
+
+**Important**: Steps with `store_result` require you to manually store the result:
+```javascript
+// When you see store_result in a step definition:
+const step = {
+  type: "mcp_call", 
+  tool: "aromcp.lint_project",
+  parameters: {...},
+  store_result: "state.lint_tool_output"  // <- You must store result here
+};
+
+// Execute like this:
+// 1. Call the MCP tool and get result
+const result = aromcp.lint_project(parameters);
+
+// 2. Store the result at the specified path
+workflow_update_state(workflow_id, [{
+  path: "state.lint_tool_output",  // Use the store_result path
+  value: result
+}]);
+
+// 3. Continue with next step
+workflow_get_next_step(workflow_id);
+```
 
 ### Agent Tasks (`agent_task`)
 ```javascript
@@ -131,19 +164,12 @@ const step = {
 3. Execute the task directly using available tools
 4. Mark step complete when task is finished
 
-### State Updates (`state_update`)
-```javascript
-const step = {
-  type: "state_update",
-  updates: [
-    { path: "raw.counter", value: 10 },
-    { path: "state.status", value: "processing" }
-  ]
-};
-```
-1. Call workflow_update_state with the updates
-2. Verify state was updated successfully
-3. Mark step complete
+### State Updates (via other steps)
+State updates are now embedded within other step types using the `state_update` or `state_updates` field:
+- `mcp_call`: Use `state_update` field to store tool results
+- `user_input`: Use `state_update` field to store user input
+- `agent_response`: Use `state_updates` field for multiple updates
+- `shell_command`: Use `state_update` field to store command output
 
 ### User Interaction (`user_input`, `user_message`)
 ```javascript
@@ -305,12 +331,25 @@ const step = {
    while task not complete:
      1. Call workflow_get_next_step(workflow_id, task_id)
      2. If step returned, execute it following main agent patterns:
-        - mcp_call: Execute the specified MCP tool with store_result
+        - mcp_call: Execute MCP tool, then if store_result exists:
+          • Get the tool result
+          • Call workflow_update_state to store at the specified path
         - agent_task: Execute the prompt instruction using available tools
-        - state_update: Call workflow_update_state
         - conditional: Follow branch logic
         - Other types: Follow step instructions
      3. Continue until workflow_get_next_step returns null
+   ```
+   
+   **Critical for Sub-Agents**: Always store MCP results when `store_result` is present:
+   ```javascript
+   // Sub-agent example with store_result:
+   if (step.store_result) {
+     const result = await mcp_tool(step.parameters);
+     await workflow_update_state(workflow_id, [{
+       path: step.store_result,
+       value: result
+     }]);
+   }
    ```
 
 3. **Key principles for sub-agents:**

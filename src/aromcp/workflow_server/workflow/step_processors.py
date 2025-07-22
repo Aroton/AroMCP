@@ -7,7 +7,14 @@ from ..utils.error_tracking import create_workflow_error, enhance_exception_mess
 from .expressions import ExpressionEvaluator
 from .models import WorkflowInstance, WorkflowStep
 from .queue import WorkflowQueue
+from .context import ExecutionContext
 from .steps.shell_command import ShellCommandProcessor
+from .steps.agent_prompt import AgentPromptProcessor
+from .steps.agent_response import AgentResponseProcessor
+from .steps.user_message import UserMessageProcessor
+from .steps.mcp_call import MCPCallProcessor
+from .steps.wait_step import WaitStepProcessor
+from .parallel import ParallelForEachProcessor, ParallelForEachStep
 
 
 class StepProcessor:
@@ -17,9 +24,14 @@ class StepProcessor:
         self.state_manager = state_manager
         self.expression_evaluator = expression_evaluator
         self.shell_command_processor = ShellCommandProcessor()
+        self.agent_prompt_processor = AgentPromptProcessor()
+        self.agent_response_processor = AgentResponseProcessor()
+        self.parallel_foreach_processor = ParallelForEachProcessor(expression_evaluator)
+# Note: user_input, user_message, and mcp_call processors use static methods
     
     def process_server_step(self, instance: WorkflowInstance, step: WorkflowStep, 
-                           queue: WorkflowQueue, step_config: dict[str, Any]) -> dict[str, Any]:
+                           queue: WorkflowQueue, step_config: dict[str, Any], 
+                           context: ExecutionContext | None = None) -> dict[str, Any]:
         """Process a server-side step."""
         current_state = self.state_manager.read(instance.id)
         
@@ -30,26 +42,33 @@ class StepProcessor:
         preserve_templates = step.type in ["foreach", "parallel_foreach", "while_loop"]
         
         # Use nested state for template expressions (not flattened)
-        # Pass instance to have access to workflow inputs
-        processed_definition = self._replace_variables(step.definition, current_state, preserve_conditions, instance, preserve_templates)
+        # Pass instance and context for scoped variable resolution
+        processed_definition = self._replace_variables(step.definition, current_state, preserve_conditions, instance, preserve_templates, context)
         
-        if step.type == "state_update":
-            return self._process_state_update(instance, step, processed_definition)
+        if step.type == "shell_command":
+            result = self._process_shell_command(instance, step, processed_definition)
+            # Process embedded state updates if present
+            self._process_embedded_state_updates(instance, step, processed_definition, result, context)
+            return result
         
-        elif step.type == "batch_state_update":
-            return self._process_batch_state_update(instance, step, processed_definition)
+        elif step.type == "agent_prompt":
+            # Create flattened state for agent prompt processor
+            flattened_state = self._flatten_state(current_state)
+            return self.agent_prompt_processor.process_agent_prompt(step, flattened_state)
         
-        elif step.type == "shell_command":
-            return self._process_shell_command(instance, step, processed_definition)
+        elif step.type == "agent_response":
+            # Agent response steps should be processed on client side
+            # Return placeholder indicating this step requires agent response
+            return {"executed": False, "requires_agent_response": True}
         
         elif step.type == "conditional":
-            return self.process_conditional(instance, step, processed_definition, queue, current_state)
+            return self.process_conditional(instance, step, processed_definition, queue, current_state, context)
         
         elif step.type == "while_loop":
-            return self.process_while_loop(instance, step, processed_definition, queue, current_state)
+            return self.process_while_loop(instance, step, processed_definition, queue, current_state, context)
         
         elif step.type == "foreach":
-            return self.process_foreach(instance, step, processed_definition, queue, current_state)
+            return self.process_foreach(instance, step, processed_definition, queue, current_state, context)
         
         elif step.type == "debug_task_completion":
             return self.process_debug_task_completion(instance, step, processed_definition, queue)
@@ -63,45 +82,141 @@ class StepProcessor:
         elif step.type == "continue":
             return self.process_continue(queue)
         
+        
         return create_workflow_error(f"Unsupported server step type: {step.type}", instance.id, step.id)
     
-    def _process_state_update(self, instance: WorkflowInstance, step: WorkflowStep,
-                             processed_definition: dict[str, Any]) -> dict[str, Any]:
-        """Process a state update step."""
-        path = processed_definition.get("path")
-        value = processed_definition.get("value")
-        operation = processed_definition.get("operation", "set")
+    def process_client_step(self, instance: WorkflowInstance, step: WorkflowStep,
+                           step_config: dict[str, Any], context: ExecutionContext | None = None) -> dict[str, Any]:
+        """Process a client-side step by formatting it appropriately."""
+        current_state = self.state_manager.read(instance.id)
         
-        if not path:
-            return create_workflow_error("Missing 'path' in state_update step", instance.id, step.id)
+        # Replace variables in step definition using the same logic as server steps
+        processed_definition = self._replace_variables(step.definition, current_state, False, instance, False, context)
         
-        updates = [{"path": path, "value": value, "operation": operation}]
-        self.state_manager.update(instance.id, updates)
+        if step.type == "user_message":
+            return self._process_user_message(instance, step, processed_definition)
         
+        elif step.type == "user_input":
+            return self._process_user_input(instance, step, processed_definition)
+        
+        elif step.type == "mcp_call":
+            return self._process_mcp_call(instance, step, processed_definition)
+        
+        elif step.type == "agent_prompt":
+            # Create flattened state for agent prompt processor
+            flattened_state = self._flatten_state(current_state)
+            return self.agent_prompt_processor.process_agent_prompt(step, flattened_state)
+        
+        elif step.type == "parallel_foreach":
+            return self._process_parallel_foreach(instance, step, processed_definition)
+        
+        elif step.type == "wait_step":
+            return WaitStepProcessor.process(processed_definition, instance.id, self.state_manager)
+        
+        # Default: return basic client step format
         return {
-            "executed": True,
             "id": step.id,
-            "type": "state_update",
+            "type": step.type,
             "definition": processed_definition,
-            "result": {"status": "success", "updates_applied": 1}
+            "execution_context": "client"
         }
     
-    def _process_batch_state_update(self, instance: WorkflowInstance, step: WorkflowStep,
-                                   processed_definition: dict[str, Any]) -> dict[str, Any]:
-        """Process a batch state update step."""
-        updates = processed_definition.get("updates", [])
-        if not updates:
-            return create_workflow_error("Missing 'updates' in batch_state_update step", instance.id, step.id)
+    def process_agent_response_result(self, instance: WorkflowInstance, step: WorkflowStep,
+                                     agent_response: dict[str, Any], context: ExecutionContext | None = None) -> dict[str, Any]:
+        """Process an agent response step result from the client."""
+        current_state = self.state_manager.read(instance.id)
+        flattened_state = self._flatten_state(current_state)
         
-        self.state_manager.update(instance.id, updates)
+        # Process the agent response
+        result = self.agent_response_processor.process_agent_response(step, agent_response, flattened_state)
         
-        return {
-            "executed": True,
-            "id": step.id,
-            "type": "batch_state_update",
-            "definition": processed_definition,
-            "result": {"status": "success", "updates_applied": len(updates)}
-        }
+        # Apply state updates if successful
+        if result.get("executed") and "state_updates" in result:
+            state_updates = result["state_updates"]
+            if state_updates:
+                self.state_manager.update(instance.id, state_updates, context)
+        
+        return result
+    
+    def _process_embedded_state_updates(self, instance: WorkflowInstance, step: WorkflowStep,
+                                       processed_definition: dict[str, Any], step_result: dict[str, Any],
+                                       context: ExecutionContext | None = None) -> None:
+        """Process embedded state updates for a step."""
+        updates_to_apply = []
+        
+        # Check for single state_update
+        state_update = processed_definition.get("state_update")
+        if state_update:
+            updates_to_apply.append(state_update)
+        
+        # Check for multiple state_updates
+        state_updates = processed_definition.get("state_updates", [])
+        if state_updates:
+            updates_to_apply.extend(state_updates)
+        
+        # Apply all updates
+        if updates_to_apply:
+            # Validate each update has required fields
+            validated_updates = []
+            for update in updates_to_apply:
+                if not isinstance(update, dict):
+                    continue
+                
+                path = update.get("path")
+                if not path:
+                    continue
+                
+                # Get value from update spec
+                value = update.get("value")
+                operation = update.get("operation", "set")
+                
+                # Handle backward compatibility: map "raw" paths to "inputs" paths
+                if path.startswith("raw."):
+                    path = path.replace("raw.", "inputs.", 1)
+                
+                # Re-evaluate template expressions with current state (including loop variables)
+                # This is critical for foreach loops where loop_item/loop_index change
+                current_state = self.state_manager.read(instance.id)
+                eval_context = current_state.copy()
+                if instance and instance.inputs:
+                    # Add workflow inputs at top level for template evaluation
+                    eval_context.update(instance.inputs)
+                
+                # If value is a template expression, re-evaluate it with current state
+                if isinstance(value, str) and "{{" in value and "}}" in value:
+                    value = self._replace_variables(value, current_state, False, instance, False, context)
+                
+                # For shell commands, allow value to reference output fields
+                if step.type == "shell_command" and isinstance(value, str):
+                    # Check if shell result has the output directly or nested under 'result'
+                    shell_output = None
+                    if "output" in step_result:
+                        shell_output = step_result["output"]
+                    elif "result" in step_result and "output" in step_result["result"]:
+                        shell_output = step_result["result"]["output"]
+                    
+                    if shell_output:
+                        if value == "stdout":
+                            value = shell_output.get("stdout", "")
+                        elif value == "stderr":
+                            value = shell_output.get("stderr", "")
+                        elif value == "returncode":
+                            value = shell_output.get("returncode", 0)
+                        elif value == "full_output":
+                            value = shell_output
+                
+                validated_updates.append({
+                    "path": path,
+                    "value": value,
+                    "operation": operation
+                })
+            
+            if validated_updates:
+                self.state_manager.update(instance.id, validated_updates, context)
+                # Add update info to step result
+                if "result" not in step_result:
+                    step_result["result"] = {}
+                step_result["result"]["shell_command with state_updates_applied"] = len(validated_updates)
     
     def _process_shell_command(self, instance: WorkflowInstance, step: WorkflowStep,
                               processed_definition: dict[str, Any]) -> dict[str, Any]:
@@ -120,7 +235,7 @@ class StepProcessor:
     
     def process_conditional(self, instance: WorkflowInstance, step: WorkflowStep,
                            definition: dict[str, Any], queue: WorkflowQueue,
-                           state: dict[str, Any]) -> dict[str, Any]:
+                           state: dict[str, Any], context: ExecutionContext | None = None) -> dict[str, Any]:
         """Process a conditional step by adding branch steps to queue."""
         condition = definition.get("condition", "")
         if not condition:
@@ -155,10 +270,15 @@ class StepProcessor:
                 if "id" not in step_def:
                     step_def["id"] = f"{step.id}.{'then' if condition_result else 'else'}.{i}"
                 
+                # Extract execution_context if present
+                execution_context = step_def.get("execution_context", "server")
+                definition = {k: v for k, v in step_def.items() if k not in ["id", "type", "execution_context"]}
+                
                 workflow_step = WorkflowStep(
                     id=step_def["id"],
                     type=step_def["type"],
-                    definition={k: v for k, v in step_def.items() if k not in ["id", "type"]}
+                    definition=definition,
+                    execution_context=execution_context
                 )
                 workflow_steps.append(workflow_step)
             
@@ -172,8 +292,8 @@ class StepProcessor:
     
     def process_while_loop(self, instance: WorkflowInstance, step: WorkflowStep,
                           definition: dict[str, Any], queue: WorkflowQueue,
-                          state: dict[str, Any]) -> dict[str, Any]:
-        """Process a while loop by evaluating condition and adding body steps."""
+                          state: dict[str, Any], context: ExecutionContext | None = None) -> dict[str, Any]:
+        """Process a while loop by evaluating condition and adding body steps using scoped loop variables."""
         condition = definition.get("condition", "")
         body = definition.get("body", [])
         max_iterations = definition.get("max_iterations", 100)
@@ -181,54 +301,91 @@ class StepProcessor:
         if not condition:
             return create_workflow_error("Missing 'condition' in while_loop step", instance.id, step.id)
         
-        # Get or create loop context
-        loop_context = None
-        for ctx in queue.loop_stack:
-            if ctx["context"].get("loop_id") == step.id:
-                loop_context = ctx["context"]
-                break
-        
-        if not loop_context:
-            # First iteration
-            loop_context = {
-                "loop_id": step.id,
-                "iteration": 0,
-                "max_iterations": max_iterations
-            }
-            queue.push_loop_context("while", loop_context)
-        
-        # Check iteration limit
-        if loop_context["iteration"] >= max_iterations:
-            queue.pop_loop_context()
-            return {"executed": False, "reason": "Max iterations reached"}
+        # Use execution context for proper loop management if available
+        if context:
+            # Check if there's already a current loop with this step ID
+            current_loop = context.current_loop()
+            
+            if current_loop and current_loop.loop_id == step.id:
+                # Continuing existing loop - advance to next iteration
+                current_loop.advance_iteration()
+                
+                # Check if loop reached max iterations
+                if current_loop.current_iteration >= max_iterations:
+                    # Exit the loop
+                    context.exit_loop()
+                    return {"executed": False, "reason": "Max iterations reached"}
+            else:
+                # Create new while loop
+                from .control_flow import LoopState
+                loop_state = LoopState(
+                    loop_type="while",
+                    loop_id=step.id,
+                    max_iterations=max_iterations
+                )
+                # Prepare initial loop variables
+                loop_state.prepare_for_iteration()
+                context.enter_loop(loop_state)
+        else:
+            # Fallback to queue-based loop management
+            loop_context = None
+            for ctx in queue.loop_stack:
+                if ctx["context"].get("loop_id") == step.id:
+                    loop_context = ctx["context"]
+                    break
+            
+            if not loop_context:
+                # First iteration
+                loop_context = {
+                    "loop_id": step.id,
+                    "iteration": 0,
+                    "max_iterations": max_iterations
+                }
+                queue.push_loop_context("while", loop_context)
         
         # Evaluate condition
         try:
             if condition.startswith("{{") and condition.endswith("}}"):
                 condition = condition[2:-2].strip()
             
-            # Add loop variables to state
-            eval_state = state.copy()
-            eval_state["loop"] = {"iteration": loop_context["iteration"]}
+            # Use updated state for condition evaluation with scoped context
+            eval_state = self.state_manager.read(instance.id)
+            scoped_context = self._build_scoped_context(instance, eval_state, context)
             
-            result = self.expression_evaluator.evaluate(condition, eval_state)
+            result = self.expression_evaluator.evaluate(condition, eval_state, scoped_context)
             condition_result = bool(result)
         except Exception as e:
-            queue.pop_loop_context()
+            # Clean up on error
+            if context:
+                context.exit_loop()
+            else:
+                queue.pop_loop_context()
+                # Clean up legacy attempt_number on error
+                self.state_manager.update(instance.id, [
+                    {"path": "state.attempt_number", "value": None}
+                ], context)
             return create_workflow_error(f"Error evaluating while condition: {enhance_exception_message(e)}", instance.id, step.id)
         
+        # Get current loop state
+        current_loop = context.current_loop() if context else None
+        
         if condition_result and body:
-            # Add body steps and loop step again
+            # Continue loop - add body steps and loop step again
             workflow_steps = []
             
             # Add body steps
             for i, step_def in enumerate(body):
                 if "id" not in step_def:
                     step_def["id"] = f"{step.id}.body.{i}"
+                # Extract execution_context if present
+                execution_context = step_def.get("execution_context", "server")
+                definition_copy = {k: v for k, v in step_def.items() if k not in ["id", "type", "execution_context"]}
+                
                 workflow_step = WorkflowStep(
                     id=step_def["id"],
                     type=step_def["type"],
-                    definition={k: v for k, v in step_def.items() if k not in ["id", "type"]}
+                    definition=definition_copy,
+                    execution_context=execution_context
                 )
                 workflow_steps.append(workflow_step)
             
@@ -236,18 +393,54 @@ class StepProcessor:
             workflow_steps.append(step)
             
             queue.prepend_steps(workflow_steps)
-            loop_context["iteration"] += 1
             
-            return {"executed": False, "iteration": loop_context["iteration"]}
+            if current_loop:
+                return {"executed": False, "iteration": current_loop.current_iteration}
+            else:
+                # Fallback to queue-based management
+                loop_context = None
+                for ctx in queue.loop_stack:
+                    if ctx["context"].get("loop_id") == step.id:
+                        loop_context = ctx["context"]
+                        break
+                
+                if loop_context:
+                    # Update legacy attempt_number for backward compatibility
+                    # TODO: Remove this legacy behavior in future version
+                    import warnings
+                    warnings.warn(
+                        "Legacy while loop variable management (state.attempt_number) is deprecated. "
+                        "Use scoped loop variables ({{loop.iteration}}) instead.",
+                        DeprecationWarning,
+                        stacklevel=2
+                    )
+                    attempt_number = loop_context["iteration"] + 1
+                    self.state_manager.update(instance.id, [
+                        {"path": "state.attempt_number", "value": attempt_number}
+                    ], context)
+                    loop_context["iteration"] += 1
+                    return {"executed": False, "iteration": loop_context["iteration"]}
+                
+                return {"executed": False, "iteration": 1}
         else:
-            # Loop complete
-            queue.pop_loop_context()
+            # Loop complete - condition is false or no body
+            if context:
+                context.exit_loop()
+            else:
+                # Fallback cleanup
+                queue.pop_loop_context()
+                # Clean up legacy attempt_number
+                # TODO: Remove this legacy cleanup in future version
+                self.state_manager.update(instance.id, [
+                    {"path": "state.attempt_number", "value": None}
+                ], context)
+            
             return {"executed": False, "reason": "Condition false"}
     
     def process_foreach(self, instance: WorkflowInstance, step: WorkflowStep,
                        definition: dict[str, Any], queue: WorkflowQueue,
-                       state: dict[str, Any]) -> dict[str, Any]:
-        """Process a foreach loop by iterating over items."""
+                       state: dict[str, Any], context: ExecutionContext | None = None) -> dict[str, Any]:
+        """Process a foreach loop by iterating over items using scoped loop variables."""
         items_expr = definition.get("items", "")
         body = definition.get("body", [])
         
@@ -265,40 +458,74 @@ class StepProcessor:
         except Exception as e:
             return {"error": f"Error evaluating foreach items: {str(e)}"}
         
-        # Get or create loop context
-        loop_context = None
-        for ctx in queue.loop_stack:
-            if ctx["context"].get("loop_id") == step.id:
-                loop_context = ctx["context"]
-                break
-        
-        if not loop_context:
-            # First iteration
-            loop_context = {
-                "loop_id": step.id,
-                "items": items,
-                "index": 0
-            }
-            queue.push_loop_context("foreach", loop_context)
-        
-        # Check if there are more items
-        if loop_context["index"] < len(loop_context["items"]):
-            # Set loop variables in state
-            item = loop_context["items"][loop_context["index"]]
-            self.state_manager.update(instance.id, [
-                {"path": "state.loop_item", "value": item},
-                {"path": "state.loop_index", "value": loop_context["index"]}
-            ])
+        # Use execution context for proper loop management if available
+        if context:
+            # Check if there's already a current loop with this step ID
+            current_loop = context.current_loop()
             
-            # Add body steps
+            if current_loop and current_loop.loop_id == step.id:
+                # Continuing existing loop - advance to next iteration
+                current_loop.advance_iteration()
+                
+                # Check if loop is complete
+                if current_loop.is_complete():
+                    # Exit the loop
+                    context.exit_loop()
+                    return {"executed": False, "reason": "All items processed"}
+            else:
+                # Create new foreach loop
+                from .control_flow import LoopState
+                loop_state = LoopState(
+                    loop_type="foreach",
+                    loop_id=step.id,
+                    items=items,
+                    max_iterations=len(items)
+                )
+                # Prepare initial loop variables
+                loop_state.prepare_for_iteration()
+                context.enter_loop(loop_state)
+        else:
+            # Fallback to queue-based loop management
+            # Use a stable loop ID that won't change across iterations
+            stable_loop_id = getattr(step, '_original_id', step.id)
+            
+            loop_context = None
+            for ctx in queue.loop_stack:
+                if ctx["context"].get("loop_id") == stable_loop_id:
+                    loop_context = ctx["context"]
+                    break
+            
+            if not loop_context:
+                # First iteration - create new loop context
+                loop_context = {
+                    "loop_id": stable_loop_id,
+                    "items": items,
+                    "index": 0
+                }
+                queue.push_loop_context("foreach", loop_context)
+                
+                # Store the original step ID for consistency across iterations
+                if not hasattr(step, '_original_id'):
+                    step._original_id = step.id
+        
+        # Get current loop state
+        current_loop = context.current_loop() if context else None
+        
+        if current_loop and not current_loop.is_complete():
+            # Add body steps for current iteration
             workflow_steps = []
             for i, step_def in enumerate(body):
                 if "id" not in step_def:
                     step_def["id"] = f"{step.id}.body.{i}"
+                # Extract execution_context if present
+                execution_context = step_def.get("execution_context", "server")
+                definition_copy = {k: v for k, v in step_def.items() if k not in ["id", "type", "execution_context"]}
+                
                 workflow_step = WorkflowStep(
                     id=step_def["id"],
                     type=step_def["type"],
-                    definition={k: v for k, v in step_def.items() if k not in ["id", "type"]}
+                    definition=definition_copy,
+                    execution_context=execution_context
                 )
                 workflow_steps.append(workflow_step)
             
@@ -306,24 +533,74 @@ class StepProcessor:
             workflow_steps.append(step)
             
             queue.prepend_steps(workflow_steps)
-            loop_context["index"] += 1
             
-            return {"executed": False, "index": loop_context["index"] - 1}
-        else:
-            # Loop complete - clean up loop variables
-            queue.pop_loop_context()
-            # Set loop variables to None (cleanup)
-            self.state_manager.update(instance.id, [
-                {"path": "state.loop_item", "value": None},
-                {"path": "state.loop_index", "value": None}
-            ])
-            return {"executed": False, "reason": "All items processed"}
+            return {"executed": False, "index": current_loop.current_item_index}
+        elif context and not current_loop:
+            # Fallback to queue-based processing
+            loop_context = None
+            for ctx in queue.loop_stack:
+                if ctx["context"].get("loop_id") == step.id:
+                    loop_context = ctx["context"]
+                    break
+            
+            if loop_context and loop_context["index"] < len(loop_context["items"]):
+                # Set legacy loop variables in state for backward compatibility
+                # TODO: Remove this legacy behavior in future version
+                import warnings
+                warnings.warn(
+                    "Legacy loop variable management (state.loop_item, state.loop_index) is deprecated. "
+                    "Use scoped loop variables ({{loop.item}}, {{loop.index}}) instead.",
+                    DeprecationWarning,
+                    stacklevel=2
+                )
+                item = loop_context["items"][loop_context["index"]]
+                self.state_manager.update(instance.id, [
+                    {"path": "state.loop_item", "value": item},
+                    {"path": "state.loop_index", "value": loop_context["index"]}
+                ], context)
+                
+                # Add body steps
+                workflow_steps = []
+                for i, step_def in enumerate(body):
+                    if "id" not in step_def:
+                        step_def["id"] = f"{step.id}.body.{i}"
+                    # Extract execution_context if present
+                    execution_context = step_def.get("execution_context", "server")
+                    definition_copy = {k: v for k, v in step_def.items() if k not in ["id", "type", "execution_context"]}
+                    
+                    workflow_step = WorkflowStep(
+                        id=step_def["id"],
+                        type=step_def["type"],
+                        definition=definition_copy,
+                        execution_context=execution_context
+                    )
+                    workflow_steps.append(workflow_step)
+                
+                # Add the foreach step again for next iteration
+                workflow_steps.append(step)
+                
+                queue.prepend_steps(workflow_steps)
+                loop_context["index"] += 1
+                
+                return {"executed": False, "index": loop_context["index"] - 1}
+            elif loop_context:
+                # Loop complete - clean up loop variables
+                queue.pop_loop_context()
+                # Clean up legacy loop variables
+                # TODO: Remove this legacy cleanup in future version
+                self.state_manager.update(instance.id, [
+                    {"path": "state.loop_item", "value": None},
+                    {"path": "state.loop_index", "value": None}
+                ], context)
+                return {"executed": False, "reason": "All items processed"}
+        
+        return {"executed": False, "reason": "Loop completed"}
     
     def process_break(self, queue: WorkflowQueue) -> dict[str, Any]:
         """Process a break statement by exiting the current loop."""
         current_loop = queue.get_current_loop()
         if not current_loop:
-            return create_workflow_error("break used outside of loop", None, None)
+            return create_workflow_error("break used outside of loop", "", "")
         
         # Remove all steps until we find the loop step
         loop_id = current_loop["context"]["loop_id"]
@@ -348,7 +625,7 @@ class StepProcessor:
         """Process a continue statement by skipping to next iteration."""
         current_loop = queue.get_current_loop()
         if not current_loop:
-            return create_workflow_error("continue used outside of loop", None, None)
+            return create_workflow_error("continue used outside of loop", "", "")
         
         # Remove all steps until we find the loop step
         loop_id = current_loop["context"]["loop_id"]
@@ -418,10 +695,63 @@ class StepProcessor:
         
         return {"executed": True, "step_advance": True}
     
+    def _build_scoped_context(self, instance: WorkflowInstance, state: dict[str, Any], 
+                             execution_context: ExecutionContext | None = None) -> dict[str, dict[str, Any]]:
+        """Build scoped context structure for template resolution.
+        
+        Args:
+            instance: WorkflowInstance with workflow inputs
+            state: Current workflow state (from state manager)
+            execution_context: Optional execution context for loop and global variables
+            
+        Returns:
+            Scoped context dictionary with keys: 'inputs', 'global', 'this', 'loop'
+        """
+        scoped_context = {
+            "inputs": instance.inputs.copy() if instance and instance.inputs else {},
+            "global": execution_context.global_variables.copy() if execution_context else {},
+            "this": {
+                **state.get("state", {}),
+                **state.get("computed", {})
+            },
+            "loop": self._get_current_loop_variables(execution_context)
+        }
+        return scoped_context
+    
+    def _get_current_loop_variables(self, execution_context: ExecutionContext | None) -> dict[str, Any]:
+        """Extract current loop variables from execution context with nested loop support.
+        
+        Args:
+            execution_context: Execution context containing loop state
+            
+        Returns:
+            Dictionary containing loop variables from nested loops (innermost takes precedence)
+        """
+        if not execution_context:
+            return {}
+            
+        # Get nested loop variables with proper isolation
+        return execution_context.get_nested_loop_variables()
+    
     def _replace_variables(self, obj: Any, state: dict[str, Any], preserve_conditions: bool = False, 
-                          instance: WorkflowInstance | None = None, preserve_templates: bool = False) -> Any:
-        """Replace template variables in an object."""
-        # Create evaluation context with workflow inputs at top level
+                          instance: WorkflowInstance | None = None, preserve_templates: bool = False,
+                          execution_context: ExecutionContext | None = None) -> Any:
+        """Replace template variables in an object using scoped contexts.
+        
+        Args:
+            obj: Object to process for template variables
+            state: Legacy state context for backward compatibility
+            preserve_conditions: Whether to preserve condition strings
+            instance: WorkflowInstance containing workflow inputs
+            preserve_templates: Whether to preserve template expressions
+            execution_context: Execution context for scoped variable resolution
+        """
+        # Build scoped context for enhanced expression evaluator
+        scoped_context = None
+        if instance or execution_context:
+            scoped_context = self._build_scoped_context(instance, state, execution_context)
+        
+        # Create legacy evaluation context for backward compatibility
         eval_context = state.copy()
         if instance and instance.inputs:
             # Add workflow inputs at top level for template evaluation
@@ -435,7 +765,7 @@ class StepProcessor:
                     if k == "condition":
                         result[k] = v  # Keep condition as-is
                     else:
-                        result[k] = self._replace_variables(v, state, preserve_conditions, instance, preserve_templates)
+                        result[k] = self._replace_variables(v, state, preserve_conditions, instance, preserve_templates, execution_context)
                 return result
             # Special handling for control flow steps - preserve items/condition fields
             elif preserve_templates and ("items" in obj or "condition" in obj):
@@ -444,12 +774,12 @@ class StepProcessor:
                     if k in ["items", "condition"]:
                         result[k] = v  # Keep template expression as-is
                     else:
-                        result[k] = self._replace_variables(v, state, preserve_conditions, instance, preserve_templates)
+                        result[k] = self._replace_variables(v, state, preserve_conditions, instance, preserve_templates, execution_context)
                 return result
             else:
-                return {k: self._replace_variables(v, state, preserve_conditions, instance, preserve_templates) for k, v in obj.items()}
+                return {k: self._replace_variables(v, state, preserve_conditions, instance, preserve_templates, execution_context) for k, v in obj.items()}
         elif isinstance(obj, list):
-            return [self._replace_variables(item, state, preserve_conditions, instance, preserve_templates) for item in obj]
+            return [self._replace_variables(item, state, preserve_conditions, instance, preserve_templates, execution_context) for item in obj]
         elif isinstance(obj, str):
             # Handle template strings with multiple variables
             if "{{" in obj and "}}" in obj:
@@ -460,7 +790,8 @@ class StepProcessor:
                     # For single expressions, return the actual value (not stringified)
                     expr = single_expr_match.group(1).strip()
                     try:
-                        result = self.expression_evaluator.evaluate(expr, eval_context)
+                        # Use enhanced expression evaluator with scoped context
+                        result = self.expression_evaluator.evaluate(expr, eval_context, scoped_context)
                         # For single expressions, return the actual value
                         if result is not None:
                             return result
@@ -498,7 +829,8 @@ class StepProcessor:
                     def replace_template(match):
                         expr = match.group(1).strip()
                         try:
-                            result = self.expression_evaluator.evaluate(expr, eval_context)
+                            # Use enhanced expression evaluator with scoped context
+                            result = self.expression_evaluator.evaluate(expr, eval_context, scoped_context)
                             # Handle None/undefined values with smart fallbacks
                             if result is None:
                                 return self._get_fallback_value(expr, eval_context)
@@ -517,21 +849,28 @@ class StepProcessor:
     def _get_fallback_value(self, expr: str, state: dict[str, Any]) -> str:
         """Provide intelligent fallback values for undefined template variables."""
         # Common fallback patterns for better error messages
+        # Note: state here is nested state structure {inputs: {...}, computed: {...}, state: {...}}
+        state_section = state.get("state", {})
+        inputs_section = state.get("inputs", {})
+        
         fallback_map = {
-            "raw.file_path": state.get("item", state.get("file_path", "unknown_file")),
-            "file_path": state.get("item", state.get("file_path", "unknown_file")),
-            "raw.attempt_number": str(state.get("attempt_number", "0")),
-            "raw.max_attempts": str(state.get("max_attempts", "10")),
-            "max_attempts": str(state.get("max_attempts", "10")),
-            "item": state.get("item", "unknown_item"),
-            "task_id": state.get("task_id", "unknown_task"),
+            "inputs.file_path": inputs_section.get("file_path", state_section.get("item", "unknown_file")),
+            "file_path": inputs_section.get("file_path", state_section.get("item", "unknown_file")),
+            "inputs.attempt_number": str(inputs_section.get("attempt_number", "0")),
+            "state.attempt_number": str(state_section.get("attempt_number", "0")),  # Legacy - deprecated
+            "inputs.max_attempts": str(inputs_section.get("max_attempts", "10")),
+            "max_attempts": str(inputs_section.get("max_attempts", "10")),
+            "item": state_section.get("item", inputs_section.get("item", "unknown_item")),
+            "state.loop_item": state_section.get("loop_item", "unknown_item"),  # Legacy - deprecated
+            "state.loop_index": str(state_section.get("loop_index", "0")),  # Legacy - deprecated
+            "task_id": state_section.get("task_id", inputs_section.get("task_id", "unknown_task")),
         }
         
         # Check for direct matches first
         if expr in fallback_map:
             return str(fallback_map[expr])
         
-        # Check for nested property access patterns (e.g., raw.step_results.hints.success)
+        # Check for nested property access patterns (e.g., inputs.step_results.hints.success)
         if "." in expr:
             parts = expr.split(".")
             if len(parts) >= 2:
@@ -565,3 +904,123 @@ class StepProcessor:
         
         # Return a descriptive placeholder instead of empty string
         return f"<{expr}>"
+    
+    def _flatten_state(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Flatten nested state structure for compatibility with existing processors."""
+        flattened = {}
+        
+        def flatten_dict(d: dict[str, Any], prefix: str = "") -> None:
+            for key, value in d.items():
+                full_key = f"{prefix}.{key}" if prefix else key
+                if isinstance(value, dict):
+                    flatten_dict(value, full_key)
+                else:
+                    flattened[full_key] = value
+        
+        flatten_dict(state)
+        return flattened
+    
+    def _process_user_message(self, instance: WorkflowInstance, step: WorkflowStep,
+                             processed_definition: dict[str, Any]) -> dict[str, Any]:
+        """Process a user message step using the UserMessageProcessor."""
+        result = UserMessageProcessor.process(processed_definition, instance.id, self.state_manager)
+        
+        # Add step identification to the result
+        if "agent_action" in result:
+            result["agent_action"]["step_id"] = step.id
+        
+        return {
+            "id": step.id,
+            "type": step.type,
+            "definition": processed_definition,
+            "agent_action": result.get("agent_action", {}),
+            "execution_context": "client"
+        }
+    
+    def _process_user_input(self, instance: WorkflowInstance, step: WorkflowStep,
+                           processed_definition: dict[str, Any]) -> dict[str, Any]:
+        """Process a user input step using the UserInputProcessor from user_message.py."""
+        # Import the correct UserInputProcessor from user_message.py
+        from .steps.user_message import UserInputProcessor as UserInputProcessorStatic
+        result = UserInputProcessorStatic.process(processed_definition, instance.id, self.state_manager)
+        
+        # Add step identification to the result
+        if "agent_action" in result:
+            result["agent_action"]["step_id"] = step.id
+        
+        return {
+            "id": step.id,
+            "type": step.type,
+            "definition": processed_definition,
+            "agent_action": result.get("agent_action", {}),
+            "execution_context": "client"
+        }
+    
+    def _process_mcp_call(self, instance: WorkflowInstance, step: WorkflowStep,
+                         processed_definition: dict[str, Any]) -> dict[str, Any]:
+        """Process an MCP call step using the MCPCallProcessor."""
+        result = MCPCallProcessor.process(processed_definition, instance.id, self.state_manager)
+        
+        # Add step identification to the result
+        if "agent_action" in result:
+            result["agent_action"]["step_id"] = step.id
+        
+        return {
+            "id": step.id,
+            "type": step.type,
+            "definition": processed_definition,
+            "agent_action": result.get("agent_action", {}),
+            "execution_context": "client"
+        }
+    
+    def _process_parallel_foreach(self, instance: WorkflowInstance, step: WorkflowStep,
+                                 processed_definition: dict[str, Any]) -> dict[str, Any]:
+        """Process a parallel_foreach step using the ParallelForEachProcessor."""
+        # Create ParallelForEachStep from definition
+        try:
+            parallel_step = ParallelForEachStep(
+                items=processed_definition.get("items", ""),
+                sub_agent_task=processed_definition.get("sub_agent_task", "default"),
+                max_parallel=processed_definition.get("max_parallel", 10),
+                wait_for_all=processed_definition.get("wait_for_all", True),
+                sub_agent_prompt_override=processed_definition.get("sub_agent_prompt_override"),
+                timeout_seconds=processed_definition.get("timeout_seconds")
+            )
+            
+            # Get current state for expression evaluation
+            current_state = self.state_manager.read(instance.id)
+            
+            # Process the parallel foreach step
+            result = self.parallel_foreach_processor.process_parallel_foreach(
+                parallel_step, current_state, step.id, instance.id
+            )
+            
+            # Check for errors
+            if "error" in result:
+                return {
+                    "id": step.id,
+                    "type": step.type,
+                    "definition": processed_definition,
+                    "execution_context": "client",
+                    "error": result["error"]
+                }
+            
+            # Return the processed parallel step
+            parallel_step_result = result.get("step", {})
+            return {
+                "id": step.id,
+                "type": step.type,
+                "definition": parallel_step_result.get("definition", processed_definition),
+                "instructions": parallel_step_result.get("instructions", ""),
+                "execution_context": "client",
+                "requires_sub_agents": True
+            }
+            
+        except Exception as e:
+            return {
+                "id": step.id,
+                "type": step.type,
+                "definition": processed_definition,
+                "execution_context": "client",
+                "error": f"Failed to process parallel_foreach: {str(e)}"
+            }

@@ -14,23 +14,23 @@ class TestWorkflowState:
     def test_workflow_state_initialization(self):
         """Test that WorkflowState initializes with three tiers"""
         # Given
-        initial_state = {"raw": {"counter": 0}, "computed": {}, "state": {"version": "1.0"}}
+        initial_state = {"inputs": {"counter": 0}, "computed": {}, "state": {"version": "1.0"}}
 
         # When
         workflow_state = WorkflowState(**initial_state)
 
         # Then
-        assert workflow_state.raw["counter"] == 0
+        assert workflow_state.inputs["counter"] == 0
         assert workflow_state.computed == {}
         assert workflow_state.state["version"] == "1.0"
 
     def test_workflow_state_empty_initialization(self):
         """Test WorkflowState can be initialized empty"""
         # When
-        workflow_state = WorkflowState(raw={}, computed={}, state={})
+        workflow_state = WorkflowState(inputs={}, computed={}, state={})
 
         # Then
-        assert workflow_state.raw == {}
+        assert workflow_state.inputs == {}
         assert workflow_state.computed == {}
         assert workflow_state.state == {}
 
@@ -38,7 +38,7 @@ class TestWorkflowState:
         """Test WorkflowState with complex nested data"""
         # Given
         complex_state = {
-            "raw": {"counter": 0, "user": {"name": "Alice", "age": 30}, "items": ["a", "b", "c"]},
+            "inputs": {"counter": 0, "user": {"name": "Alice", "age": 30}, "items": ["a", "b", "c"]},
             "computed": {"double_counter": 0, "user_summary": "Alice (30)"},
             "state": {"version": "1.0", "config": {"debug": True}},
         }
@@ -47,8 +47,8 @@ class TestWorkflowState:
         workflow_state = WorkflowState(**complex_state)
 
         # Then
-        assert workflow_state.raw["user"]["name"] == "Alice"
-        assert workflow_state.raw["items"] == ["a", "b", "c"]
+        assert workflow_state.inputs["user"]["name"] == "Alice"
+        assert workflow_state.inputs["items"] == ["a", "b", "c"]
         assert workflow_state.computed["user_summary"] == "Alice (30)"
         assert workflow_state.state["config"]["debug"] is True
 
@@ -60,11 +60,11 @@ class TestComputedFieldDefinition:
         """Test computed field definition structure"""
         # Given
         field_def = ComputedFieldDefinition(
-            from_paths=["raw.value"], transform="input * 2", on_error="use_fallback", fallback=0
+            from_paths=["inputs.value"], transform="input * 2", on_error="use_fallback", fallback=0
         )
 
         # Then
-        assert field_def.from_paths == ["raw.value"]
+        assert field_def.from_paths == ["inputs.value"]
         assert field_def.transform == "input * 2"
         assert field_def.on_error == "use_fallback"
         assert field_def.fallback == 0
@@ -73,14 +73,14 @@ class TestComputedFieldDefinition:
         """Test computed field with multiple from_paths"""
         # Given
         field_def = ComputedFieldDefinition(
-            from_paths=["raw.a", "raw.b", "state.c"],
+            from_paths=["inputs.a", "inputs.b", "state.c"],
             transform="input[0] + input[1] + input[2]",
             on_error="propagate",
             fallback=None,
         )
 
         # Then
-        assert field_def.from_paths == ["raw.a", "raw.b", "state.c"]
+        assert field_def.from_paths == ["inputs.a", "inputs.b", "state.c"]
         assert field_def.transform == "input[0] + input[1] + input[2]"
         assert field_def.on_error == "propagate"
         assert field_def.fallback is None
@@ -92,7 +92,7 @@ class TestComputedFieldDefinition:
         for strategy in valid_strategies:
             # When
             field_def = ComputedFieldDefinition(
-                from_paths=["raw.value"], transform="input", on_error=strategy, fallback="default"
+                from_paths=["inputs.value"], transform="input", on_error=strategy, fallback="default"
             )
 
             # Then
@@ -102,7 +102,7 @@ class TestComputedFieldDefinition:
         """Test computed field with complex JavaScript transformation"""
         # Given
         field_def = ComputedFieldDefinition(
-            from_paths=["raw.items"],
+            from_paths=["inputs.items"],
             transform="input.filter(x => x > 5).map(x => x * 2)",
             on_error="use_fallback",
             fallback=[],

@@ -8,7 +8,7 @@ config:
 
 # Initial state
 default_state:
-  raw:
+  state:
     git_output: ""
     processing_results: {}
     success_count: 0
@@ -17,13 +17,19 @@ default_state:
 
 # Computed state fields
 state_schema:
+  state:
+    git_output: "string"
+    processing_results: "object"
+    success_count: "number"
+    failure_count: "number"
+    comparison_target: "string"
   computed:
     changed_files:
-      from: "raw.git_output"
+      from: "this.git_output"
       transform: "input.split('\\n').filter(line => line.trim() !== '')"
 
     code_files:
-      from: "computed.changed_files"
+      from: "this.changed_files"
       transform: |
         input.filter(file => {
           const codeExts = ['.py', '.pyi', '.ts', '.tsx', '.js', '.jsx', '.java', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.cs', '.rb'];
@@ -35,20 +41,24 @@ state_schema:
         })
 
     total_files:
-      from: "computed.code_files"
+      from: "this.code_files"
       transform: "input.length"
 
     has_files:
-      from: "computed.code_files"
+      from: "this.code_files"
       transform: "input.length > 0"
 
     all_processed:
-      from: ["raw.processing_results", "computed.code_files"]
+      from: ["this.processing_results", "this.code_files"]
       transform: "Object.keys(input[0]).length === input[1].length"
 
     failed_files:
-      from: "raw.processing_results"
+      from: "this.processing_results"
       transform: "Object.entries(input).filter(([_, result]) => !result.success).map(([file, _]) => file)"
+
+    processed_count:
+      from: "this.processing_results"
+      transform: "Object.keys(input).length"
 
 # Input parameters
 inputs:
@@ -69,113 +79,107 @@ steps:
   - id: "welcome_message"
     type: "user_message"
     message: "Starting code standards enforcement workflow..."
-
-  # Step 1: Initialize and get changed files
-  - id: "init_comparison_target"
-    type: "state_update"
-    path: "raw.comparison_target"
-    value: "{{ commit || compare_to || 'HEAD' }}"
-
   - id: "get_changed_files"
     type: "conditional"
-    condition: "{{ commit }}"
+    condition: "{{ inputs.commit }}"
     then_steps:
       - id: "commit_message"
         type: "user_message"
-        message: "Getting files changed in commit {{ commit }}..."
+        message: "Getting files changed in commit {{ inputs.commit }}..."
 
       - id: "git_diff_tree"
         type: "shell_command"
-        command: "git diff-tree --no-commit-id --name-only -r {{ commit }}"
+        command: "git diff-tree --no-commit-id --name-only -r {{ inputs.commit }}"
         state_update:
-          path: "raw.git_output"
+          path: "this.git_output"
           value: "stdout"
     else_steps:
       - id: "diff_message"
         type: "user_message"
-        message: "Checking for changed files against {{ compare_to || 'HEAD' }}..."
+        message: "Checking for changed files against {{ inputs.compare_to || 'HEAD' }}..."
 
       - id: "git_diff_status"
         type: "shell_command"
-        command: "git diff --name-only {{ compare_to || 'HEAD' }} && git ls-files --others --exclude-standard"
+        command: "git diff --name-only {{ inputs.compare_to || 'HEAD' }} && git ls-files --others --exclude-standard"
         state_update:
-          path: "raw.git_output"
+          path: "this.git_output"
           value: "stdout"
 
   # Step 3: Check if we have files to process
   - id: "check_files_to_process"
     type: "conditional"
-    condition: "{{ computed.has_files }}"
+    condition: "{{ this.has_files }}"
     then_steps:
       - id: "files_found_message"
         type: "user_message"
-        message: "Found {{ computed.total_files }} code files to process"
+        message: "Found {{ this.total_files }} code files to process"
     else_steps:
       - id: "no_files_message"
         type: "user_message"
         message: "No code files found in the changes"
-      - id: "exit_workflow"
-        type: "break"
 
-  # Step 4: Process files in parallel
-  - id: "process_files_parallel"
-    type: "parallel_foreach"
-    items: "{{ computed.code_files }}"
-    max_parallel: 10
-    sub_agent_task: "enforce_standards_on_file"
-    timeout_seconds: 600
-
-  # Step 5: Wait for all files to be processed
-  - id: "wait_for_completion"
-    type: "while_loop"
-    condition: "{{ !computed.all_processed }}"
-    max_iterations: 100
-    body:
-      - id: "progress_message"
-        type: "user_message"
-        message: "Processing files... ({{ Object.keys(raw.processing_results).length }}/{{ computed.total_files }} complete)"
-
-      - id: "wait_step"
-        type: "shell_command"
-        command: "sleep 2"
-
-  # Step 6: Generate summary
-  - id: "summary_message"
-    type: "user_message"
-    message: |
-      ====== Code Standards Enforcement Summary ======
-      Total files processed: {{ computed.total_files }}
-      ✅ Successfully fixed: {{ raw.success_count }} files
-    format: "text"
-
-  - id: "check_failures"
+  # Step 4: Process files in parallel (only if files exist)
+  - id: "check_files_exist"
     type: "conditional"
-    condition: "{{ raw.failure_count > 0 }}"
+    condition: "{{ this.has_files }}"
     then_steps:
-      - id: "failures_message"
-        type: "user_message"
-        message: "❌ Failed to fix: {{ raw.failure_count }} files"
+      - id: "process_files_parallel"
+        type: "parallel_foreach"
+        items: "{{ this.code_files }}"
+        max_parallel: 10
+        sub_agent_task: "enforce_standards_on_file"
+        timeout_seconds: 600
 
-      - id: "list_failed_files"
-        type: "foreach"
-        items: "{{ computed.failed_files }}"
-        variable_name: "failed_file"
+      # Wait for all files to be processed
+      - id: "wait_for_completion"
+        type: "while_loop"
+        condition: "{{ !this.all_processed }}"
+        max_iterations: 100
         body:
-          - id: "failed_file_details"
+          - id: "progress_message"
             type: "user_message"
-            message: |
-              - {{ failed_file }}
-                Attempts: {{ raw.processing_results[failed_file].attempts }}
-                Last error: {{ raw.processing_results[failed_file].last_error }}
+            message: "Processing files... ({{ this.processed_count }}/{{ this.total_files }} complete)"
+
+          - id: "wait_step"
+            type: "wait_step"
+            message: "Waiting for sub-agents to complete processing..."
+
+      # Generate summary
+      - id: "summary_message"
+        type: "user_message"
+        message: |
+          ====== Code Standards Enforcement Summary ======
+          Total files processed: {{ this.total_files }}
+          ✅ Successfully fixed: {{ this.success_count }} files
+        format: "text"
+
+      - id: "check_failures"
+        type: "conditional"
+        condition: "{{ this.failure_count > 0 }}"
+        then_steps:
+          - id: "failures_message"
+            type: "user_message"
+            message: "❌ Failed to fix: {{ this.failure_count }} files"
+
+          - id: "list_failed_files"
+            type: "foreach"
+            items: "{{ this.failed_files }}"
+            body:
+              - id: "failed_file_details"
+                type: "user_message"
+                message: |
+                  - {{ item }}
+                    Attempts: {{ this.processing_results[item].attempts }}
+                    Last error: {{ this.processing_results[item].last_error }}
             format: "text"
 
-      - id: "final_message_with_failures"
-        type: "user_message"
-        message: "\nAll changes have been left uncommitted. Review and commit when ready."
-    else_steps:
-      - id: "final_message_success"
-        type: "user_message"
-        message: "\nAll changes have been left uncommitted. Review and commit when ready."
+          - id: "final_message_with_failures"
+            type: "user_message"
+            message: "\nAll changes have been left uncommitted. Review and commit when ready."
+        else_steps:
+          - id: "final_message_success"
+            type: "user_message"
+            message: "\nAll changes have been left uncommitted. Review and commit when ready."
 
 # Sub-agent task definition
 sub_agent_tasks:
@@ -194,222 +198,183 @@ sub_agent_tasks:
         default: 10
 
     default_state:
-      raw:
-        attempt_number: 0
+      state:
+        attempt_number: 1  # Start at 1 since we don't have state_update
         success: false
         last_error: ""
-        step_results:
-          hints: -1  # -1 = not started, 0 = success, >0 = error count
-          lint: -1   # -1 = not started, 0 = success, >0 = error count
-          typescript: -1  # -1 = not started, 0 = success, >0 = error count
+        lint_tool_output: null
+        typescript_tool_output: null
 
     state_schema:
+      state:
+        attempt_number: "number"
+        success: "boolean"
+        last_error: "string"
+        lint_tool_output: "object"
+        typescript_tool_output: "object"
       computed:
         is_typescript_file:
-          from: "{{ file_path }}"
+          from: "inputs.file_path"
           transform: "input.endsWith('.ts') || input.endsWith('.tsx')"
 
-        hints_completed:
-          from: "raw.step_results"
-          transform: "input.hints === 0"  # 0 = success, -1 = not started, >0 = errors
-
         lint_completed:
-          from: "raw.step_results"
-          transform: "input.lint === 0"   # 0 = success, -1 = not started, >0 = errors
+          from: "this.lint_tool_output"
+          transform: "input && input.success && (!input.data.errors || input.data.errors.length === 0)"
 
         typescript_completed:
-          from: ["raw.step_results", "computed.is_typescript_file"]
-          transform: "!input[1] || input[0].typescript === 0"  # Skip if not TS file, or 0 = success
+          from: ["this.typescript_tool_output", "this.is_typescript_file"]
+          transform: "!input[1] || (input[0] && input[0].success && (!input[0].data.errors || input[0].data.errors.length === 0))"
 
         all_steps_completed:
-          from: ["computed.hints_completed", "computed.lint_completed", "computed.typescript_completed"]
-          transform: "input[0] && input[1] && input[2]"
+          from: ["this.lint_completed", "this.typescript_completed"]
+          transform: "input[0] && input[1]"
 
         can_continue:
-          from: ["raw.attempt_number", "{{ max_attempts }}", "computed.all_steps_completed"]
+          from: ["loop.iteration", "inputs.max_attempts", "this.all_steps_completed"]
           transform: "input[0] < input[1] && !input[2]"
 
     steps:
       # Main processing loop matching original prompt template logic
       - id: "standards_enforcement_loop"
         type: "while_loop"
-        condition: "{{ computed.can_continue }}"
+        condition: "{{ this.can_continue }}"
         max_iterations: 10
         body:
-          - id: "start_attempt"
-            type: "state_update"
-            path: "raw.attempt_number"
-            value: "{{ raw.attempt_number + 1 }}"
+          # Attempt counter is managed by the while loop
 
           - id: "attempt_message"
             type: "user_message"
-            message: "Starting attempt {{ raw.attempt_number }} for {{ file_path }}"
+            message: "Starting attempt {{ loop.iteration }} for {{ inputs.file_path }}"
 
           # Step 1: Get hints for the file using aromcp.hints_for_files
           - id: "get_hints_step"
             type: "conditional"
-            condition: "{{ !computed.hints_completed }}"
+            condition: "{{ loop.iteration === 1 }}"
             then_steps:
               - id: "get_hints"
                 type: "mcp_call"
                 tool: "aromcp.hints_for_files"
                 parameters:
-                  file_paths: ["{{ file_path }}"]
+                  file_paths: ["{{ inputs.file_path }}"]
 
               - id: "apply_hints_instruction"
-                type: "agent_task"
-                prompt: "Review the hints and apply ALL suggested improvements to {{ file_path }}. Apply fixes carefully to maintain functionality."
-
-              - id: "store_hints_success"
-                type: "state_update"
-                path: "raw.step_results.hints"
-                value: 0
+                type: "agent_prompt"
+                prompt: "Review the hints and apply ALL suggested improvements to {{ inputs.file_path }}. Apply fixes carefully to maintain functionality."
 
           # Step 3: Run aromcp.lint_project with use_eslint_standards=true
           - id: "lint_step"
             type: "conditional"
-            condition: "{{ computed.hints_completed && !computed.lint_completed }}"
+            condition: "{{ !this.lint_completed }}"
             then_steps:
               - id: "run_lint"
                 type: "mcp_call"
                 tool: "aromcp.lint_project"
                 parameters:
-                  use_eslint_standards: true
-                store_result: "raw.lint_tool_output"
+                  use_eslint_standards: true,
+                  files: ["{{ inputs.file_path }}"]
+                store_result: "this.lint_tool_output"
 
               - id: "process_lint_results"
                 type: "conditional"
-                condition: "{{ raw.lint_tool_output.success && (!raw.lint_tool_output.data.errors || raw.lint_tool_output.data.errors.length === 0) }}"
+                condition: "{{ this.lint_tool_output.success && (!this.lint_tool_output.data.errors || this.lint_tool_output.data.errors.length === 0) }}"
                 then_steps:
                   - id: "lint_success"
-                    type: "state_update"
-                    path: "raw.step_results.lint"
-                    value: 0
+                    type: "user_message"
+                    message: "✓ Lint check passed"
                 else_steps:
                   - id: "fix_lint_instruction"
-                    type: "agent_task"
-                    prompt: "Fix any linting errors or warnings found in {{ file_path }}. Use the file editing tools to make changes, then re-run all checks."
+                    type: "agent_prompt"
+                    prompt: "Fix any linting errors or warnings found in {{ inputs.file_path }}. Use the file editing tools to make changes, then re-run all checks."
 
-                  - id: "lint_partial"
-                    type: "state_update"
-                    path: "raw.step_results.lint"
-                    value: "{{ raw.lint_tool_output.data.errors.length || 0 }}"
+                  # Lint errors will be tracked in the tool output
 
           # Step 5: Run aromcp.check_typescript (if it's a TypeScript/JavaScript file)
           - id: "typescript_step"
             type: "conditional"
-            condition: "{{ computed.is_typescript_file && computed.lint_completed && !computed.typescript_completed }}"
+            condition: "{{ this.is_typescript_file && this.lint_completed && !this.typescript_completed }}"
             then_steps:
               - id: "run_typescript"
                 type: "mcp_call"
                 tool: "aromcp.check_typescript"
                 parameters:
-                  file_paths: ["{{ file_path }}"]
-                store_result: "raw.typescript_tool_output"
+                  files: ["{{ inputs.file_path }}"]
+                store_result: "this.typescript_tool_output"
 
               - id: "process_typescript_results"
                 type: "conditional"
-                condition: "{{ raw.typescript_tool_output.success && (!raw.typescript_tool_output.data.errors || raw.typescript_tool_output.data.errors.length === 0) }}"
+                condition: "{{ this.typescript_tool_output.success && (!this.typescript_tool_output.data.errors || this.typescript_tool_output.data.errors.length === 0) }}"
                 then_steps:
                   - id: "typescript_success"
-                    type: "state_update"
-                    path: "raw.step_results.typescript"
-                    value: 0
+                    type: "user_message"
+                    message: "✓ TypeScript check passed"
                 else_steps:
                   - id: "fix_typescript_instruction"
-                    type: "agent_task"
-                    prompt: "Fix any TypeScript errors found in {{ file_path }}. Use the file editing tools to make changes, then re-run all checks."
+                    type: "agent_prompt"
+                    prompt: "Fix any TypeScript errors found in {{ inputs.file_path }}. Use the file editing tools to make changes, then re-run all checks."
 
-                  - id: "typescript_partial"
-                    type: "state_update"
-                    path: "raw.step_results.typescript"
-                    value: "{{ raw.typescript_tool_output.data.errors.length || 0 }}"
+                  # TypeScript errors will be tracked in the tool output
 
           # Auto-complete TypeScript for non-TS files
           - id: "skip_typescript_for_non_ts"
             type: "conditional"
-            condition: "{{ !computed.is_typescript_file && computed.lint_completed }}"
+            condition: "{{ !this.is_typescript_file && this.lint_completed }}"
             then_steps:
               - id: "auto_complete_typescript"
-                type: "state_update"
-                path: "raw.step_results.typescript"
-                value: 0
+                type: "user_message"
+                message: "⏭️ Skipping TypeScript check for non-TS file"
 
       # Final result processing matching original prompt template requirements
       - id: "final_result_processing"
         type: "conditional"
-        condition: "{{ computed.all_steps_completed }}"
+        condition: "{{ this.all_steps_completed }}"
         then_steps:
-          - id: "mark_final_success"
-            type: "state_update"
-            path: "raw.success"
-            value: true
+          # Success will be communicated via message
 
           - id: "success_message"
             type: "user_message"
-            message: "✅ Successfully enforced standards on {{ file_path }} in {{ raw.attempt_number }} attempts"
+            message: "✅ Successfully enforced standards on {{ inputs.file_path }} in {{ loop.iteration }} attempts"
         else_steps:
-          - id: "analyze_failure_reason"
-            type: "state_update"
-            path: "raw.failure_analysis"
-            value: |
-              {{
-                !computed.hints_completed ? 'Hints step failed or never completed' :
-                !computed.lint_completed ? 'Linting errors not resolved' :
-                computed.is_typescript_file && !computed.typescript_completed ? 'TypeScript errors not resolved' :
-                raw.attempt_number >= max_attempts ? 'Maximum attempts exceeded' :
-                'Unknown failure condition'
-              }}
+          # Failure analysis will be shown in messages
 
-          - id: "mark_final_failure"
-            type: "state_update"
-            path: "raw.last_error"
-            value: "Failed to complete all standards checks after {{ raw.attempt_number }} attempts. Reason: {{ raw.failure_analysis }}"
+          # Failure details will be shown in messages
 
           - id: "failure_message"
             type: "user_message"
-            message: "❌ Failed to enforce standards on {{ file_path }} after {{ raw.attempt_number }} attempts"
-
-          - id: "failure_reason"
-            type: "user_message"
-            message: "🔍 Failure Analysis: {{ raw.failure_analysis }}"
+            message: "❌ Failed to enforce standards on {{ inputs.file_path }} after {{ loop.iteration }} attempts"
 
           - id: "failure_details"
             type: "user_message"
             message: |
               📊 Detailed Status:
-              - Hints: {{ computed.hints_completed ? '✅ Completed' : '❌ Failed' }}{{ !computed.hints_completed && raw.step_results.hints ? ' (' + (raw.step_results.hints.error || 'Unknown error') + ')' : '' }}
-              - Lint: {{ computed.lint_completed ? '✅ Completed' : '❌ Failed' }}{{ !computed.lint_completed && raw.step_results.lint ? ' (' + (raw.step_results.lint.errors || '0') + ' errors)' : '' }}
-              - TypeScript: {{ computed.typescript_completed ? '✅ Completed' : (computed.is_typescript_file ? '❌ Failed' : '⏭️ Skipped') }}{{ computed.is_typescript_file && !computed.typescript_completed && raw.step_results.typescript ? ' (' + (raw.step_results.typescript.errors || '0') + ' errors)' : '' }}
+              - Lint: {{ this.lint_completed ? '✅ Completed' : '❌ Failed' }}{{ this.lint_tool_output && this.lint_tool_output.data && this.lint_tool_output.data.errors ? ' (' + this.lint_tool_output.data.errors.length + ' errors)' : '' }}
+              - TypeScript: {{ this.typescript_completed ? '✅ Completed' : (this.is_typescript_file ? '❌ Failed' : '⏭️ Skipped') }}{{ this.is_typescript_file && this.typescript_tool_output && this.typescript_tool_output.data && this.typescript_tool_output.data.errors ? ' (' + this.typescript_tool_output.data.errors.length + ' errors)' : '' }}
 
               🔧 Debug Information:
-              - Max Attempts: {{ max_attempts }}
-              - Current Attempt: {{ raw.attempt_number }}
-              - Can Continue: {{ computed.can_continue }}
-              - All Steps Completed: {{ computed.all_steps_completed }}
-              - Is TypeScript File: {{ computed.is_typescript_file }}
+              - Max Attempts: {{ inputs.max_attempts }}
+              - Current Attempt: {{ loop.iteration }}
+              - Can Continue: {{ this.can_continue }}
+              - All Steps Completed: {{ this.all_steps_completed }}
+              - Is TypeScript File: {{ this.is_typescript_file }}
 
           - id: "diagnostic_dump"
             type: "user_message"
             message: |
               🔍 Full Diagnostic Information:
               ```
-              File: {{ file_path }}
-              TypeScript File: {{ computed.is_typescript_file || 'unknown' }}
+              File: {{ inputs.file_path }}
+              TypeScript File: {{ this.is_typescript_file || 'unknown' }}
 
               Execution State:
-              - Attempt: {{ raw.attempt_number }}
-              - Max Attempts: {{ max_attempts }}
-              - Can Continue: {{ computed.can_continue || 'unknown' }}
-              - All Completed: {{ computed.all_steps_completed || 'unknown' }}
+              - Attempt: {{ loop.iteration }}
+              - Max Attempts: {{ inputs.max_attempts }}
+              - Can Continue: {{ this.can_continue || 'unknown' }}
+              - All Completed: {{ this.all_steps_completed || 'unknown' }}
 
               Step Completion Status:
-              - Hints: {{ computed.hints_completed || 'unknown' }}
-              - Lint: {{ computed.lint_completed || 'unknown' }}
-              - TypeScript: {{ computed.typescript_completed || 'unknown' }}
+              - Lint: {{ this.lint_completed || 'unknown' }}
+              - TypeScript: {{ this.typescript_completed || 'unknown' }}
 
-              Raw Step Results:
-              - Hints Result: {{ raw.step_results.hints || 'not started' }}
-              - Lint Result: {{ raw.step_results.lint || 'not started' }}
-              - TypeScript Result: {{ raw.step_results.typescript || 'not started' }}
+              Tool Outputs:
+              - Lint Output: {{ this.lint_tool_output ? (this.lint_tool_output.success ? 'Success' : 'Failed') : 'Not run' }}
+              - TypeScript Output: {{ this.typescript_tool_output ? (this.typescript_tool_output.success ? 'Success' : 'Failed') : 'Not run' }}
               ```
