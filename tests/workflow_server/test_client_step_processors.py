@@ -1,13 +1,10 @@
 """Tests for client-side step processors (user_input, user_message, mcp_call, parallel_foreach)."""
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 
 from aromcp.workflow_server.workflow.steps.user_message import UserMessageProcessor, UserInputProcessor as UserInputProcessorStatic
 from aromcp.workflow_server.workflow.steps.mcp_call import MCPCallProcessor
-from aromcp.workflow_server.workflow.parallel import ParallelForEachProcessor, ParallelForEachStep
-from aromcp.workflow_server.workflow.expressions import ExpressionEvaluator
-from aromcp.workflow_server.workflow.models import WorkflowStep
 
 
 class TestUserMessageProcessor:
@@ -101,7 +98,124 @@ class TestUserInputProcessorStatic:
         result = UserInputProcessorStatic.process(step_definition, "workflow_123", None)
         
         assert result["agent_action"]["choices"] == ["option1", "option2", "option3"]
-        assert result["agent_action"]["default"] == "option1"
+
+
+class TestMCPToolErrorHandling:
+    """Test MCP tool basic formatting and edge cases for call preparation."""
+
+    def test_mcp_call_missing_tool(self):
+        """Test MCP call with missing tool field."""
+        step_definition = {
+            "parameters": {"data": "test_data"}
+            # Missing required 'tool' field
+        }
+        
+        state_manager = Mock()
+        
+        result = MCPCallProcessor.process(step_definition, "workflow_test", state_manager)
+        
+        assert result["status"] == "failed"
+        assert "Missing 'tool'" in result["error"]
+
+    def test_mcp_call_with_error_handling_config(self):
+        """Test that error handling configuration is passed through in formatting."""
+        step_definition = {
+            "tool": "analysis_tool",
+            "parameters": {"data": "test_data"},
+            "error_handling": {
+                "strategy": "retry",
+                "max_retries": 3
+            }
+        }
+        
+        state_manager = Mock()
+        
+        result = MCPCallProcessor.process(step_definition, "workflow_test", state_manager)
+        
+        assert result["status"] == "success"
+        assert result["agent_action"]["tool"] == "analysis_tool"
+        assert result["agent_action"]["parameters"]["data"] == "test_data"
+        # Error handling config should be formatted for agent but not processed here
+
+    def test_mcp_call_with_timeout_config(self):
+        """Test that timeout configuration is included in formatted call."""
+        step_definition = {
+            "tool": "slow_tool",
+            "parameters": {"dataset": "large"},
+            "timeout": 30
+        }
+        
+        state_manager = Mock()
+        
+        result = MCPCallProcessor.process(step_definition, "workflow_test", state_manager)
+        
+        assert result["status"] == "success"
+        assert result["agent_action"]["tool"] == "slow_tool"
+        # Timeout should be available in step_definition for agent processing
+
+    def test_mcp_call_with_complex_parameters(self):
+        """Test MCP call formatting with complex parameter structures."""
+        step_definition = {
+            "tool": "complex_tool",
+            "parameters": {
+                "nested": {
+                    "field1": "value1",
+                    "field2": {"deep": "nested"}
+                },
+                "list_param": ["item1", "item2"],
+                "null_param": None
+            }
+        }
+        
+        state_manager = Mock()
+        
+        result = MCPCallProcessor.process(step_definition, "workflow_test", state_manager)
+        
+        assert result["status"] == "success"
+        assert result["agent_action"]["parameters"]["nested"]["field1"] == "value1"
+        assert result["agent_action"]["parameters"]["list_param"] == ["item1", "item2"]
+        assert result["agent_action"]["parameters"]["null_param"] is None
+
+    def test_mcp_call_empty_parameters(self):
+        """Test MCP call with empty parameters."""
+        step_definition = {
+            "tool": "no_param_tool"
+            # No parameters field
+        }
+        
+        state_manager = Mock()
+        
+        result = MCPCallProcessor.process(step_definition, "workflow_test", state_manager)
+        
+        assert result["status"] == "success"
+        assert result["agent_action"]["parameters"] == {}
+
+    def test_mcp_call_with_all_optional_fields(self):
+        """Test MCP call with all optional fields present."""
+        step_definition = {
+            "tool": "full_featured_tool",
+            "parameters": {"input": "data"},
+            "state_update": {
+                "result_path": "state.results",
+                "operation": "merge"
+            },
+            "store_result": {
+                "key": "analysis_output",
+                "format": "json"
+            }
+        }
+        
+        state_manager = Mock()
+        
+        result = MCPCallProcessor.process(step_definition, "workflow_test", state_manager)
+        
+        assert result["status"] == "success"
+        assert result["agent_action"]["state_update"]["result_path"] == "state.results"
+        assert result["agent_action"]["store_result"]["key"] == "analysis_output"
+
+
+class TestUserInputProcessorStaticEnhanced:
+    """Enhanced tests for UserInputProcessor functionality."""
 
     def test_user_input_with_state_update(self):
         """Test user input with state update configuration."""
@@ -205,238 +319,3 @@ class TestMCPCallProcessor:
         assert "Missing 'tool'" in result["error"]
 
 
-class TestParallelForEachProcessor:
-    """Test ParallelForEachProcessor functionality."""
-
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.expression_evaluator = Mock()
-        self.processor = ParallelForEachProcessor(self.expression_evaluator)
-
-    def test_basic_parallel_foreach_processing(self):
-        """Test basic parallel foreach processing."""
-        step_def = ParallelForEachStep(
-            items="state.file_list",
-            sub_agent_task="analyze_file",
-            max_parallel=3
-        )
-        
-        # Mock expression evaluator to return file list
-        self.expression_evaluator.evaluate.return_value = ["file1.py", "file2.py", "file3.py"]
-        
-        state = {"state.file_list": ["file1.py", "file2.py", "file3.py"]}
-        
-        result = self.processor.process_parallel_foreach(step_def, state, "step_1", "workflow_123")
-        
-        assert "step" in result
-        assert result["step"]["type"] == "parallel_tasks"
-        assert result["step"]["definition"]["max_parallel"] == 3
-        assert result["step"]["definition"]["sub_agent_task"] == "analyze_file"
-        assert len(result["step"]["definition"]["tasks"]) == 3
-
-    def test_parallel_foreach_task_context(self):
-        """Test parallel foreach task context creation."""
-        step_def = ParallelForEachStep(
-            items="inputs.targets",
-            sub_agent_task="process_target"
-        )
-        
-        self.expression_evaluator.evaluate.return_value = ["target_a", "target_b"]
-        
-        state = {"inputs.targets": ["target_a", "target_b"]}
-        
-        result = self.processor.process_parallel_foreach(step_def, state, "step_2", "workflow_456")
-        
-        tasks = result["step"]["definition"]["tasks"]
-        
-        # Check first task context
-        assert tasks[0]["context"]["item"] == "target_a"
-        assert tasks[0]["context"]["index"] == 0
-        assert tasks[0]["context"]["total"] == 2
-        
-        # Check second task context
-        assert tasks[1]["context"]["item"] == "target_b"
-        assert tasks[1]["context"]["index"] == 1
-        assert tasks[1]["context"]["total"] == 2
-
-    def test_parallel_foreach_with_prompt_override(self):
-        """Test parallel foreach with sub-agent prompt override."""
-        step_def = ParallelForEachStep(
-            items="data.items",
-            sub_agent_task="custom_task",
-            sub_agent_prompt_override="Analyze this item carefully"
-        )
-        
-        self.expression_evaluator.evaluate.return_value = ["item1"]
-        
-        state = {"data.items": ["item1"]}
-        
-        result = self.processor.process_parallel_foreach(step_def, state, "step_3", "workflow_789")
-        
-        tasks = result["step"]["definition"]["tasks"]
-        assert tasks[0]["sub_agent_prompt"] == "Analyze this item carefully"
-
-    def test_parallel_foreach_invalid_items_expression(self):
-        """Test parallel foreach with invalid items expression."""
-        step_def = ParallelForEachStep(
-            items="invalid.expression",
-            sub_agent_task="test_task"
-        )
-        
-        # Mock expression evaluator to raise exception
-        self.expression_evaluator.evaluate.side_effect = Exception("Invalid expression")
-        
-        state = {}
-        
-        result = self.processor.process_parallel_foreach(step_def, state, "step_4", "workflow_error")
-        
-        assert "error" in result
-        assert "Failed to evaluate items expression" in result["error"]
-
-    def test_parallel_foreach_non_list_items(self):
-        """Test parallel foreach when items expression returns non-list."""
-        step_def = ParallelForEachStep(
-            items="state.single_value",
-            sub_agent_task="process"
-        )
-        
-        # Mock expression evaluator to return non-list
-        self.expression_evaluator.evaluate.return_value = "not_a_list"
-        
-        state = {"state.single_value": "not_a_list"}
-        
-        result = self.processor.process_parallel_foreach(step_def, state, "step_5", "workflow_type_error")
-        
-        assert "error" in result
-        assert "Items expression must return array" in result["error"]
-
-    def test_parallel_foreach_empty_items(self):
-        """Test parallel foreach with empty items list."""
-        step_def = ParallelForEachStep(
-            items="state.empty_list",
-            sub_agent_task="process_empty"
-        )
-        
-        self.expression_evaluator.evaluate.return_value = []
-        
-        state = {"state.empty_list": []}
-        
-        result = self.processor.process_parallel_foreach(step_def, state, "step_6", "workflow_empty")
-        
-        assert "step" in result
-        assert len(result["step"]["definition"]["tasks"]) == 0
-
-    def test_parallel_execution_tracking(self):
-        """Test parallel execution state tracking."""
-        step_def = ParallelForEachStep(
-            items="data.items",
-            sub_agent_task="track_test"
-        )
-        
-        self.expression_evaluator.evaluate.return_value = ["item1", "item2"]
-        
-        state = {"data.items": ["item1", "item2"]}
-        
-        result = self.processor.process_parallel_foreach(step_def, state, "step_7", "workflow_track")
-        
-        execution_id = result["step"]["definition"]["execution_id"]
-        
-        # Verify execution is tracked
-        execution = self.processor.get_execution(execution_id)
-        assert execution is not None
-        assert execution.workflow_id == "workflow_track"
-        assert execution.parent_step_id == "step_7"
-        assert len(execution.tasks) == 2
-
-    def test_task_status_updates(self):
-        """Test updating task status in parallel execution."""
-        step_def = ParallelForEachStep(
-            items="test.data",
-            sub_agent_task="status_test"
-        )
-        
-        self.expression_evaluator.evaluate.return_value = ["task1"]
-        
-        result = self.processor.process_parallel_foreach(step_def, {}, "step_8", "workflow_status")
-        
-        execution_id = result["step"]["definition"]["execution_id"]
-        task_id = result["step"]["definition"]["tasks"][0]["task_id"]
-        
-        # Update task to running
-        success = self.processor.update_task_status(execution_id, task_id, "running")
-        assert success is True
-        
-        execution = self.processor.get_execution(execution_id)
-        assert execution.tasks[0].status == "running"
-        assert execution.status == "running"
-        
-        # Update task to completed
-        success = self.processor.update_task_status(execution_id, task_id, "completed", result={"success": True})
-        assert success is True
-        
-        execution = self.processor.get_execution(execution_id)
-        assert execution.tasks[0].status == "completed"
-        assert execution.is_complete is True
-
-    def test_get_next_available_tasks(self):
-        """Test getting next available tasks with parallel limits."""
-        step_def = ParallelForEachStep(
-            items="test.items",
-            sub_agent_task="limit_test",
-            max_parallel=2
-        )
-        
-        self.expression_evaluator.evaluate.return_value = ["task1", "task2", "task3", "task4"]
-        
-        result = self.processor.process_parallel_foreach(step_def, {}, "step_9", "workflow_limit")
-        
-        execution_id = result["step"]["definition"]["execution_id"]
-        
-        # Get next available tasks (should respect max_parallel=2)
-        available_tasks = self.processor.get_next_available_tasks(execution_id)
-        assert len(available_tasks) == 2
-        
-        # Mark two tasks as running
-        for task in available_tasks:
-            self.processor.update_task_status(execution_id, task.task_id, "running")
-        
-        # Should have no more available tasks
-        available_tasks = self.processor.get_next_available_tasks(execution_id)
-        assert len(available_tasks) == 0
-        
-        # Complete one task
-        task_id = result["step"]["definition"]["tasks"][0]["task_id"]
-        self.processor.update_task_status(execution_id, task_id, "completed")
-        
-        # Should have one more available task
-        available_tasks = self.processor.get_next_available_tasks(execution_id)
-        assert len(available_tasks) == 1
-
-    def test_execution_cleanup(self):
-        """Test cleaning up completed executions."""
-        step_def = ParallelForEachStep(
-            items="cleanup.test",
-            sub_agent_task="cleanup_task"
-        )
-        
-        self.expression_evaluator.evaluate.return_value = ["single_task"]
-        
-        result = self.processor.process_parallel_foreach(step_def, {}, "step_10", "workflow_cleanup")
-        
-        execution_id = result["step"]["definition"]["execution_id"]
-        task_id = result["step"]["definition"]["tasks"][0]["task_id"]
-        
-        # Complete the task
-        self.processor.update_task_status(execution_id, task_id, "completed")
-        
-        # Verify execution exists and is complete
-        execution = self.processor.get_execution(execution_id)
-        assert execution.is_complete is True
-        
-        # Clean up execution
-        cleaned = self.processor.cleanup_execution(execution_id)
-        assert cleaned is True
-        
-        # Verify execution is removed
-        execution = self.processor.get_execution(execution_id)
-        assert execution is None

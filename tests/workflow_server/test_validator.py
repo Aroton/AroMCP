@@ -1,4 +1,13 @@
-"""Tests for the WorkflowValidator class."""
+"""
+Test suite for Validation Error Recovery - Acceptance Criteria 8.3
+
+This file tests the following acceptance criteria:
+- AC 8.3: Validation Error Recovery - recovery and reporting for validation failures
+- AC 1.1: Schema Compliance - step validation against step registry requirements
+- Workflow validation with clear error messages and context tracking
+
+Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
+"""
 
 import pytest
 
@@ -33,6 +42,11 @@ class TestWorkflowValidator:
         assert result is False
         # Check that it fails due to invalid operation
         assert any("invalid_op" in str(error) for error in validator.errors)
+        # Verify validation error recovery structure
+        assert len(validator.errors) > 0, "Should have validation errors"
+        # Verify error structure format
+        for error in validator.errors:
+            assert isinstance(error, str) and len(error) > 0, "Errors should be non-empty strings"
 
     def test_input_validation(self):
         """Test validation of input parameters."""
@@ -54,6 +68,11 @@ class TestWorkflowValidator:
         assert result is False
         assert any("invalid type: invalid" in error for error in validator.errors)
         assert any("required field must be boolean" in error for error in validator.errors)
+        # Verify validation error recovery provides clear context
+        assert len(validator.errors) >= 2, "Should have multiple specific validation errors"
+        # Verify error message structure provides field-level details
+        error_messages = [str(e) for e in validator.errors]
+        assert any("type" in msg for msg in error_messages), "Should include field context"
 
     def test_nested_step_validation(self):
         """Test validation of nested steps in conditionals and loops."""
@@ -228,6 +247,70 @@ class TestWorkflowValidator:
         assert any("invalid type: agent_shell_command" in error for error in validator.errors)
         assert any("invalid type: internal_mcp_call" in error for error in validator.errors)
         assert any("invalid type: conditional_message" in error for error in validator.errors)
+
+    def test_circular_dependency_detection_direct(self):
+        """Test detection of direct circular dependencies in computed fields."""
+        workflow = {
+            "name": "test:circular",
+            "description": "Test circular dependencies",
+            "version": "1.0.0",
+            "default_state": {
+                "value": 10
+            },
+            "state_schema": {
+                "computed": {
+                    "field_a": {
+                        "from": "computed.field_b",
+                        "transform": "input * 2"
+                    },
+                    "field_b": {
+                        "from": "computed.field_a",
+                        "transform": "input + 1"
+                    }
+                }
+            },
+            "steps": []
+        }
+        
+        validator = WorkflowValidator()
+        validator.schema = None  # Disable JSON schema validation for test
+        assert not validator.validate(workflow)
+        errors = [error for error in validator.errors if "Circular dependency" in error]
+        assert len(errors) >= 1  # Should detect circular dependency
+
+    def test_circular_dependency_detection_indirect(self):
+        """Test detection of indirect circular dependencies in computed fields."""
+        workflow = {
+            "name": "test:circular-indirect",
+            "description": "Test indirect circular dependencies",
+            "version": "1.0.0",
+            "default_state": {
+                "value": 10
+            },
+            "state_schema": {
+                "computed": {
+                    "field_a": {
+                        "from": "computed.field_b",
+                        "transform": "input * 2"
+                    },
+                    "field_b": {
+                        "from": "computed.field_c",
+                        "transform": "input + 1"
+                    },
+                    "field_c": {
+                        "from": "computed.field_a",
+                        "transform": "input / 2"
+                    }
+                }
+            },
+            "steps": []
+        }
+        
+        validator = WorkflowValidator()
+        validator.schema = None  # Disable JSON schema validation for test
+        assert not validator.validate(workflow)
+        errors = [error for error in validator.errors if "Circular dependency" in error]
+        assert len(errors) >= 1  # Should detect circular dependency
 
 
 if __name__ == "__main__":

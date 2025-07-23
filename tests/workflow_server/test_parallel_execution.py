@@ -1,4 +1,13 @@
-"""Tests for parallel execution functionality in MCP Workflow System Phase 4."""
+"""
+Test suite for Parallel Processing Steps - Acceptance Criteria 3.5
+
+This file tests the following acceptance criteria:
+- AC 3.5: Parallel Processing Steps - parallel_foreach with sub-agent creation and management
+- AC 6.2: Parallel Sub-Agent Execution - concurrent execution within max_parallel limits
+- AC 9.3: Serial Debug Mode - debug mode with serial execution via AROMCP_WORKFLOW_DEBUG=serial
+
+Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
+"""
 
 import threading
 import time
@@ -20,8 +29,8 @@ from aromcp.workflow_server.workflow.sub_agents import SubAgentManager
 class TestParallelExecutionModels:
     """Test parallel execution data models."""
 
-    def test_parallel_foreach_step_creation(self):
-        """Test ParallelForEachStep creation with defaults."""
+    def test_parallel_execution_step_creation_and_defaults(self):
+        """Test ParallelForEachStep creation with defaults (AC 3.5)."""
         # Given
         step = ParallelForEachStep(items="file_batches", sub_agent_task="process_batch")
 
@@ -32,8 +41,8 @@ class TestParallelExecutionModels:
         assert step.sub_agent_task == "process_batch"
         assert step.sub_agent_prompt_override is None
 
-    def test_parallel_foreach_step_custom_config(self):
-        """Test ParallelForEachStep with custom configuration."""
+    def test_parallel_execution_custom_configuration(self):
+        """Test ParallelForEachStep with custom configuration (AC 3.5)."""
         # Given
         step = ParallelForEachStep(
             items="batches",
@@ -462,13 +471,13 @@ class TestConcurrentStateManager:
         # Setup base state
         from aromcp.workflow_server.state.models import WorkflowState
 
-        manager._base_manager._states["wf_123"] = WorkflowState(raw={"counter": 5}, computed={}, state={})
+        manager._base_manager._states["wf_123"] = WorkflowState(state={"counter": 5}, computed={}, inputs={})
 
         # When
         result = manager.read("wf_123", include_version=True)
 
         # Then
-        assert result["raw"]["counter"] == 5
+        assert result["state"]["counter"] == 5
         assert "__version__" in result
         assert result["__version__"]["version"] == 1
         assert result["__version__"]["updated_at"] > 0
@@ -481,7 +490,7 @@ class TestConcurrentStateManager:
         # Initialize workflow
         from aromcp.workflow_server.state.models import WorkflowState
 
-        manager._base_manager._states["wf_123"] = WorkflowState(raw={"field1": 0, "field2": 0}, computed={}, state={})
+        manager._base_manager._states["wf_123"] = WorkflowState(state={"field1": 0, "field2": 0}, computed={}, inputs={})
 
         results = []
 
@@ -490,8 +499,8 @@ class TestConcurrentStateManager:
             results.append(result)
 
         # When - Concurrent updates to different paths
-        thread1 = threading.Thread(target=update_field, args=("raw.field1", 10, "agent1"))
-        thread2 = threading.Thread(target=update_field, args=("raw.field2", 20, "agent2"))
+        thread1 = threading.Thread(target=update_field, args=("state.field1", 10, "agent1"))
+        thread2 = threading.Thread(target=update_field, args=("state.field2", 20, "agent2"))
 
         thread1.start()
         thread2.start()
@@ -503,8 +512,8 @@ class TestConcurrentStateManager:
         assert all(result["success"] for result in results)
 
         final_state = manager.read("wf_123")
-        assert final_state["raw"]["field1"] == 10
-        assert final_state["raw"]["field2"] == 20
+        assert final_state["state"]["field1"] == 10
+        assert final_state["state"]["field2"] == 20
 
     def test_concurrent_updates_same_path_conflict(self):
         """Test concurrent updates to same path with conflict resolution."""
@@ -515,14 +524,14 @@ class TestConcurrentStateManager:
         # Initialize workflow
         from aromcp.workflow_server.state.models import WorkflowState
 
-        manager._base_manager._states["wf_123"] = WorkflowState(raw={"counter": 0}, computed={}, state={})
+        manager._base_manager._states["wf_123"] = WorkflowState(state={"counter": 0}, computed={}, inputs={})
 
         results = []
 
         def update_counter(value, agent_id):
             # Add small delay to increase chance of conflict
             time.sleep(0.01)
-            result = manager.update("wf_123", [{"path": "raw.counter", "value": value}], agent_id=agent_id)
+            result = manager.update("wf_123", [{"path": "state.counter", "value": value}], agent_id=agent_id)
             results.append((agent_id, result))
 
         # When - Concurrent updates to same path
@@ -540,7 +549,7 @@ class TestConcurrentStateManager:
         assert success_count >= 1
 
         final_state = manager.read("wf_123")
-        assert final_state["raw"]["counter"] in [10, 20]  # One of the values should win
+        assert final_state["state"]["counter"] in [10, 20]  # One of the values should win
 
     def test_optimistic_locking(self):
         """Test optimistic locking with version checking."""
@@ -550,10 +559,10 @@ class TestConcurrentStateManager:
         # Initialize workflow
         from aromcp.workflow_server.state.models import WorkflowState
 
-        manager._base_manager._states["wf_123"] = WorkflowState(raw={"counter": 0}, computed={}, state={})
+        manager._base_manager._states["wf_123"] = WorkflowState(state={"counter": 0}, computed={}, inputs={})
 
         # When - Update with correct version
-        result1 = manager.update("wf_123", [{"path": "raw.counter", "value": 5}], expected_version=1)
+        result1 = manager.update("wf_123", [{"path": "state.counter", "value": 5}], expected_version=1)
 
         # Then
         assert result1["success"]
@@ -562,7 +571,7 @@ class TestConcurrentStateManager:
         # When - Update with old version
         result2 = manager.update(
             "wf_123",
-            [{"path": "raw.counter", "value": 10}],
+            [{"path": "state.counter", "value": 10}],
             expected_version=1,  # Old version
         )
 
@@ -586,7 +595,7 @@ class TestConcurrentStateManager:
         from aromcp.workflow_server.state.models import WorkflowState
 
         manager._base_manager._states["wf_123"] = WorkflowState(
-            raw={"counter": 5, "name": "test"}, computed={"double": 10}, state={}
+            state={"counter": 5, "name": "test"}, computed={"double": 10}, inputs={}
         )
 
         # When - Create checkpoint
@@ -596,12 +605,12 @@ class TestConcurrentStateManager:
         assert checkpoint_result["success"]
         checkpoint = checkpoint_result["checkpoint"]
         assert checkpoint["workflow_id"] == "wf_123"
-        assert checkpoint["state"]["raw"]["counter"] == 5
-        assert checkpoint["state"]["raw"]["name"] == "test"
+        assert checkpoint["state"]["state"]["counter"] == 5
+        assert checkpoint["state"]["state"]["name"] == "test"
         assert checkpoint["state"]["computed"]["double"] == 10
 
         # When - Modify state
-        manager.update("wf_123", [{"path": "raw.counter", "value": 15}])
+        manager.update("wf_123", [{"path": "state.counter", "value": 15}])
 
         # When - Restore from checkpoint
         restore_result = manager.restore_from_checkpoint("wf_123", checkpoint)
@@ -610,8 +619,8 @@ class TestConcurrentStateManager:
         assert restore_result["success"]
 
         restored_state = manager.read("wf_123")
-        assert restored_state["raw"]["counter"] == 5  # Restored to checkpoint value
-        assert restored_state["raw"]["name"] == "test"
+        assert restored_state["state"]["counter"] == 5  # Restored to checkpoint value
+        assert restored_state["state"]["name"] == "test"
 
     def test_get_stats(self):
         """Test getting performance statistics."""
@@ -621,11 +630,11 @@ class TestConcurrentStateManager:
         # Initialize workflow
         from aromcp.workflow_server.state.models import WorkflowState
 
-        manager._base_manager._states["wf_123"] = WorkflowState(raw={"counter": 0}, computed={}, state={})
+        manager._base_manager._states["wf_123"] = WorkflowState(state={"counter": 0}, computed={}, inputs={})
 
         # When - Perform some updates
-        manager.update("wf_123", [{"path": "raw.counter", "value": 1}])
-        manager.update("wf_123", [{"path": "raw.counter", "value": 2}])
+        manager.update("wf_123", [{"path": "state.counter", "value": 1}])
+        manager.update("wf_123", [{"path": "state.counter", "value": 2}])
 
         stats = manager.get_stats()
 
@@ -883,14 +892,14 @@ class TestPhase4AcceptanceCriteria:
         from aromcp.workflow_server.state.models import WorkflowState
 
         manager._base_manager._states["wf_123"] = WorkflowState(
-            raw={"path1": 0, "path2": 0, "path3": 0}, computed={}, state={}
+            state={"path1": 0, "path2": 0, "path3": 0}, computed={}, inputs={}
         )
 
         # When - Concurrent updates to different paths
         results = []
 
         def update_path(path, value, agent_id):
-            result = manager.update("wf_123", [{"path": f"raw.{path}", "value": value}], agent_id=agent_id)
+            result = manager.update("wf_123", [{"path": f"state.{path}", "value": value}], agent_id=agent_id)
             results.append(result)
 
         threads = [
@@ -908,9 +917,9 @@ class TestPhase4AcceptanceCriteria:
         assert all(result["success"] for result in results)
 
         final_state = manager.read("wf_123")
-        assert final_state["raw"]["path1"] == 10
-        assert final_state["raw"]["path2"] == 20
-        assert final_state["raw"]["path3"] == 30
+        assert final_state["state"]["path1"] == 10
+        assert final_state["state"]["path2"] == 20
+        assert final_state["state"]["path3"] == 30
 
     def test_performance_scales_with_agents(self):
         """AC: Performance scales with agents."""

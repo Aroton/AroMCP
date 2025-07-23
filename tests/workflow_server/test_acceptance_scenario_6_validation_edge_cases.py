@@ -224,9 +224,13 @@ class TestAcceptanceScenario6ValidationEdgeCases:
         validator = self.create_validator_without_schema()
         is_valid = validator.validate(invalid_namespace_workflow)
         
-        # This should be valid because the invalid namespace reference is not extracted for validation
-        # This demonstrates that the validator gracefully ignores unknown namespaces rather than crashing
-        assert is_valid or len(validator.errors) == 0, "Invalid namespace references should be gracefully ignored"
+        # The validator should catch invalid namespace references and provide helpful suggestions
+        # This demonstrates that the validator properly validates namespaces and provides guidance
+        assert not is_valid, "Invalid namespace references should be caught by validator"
+        error_msg = validator.get_validation_error()
+        assert "stats.counter" in error_msg, "Expected undefined reference 'stats.counter' not found in error"
+        assert "Invalid scope 'stats'" in error_msg, "Expected invalid scope error not found"
+        assert "Did you mean" in error_msg, "Expected suggestions not found in error"
 
     def test_malformed_workflow_handling(self):
         """Test graceful handling of malformed workflows."""

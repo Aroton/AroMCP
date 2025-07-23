@@ -1,4 +1,13 @@
-"""Tests for Phase 5: Error handling scenarios."""
+"""
+Test suite for Error Handling & Resilience - Acceptance Criteria 8
+
+This file tests the following acceptance criteria:
+- AC 8.1: Step-Level Error Handling - error handling strategies (retry, continue, fail, fallback)
+- AC 8.2: Timeout Management - step and workflow-level timeout handling
+- AC 8.3: Validation Error Recovery - recovery and reporting for validation failures
+
+Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
+"""
 
 from datetime import datetime, timedelta
 
@@ -66,6 +75,8 @@ class TestErrorModels:
         assert error.severity == ErrorSeverity.HIGH
         assert error.original_exception == exception
         assert error.stack_trace is not None
+        # Verify error structure matches expected format
+        assert error.workflow_id.startswith("wf_"), "Workflow ID should follow format"
 
     def test_workflow_error_to_dict(self):
         """Test WorkflowError serialization."""
@@ -89,6 +100,8 @@ class TestErrorModels:
         assert error_dict["message"] == "Test message"
         assert error_dict["retry_count"] == 1
         assert error_dict["severity"] == "medium"
+        # Verify error strategy validation
+        assert "id" in error_dict and "message" in error_dict, "Error dict should have required fields"
 
     def test_circuit_breaker_state(self):
         """Test CircuitBreakerState functionality."""
@@ -188,6 +201,8 @@ class TestErrorHandlerRegistry:
         assert result["action"] == "fail"
         assert not result["should_continue"]
         assert result["error"]["id"] == "err_test"
+        # Verify error message structure
+        assert "error" in result and "code" in result["error"] or "message" in result["error"]
 
     def test_handle_continue_strategy(self):
         """Test continue error handling strategy."""
@@ -209,6 +224,8 @@ class TestErrorHandlerRegistry:
         assert result["action"] == "continue"
         assert result["should_continue"]
         assert result["error"]["id"] == "err_test"
+        # Verify error message structure
+        assert "error" in result and "id" in result["error"]
 
     def test_handle_fallback_strategy(self):
         """Test fallback error handling strategy."""
@@ -233,6 +250,8 @@ class TestErrorHandlerRegistry:
         assert result["action"] == "fallback"
         assert result["should_continue"]
         assert result["fallback_value"] == {"status": "fallback"}
+        # Verify error structure format
+        assert "error" in result
 
     def test_handle_retry_strategy(self):
         """Test retry error handling strategy."""

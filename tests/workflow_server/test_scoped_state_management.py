@@ -314,7 +314,7 @@ class TestScopedVariableIntegration:
         loop_state = LoopState(
             loop_id="test_loop",
             loop_type="foreach",
-            variable_bindings={"loop_item": "item1", "loop_index": 0}
+            variable_bindings={"loop.item": "item1", "loop.index": 0}
         )
         self.context.enter_loop(loop_state)
         
@@ -324,8 +324,8 @@ class TestScopedVariableIntegration:
         # Verify all scopes are present
         assert scoped_vars["global"]["global_var"] == "global_value"
         assert scoped_vars["local"]["local_var"] == "local_value"
-        assert scoped_vars["loop"]["loop_item"] == "item1"
-        assert scoped_vars["loop"]["loop_index"] == 0
+        assert scoped_vars["loop"]["loop.item"] == "item1"
+        assert scoped_vars["loop"]["loop.index"] == 0
     
     def test_execution_context_global_variable_methods(self):
         """Test ExecutionContext global variable helper methods.""" 

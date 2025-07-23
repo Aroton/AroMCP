@@ -1,4 +1,13 @@
-"""Tests for Phase 5: Debug tools functionality."""
+"""
+Test suite for Debug and Development Support - Acceptance Criteria 9.3
+
+This file tests the following acceptance criteria:
+- AC 9.3: Debug and Development Support - enhanced debugging capabilities and execution logging
+- Debug mode observability - metrics and logging for debug sessions
+- Workflow state inspection and step-by-step debugging
+
+Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
+"""
 
 from unittest.mock import Mock, patch
 
@@ -177,7 +186,7 @@ class TestExecutionHistory:
         # Check first step
         step1 = history[0]
         assert step1["step_id"] == "step_1"
-        assert step1["step_type"] == "shell_command with state_update"
+        assert step1["step_type"] == "state_update"
         assert step1["status"] == "completed"
         assert step1["duration_ms"] == 15.5
         assert step1["details"]["path"] == "raw.counter"
@@ -438,7 +447,7 @@ class TestDebugToolsIntegration:
         assert len(steps) == 4
 
         # Check step types
-        assert steps[0]["type"] == "shell_command"
+        assert steps[0]["type"] == "state_update"
         assert steps[1]["type"] == "conditional"
         assert steps[2]["type"] == "while"
         assert steps[3]["type"] == "parallel_foreach"

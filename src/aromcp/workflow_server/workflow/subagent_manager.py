@@ -375,7 +375,7 @@ class SubAgentManager:
         fallback_map = {
             "raw.file_path": state.get("item", "file_path"),
             "file_path": state.get("item", state.get("file_path", "unknown_file")),
-            "raw.attempt_number": state.get("attempt_number", "0"),
+            # Legacy raw.attempt_number removed - use loop.iteration instead
             "raw.max_attempts": state.get("max_attempts", "10"),
             "max_attempts": state.get("max_attempts", "10"),
             "item": state.get("item", "unknown_item"),

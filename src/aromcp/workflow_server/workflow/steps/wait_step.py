@@ -22,8 +22,21 @@ class WaitStepProcessor:
         Returns:
             Wait step indicator for client
         """
-        # Optional message to display to client
-        message = step_definition.get("message", "Waiting for next client request...")
+        # Optional message to display to client with graceful handling
+        raw_message = step_definition.get("message", "Waiting for next client request...")
+        
+        # Handle message gracefully - convert non-strings to strings
+        if isinstance(raw_message, str):
+            message = raw_message
+        elif raw_message is None:
+            message = "Waiting for next client request..."
+        else:
+            # Convert non-string types to string representation
+            message = str(raw_message)
+        
+        # Handle empty string case
+        if not message.strip():
+            message = "Waiting for next client request..."
         
         # Return a wait indicator - this tells the queue executor to pause
         return {

@@ -82,6 +82,9 @@ class StepProcessor:
         elif step.type == "continue":
             return self.process_continue(queue)
         
+        elif step.type == "mcp_call":
+            # Handle workflow_state_update MCP calls server-side
+            return self._process_mcp_call(instance, step, processed_definition)
         
         return create_workflow_error(f"Unsupported server step type: {step.type}", instance.id, step.id)
     
@@ -182,6 +185,13 @@ class StepProcessor:
                     # Add workflow inputs at top level for template evaluation
                     eval_context.update(instance.inputs)
                 
+                # If path contains template expressions, evaluate them first
+                # This handles dynamic paths like "state.results['large_batch_' + {{ batch_index }}]"
+                if isinstance(path, str) and "{{" in path and "}}" in path:
+                    path = self._replace_variables(path, current_state, False, instance, False, context)
+                    # Convert bracket notation to dot notation for state manager compatibility
+                    path = self._convert_bracket_notation_to_dot_notation(path)
+                
                 # If value is a template expression, re-evaluate it with current state
                 if isinstance(value, str) and "{{" in value and "}}" in value:
                     value = self._replace_variables(value, current_state, False, instance, False, context)
@@ -201,7 +211,7 @@ class StepProcessor:
                         elif value == "stderr":
                             value = shell_output.get("stderr", "")
                         elif value == "returncode":
-                            value = shell_output.get("returncode", 0)
+                            value = shell_output.get("exit_code", 0)
                         elif value == "full_output":
                             value = shell_output
                 
@@ -217,6 +227,25 @@ class StepProcessor:
                 if "result" not in step_result:
                     step_result["result"] = {}
                 step_result["result"]["shell_command with state_updates_applied"] = len(validated_updates)
+    
+    def _convert_bracket_notation_to_dot_notation(self, path: str) -> str:
+        """
+        Convert bracket notation to dot notation for state manager compatibility.
+        Example: "state.results['large_batch_0']" -> "state.results.large_batch_0"
+        """
+        import re
+        
+        # Pattern to match bracket notation like ['key'] or ["key"]
+        pattern = r"\[(['\"])([^'\"]+)\1\]"
+        
+        def replace_brackets(match):
+            # Extract the key without quotes
+            key = match.group(2)
+            return f".{key}"
+        
+        # Replace all bracket notation with dot notation
+        converted_path = re.sub(pattern, replace_brackets, path)
+        return converted_path
     
     def _process_shell_command(self, instance: WorkflowInstance, step: WorkflowStep,
                               processed_definition: dict[str, Any]) -> dict[str, Any]:
@@ -251,7 +280,16 @@ class StepProcessor:
             # This allows expressions like "computed.has_files" to work
             eval_state = self.state_manager.read(instance.id)
             
-            result = self.expression_evaluator.evaluate(condition, eval_state)
+            # Set up scoped context for 'this.' expressions
+            scoped_context = {
+                'this': eval_state.get('computed', {}),
+                'inputs': eval_state.get('inputs', {}),
+                'state': eval_state.get('state', {}),
+                'global': eval_state.get('global', {}),
+                'loop': eval_state.get('loop', {})
+            }
+            
+            result = self.expression_evaluator.evaluate(condition, eval_state, scoped_context)
             condition_result = bool(result)
         except Exception as e:
             return create_workflow_error(f"Error evaluating condition: {enhance_exception_message(e)}", instance.id, step.id)
@@ -360,16 +398,33 @@ class StepProcessor:
                 context.exit_loop()
             else:
                 queue.pop_loop_context()
-                # Clean up legacy attempt_number on error
-                self.state_manager.update(instance.id, [
-                    {"path": "state.attempt_number", "value": None}
-                ], context)
+                # Modern scoped loop variables are automatically cleaned up
             return create_workflow_error(f"Error evaluating while condition: {enhance_exception_message(e)}", instance.id, step.id)
         
         # Get current loop state
         current_loop = context.current_loop() if context else None
         
         if condition_result and body:
+            # Check if we've reached max iterations before adding body steps
+            if current_loop:
+                # Modern context path - check if already at max iterations
+                if current_loop.current_iteration >= max_iterations:
+                    context.exit_loop()
+                    return {"executed": False, "reason": "Max iterations reached"}
+            else:
+                # Legacy queue-based path - check max iterations
+                loop_context = None
+                for ctx in queue.loop_stack:
+                    if ctx["context"].get("loop_id") == step.id:
+                        loop_context = ctx["context"]
+                        break
+                
+                if loop_context:
+                    # Check if we've reached max iterations before adding more steps
+                    if loop_context["iteration"] >= loop_context["max_iterations"]:
+                        queue.pop_loop_context()
+                        return {"executed": False, "reason": "Max iterations reached"}
+            
             # Continue loop - add body steps and loop step again
             workflow_steps = []
             
@@ -397,27 +452,8 @@ class StepProcessor:
             if current_loop:
                 return {"executed": False, "iteration": current_loop.current_iteration}
             else:
-                # Fallback to queue-based management
-                loop_context = None
-                for ctx in queue.loop_stack:
-                    if ctx["context"].get("loop_id") == step.id:
-                        loop_context = ctx["context"]
-                        break
-                
+                # Fallback to queue-based management - increment after adding steps
                 if loop_context:
-                    # Update legacy attempt_number for backward compatibility
-                    # TODO: Remove this legacy behavior in future version
-                    import warnings
-                    warnings.warn(
-                        "Legacy while loop variable management (state.attempt_number) is deprecated. "
-                        "Use scoped loop variables ({{loop.iteration}}) instead.",
-                        DeprecationWarning,
-                        stacklevel=2
-                    )
-                    attempt_number = loop_context["iteration"] + 1
-                    self.state_manager.update(instance.id, [
-                        {"path": "state.attempt_number", "value": attempt_number}
-                    ], context)
                     loop_context["iteration"] += 1
                     return {"executed": False, "iteration": loop_context["iteration"]}
                 
@@ -429,11 +465,7 @@ class StepProcessor:
             else:
                 # Fallback cleanup
                 queue.pop_loop_context()
-                # Clean up legacy attempt_number
-                # TODO: Remove this legacy cleanup in future version
-                self.state_manager.update(instance.id, [
-                    {"path": "state.attempt_number", "value": None}
-                ], context)
+                # Modern scoped loop variables are automatically cleaned up
             
             return {"executed": False, "reason": "Condition false"}
     
@@ -535,11 +567,14 @@ class StepProcessor:
             queue.prepend_steps(workflow_steps)
             
             return {"executed": False, "index": current_loop.current_item_index}
-        elif context and not current_loop:
-            # Fallback to queue-based processing
+        else:
+            # Handle queue-based processing (legacy or when no execution context)
+            # Use a stable loop ID that won't change across iterations
+            stable_loop_id = getattr(step, '_original_id', step.id)
+            
             loop_context = None
             for ctx in queue.loop_stack:
-                if ctx["context"].get("loop_id") == step.id:
+                if ctx["context"].get("loop_id") == stable_loop_id:
                     loop_context = ctx["context"]
                     break
             
@@ -554,10 +589,22 @@ class StepProcessor:
                     stacklevel=2
                 )
                 item = loop_context["items"][loop_context["index"]]
-                self.state_manager.update(instance.id, [
+                
+                # Set legacy loop variables for backward compatibility
+                state_updates = [
                     {"path": "state.loop_item", "value": item},
                     {"path": "state.loop_index", "value": loop_context["index"]}
-                ], context)
+                ]
+                
+                # Also set custom variable names if specified
+                variable_name = definition.get("variable_name", "item")
+                index_name = definition.get("index_name", "index")
+                if variable_name:
+                    state_updates.append({"path": f"state.{variable_name}", "value": item})
+                if index_name:
+                    state_updates.append({"path": f"state.{index_name}", "value": loop_context["index"]})
+                
+                self.state_manager.update(instance.id, state_updates, context)
                 
                 # Add body steps
                 workflow_steps = []
@@ -567,6 +614,18 @@ class StepProcessor:
                     # Extract execution_context if present
                     execution_context = step_def.get("execution_context", "server")
                     definition_copy = {k: v for k, v in step_def.items() if k not in ["id", "type", "execution_context"]}
+                    
+                    # Pre-evaluate templates in state updates to capture current loop variable values
+                    if "state_update" in definition_copy:
+                        current_state = self.state_manager.read(instance.id)
+                        definition_copy["state_update"] = self._replace_variables(
+                            definition_copy["state_update"], current_state, False, instance, False, context
+                        )
+                    if "state_updates" in definition_copy:
+                        current_state = self.state_manager.read(instance.id)
+                        definition_copy["state_updates"] = self._replace_variables(
+                            definition_copy["state_updates"], current_state, False, instance, False, context
+                        )
                     
                     workflow_step = WorkflowStep(
                         id=step_def["id"],
@@ -856,10 +915,10 @@ class StepProcessor:
         fallback_map = {
             "inputs.file_path": inputs_section.get("file_path", state_section.get("item", "unknown_file")),
             "file_path": inputs_section.get("file_path", state_section.get("item", "unknown_file")),
-            "inputs.attempt_number": str(inputs_section.get("attempt_number", "0")),
-            "state.attempt_number": str(state_section.get("attempt_number", "0")),  # Legacy - deprecated
+            # Legacy attempt_number variables removed - use loop.iteration instead
             "inputs.max_attempts": str(inputs_section.get("max_attempts", "10")),
             "max_attempts": str(inputs_section.get("max_attempts", "10")),
+            "loop.iteration": str(state_section.get("loop_iteration", "0")),  # For debug mode
             "item": state_section.get("item", inputs_section.get("item", "unknown_item")),
             "state.loop_item": state_section.get("loop_item", "unknown_item"),  # Legacy - deprecated
             "state.loop_index": str(state_section.get("loop_index", "0")),  # Legacy - deprecated

@@ -12,8 +12,8 @@ from aromcp.workflow_server.workflow.expressions import ExpressionError, Express
 class TestScopedVariableResolution:
     """Test basic scoped variable resolution functionality."""
 
-    def test_this_scope_basic(self):
-        """Test basic 'this' scope variable resolution."""
+    def test_scoped_variable_this_scope_resolution(self):
+        """Test basic 'this' scope variable resolution (AC 7.1)."""
         evaluator = ExpressionEvaluator()
         context = {"legacy_var": "old_value"}
         scoped_context = {
@@ -31,8 +31,8 @@ class TestScopedVariableResolution:
         result = evaluator.evaluate("this.config.setting", context, scoped_context)
         assert result == "enabled"
 
-    def test_global_scope_basic(self):
-        """Test basic 'global' scope variable resolution."""
+    def test_scoped_variable_global_scope_resolution(self):
+        """Test basic 'global' scope variable resolution (AC 7.1)."""
         evaluator = ExpressionEvaluator()
         context = {}
         scoped_context = {

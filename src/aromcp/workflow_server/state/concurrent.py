@@ -345,7 +345,7 @@ class ConcurrentStateManager:
                 import copy
 
                 state_data = {
-                    "raw": copy.deepcopy(workflow_state.raw),
+                    "inputs": copy.deepcopy(workflow_state.inputs),
                     "computed": copy.deepcopy(workflow_state.computed),
                     "state": copy.deepcopy(workflow_state.state),
                 }
@@ -397,7 +397,7 @@ class ConcurrentStateManager:
                 from .models import WorkflowState
 
                 restored_state = WorkflowState(
-                    raw=checkpoint_state.get("raw", {}),
+                    inputs=checkpoint_state.get("inputs", {}),
                     computed=checkpoint_state.get("computed", {}),
                     state=checkpoint_state.get("state", {}),
                 )

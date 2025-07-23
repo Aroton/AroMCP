@@ -380,8 +380,7 @@ def create_mock_workflow_definition(
 
     if state_schema is None:
         state_schema = {
-            "raw": {"counter": "number", "name": "string"},
-            "computed": {},
+            "inputs": {"counter": "number", "name": "string"},
             "state": {"version": "string"},
         }
 
@@ -398,13 +397,17 @@ def create_mock_workflow_definition(
             )
         )
 
+    # Extract inputs and state from state_schema for StateSchema constructor
+    schema_inputs = state_schema.get("inputs", {})
+    schema_state = state_schema.get("state", {})
+
     return WorkflowDefinition(
         name=name,
         description="Test workflow",
         version="1.0.0",
         steps=workflow_steps,
-        state_schema=StateSchema(**state_schema),
-        default_state={"raw": {"counter": 0}, "state": {"version": "1.0"}},
+        state_schema=StateSchema(inputs=schema_inputs, state=schema_state),
+        default_state={"inputs": {"counter": 0}, "state": {"version": "1.0"}},
         inputs={},
     )
 

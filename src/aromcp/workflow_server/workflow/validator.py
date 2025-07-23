@@ -95,6 +95,9 @@ class WorkflowValidator:
         self.sub_agent_tasks = set()
         self.computed_fields = set()
         self.referenced_variables = set()
+        
+        # Store current workflow for context-aware validation
+        self._current_workflow = workflow
 
         if not isinstance(workflow, dict):
             self.errors.append("Workflow must be a dictionary/object")
@@ -271,7 +274,7 @@ class WorkflowValidator:
             if hasattr(self, '_current_computed_definitions'):
                 delattr(self, '_current_computed_definitions')
 
-    def _validate_computed_field(self, name: str, field: Any):
+    def _validate_computed_field(self, name: str, field: Any, context: dict[str, Any] | None = None):
         """Validate a computed field definition."""
         if not isinstance(field, dict):
             self.errors.append(f"Computed field '{name}' must be an object")
@@ -284,7 +287,17 @@ class WorkflowValidator:
             from_value = field["from"]
             if isinstance(from_value, str):
                 refs = self._extract_variable_references(from_value, f"computed.{name}.from")
-                self.referenced_variables.update(refs)
+                # If context is provided, validate references immediately
+                if context:
+                    for ref in refs:
+                        if not self._validate_variable_reference(ref, context):
+                            suggestions = self._get_similar_variables(ref)
+                            error_msg = f"Undefined variable reference in computed field '{name}.from': '{ref}'"
+                            if suggestions:
+                                error_msg += f". Did you mean: {', '.join(suggestions)}?"
+                            self.errors.append(error_msg)
+                else:
+                    self.referenced_variables.update(refs)
                 # Check for circular dependencies
                 if self._has_circular_dependency(name, from_value):
                     self.errors.append(f"Circular dependency detected in computed field '{name}'")
@@ -301,7 +314,17 @@ class WorkflowValidator:
         else:
             # Extract references from transform expressions
             refs = self._extract_variable_references(field["transform"], f"computed.{name}.transform")
-            self.referenced_variables.update(refs)
+            # If context is provided, validate references immediately
+            if context:
+                for ref in refs:
+                    if not self._validate_variable_reference(ref, context):
+                        suggestions = self._get_similar_variables(ref)
+                        error_msg = f"Undefined variable reference in computed field '{name}.transform': '{ref}'"
+                        if suggestions:
+                            error_msg += f". Did you mean: {', '.join(suggestions)}?"
+                        self.errors.append(error_msg)
+            else:
+                self.referenced_variables.update(refs)
 
         # Validate error handling strategy
         if "on_error" in field:
@@ -446,18 +469,32 @@ class WorkflowValidator:
         """Validate conditional step."""
         if "condition" not in step:
             self.errors.append(f"{path} missing 'condition' field")
+        else:
+            # Validate condition references
+            condition_refs = self._extract_references_from_expression(step["condition"])
+            for ref in condition_refs:
+                if self._is_context_specific_variable(ref):
+                    if not self._validate_variable_reference(ref, context):
+                        suggestions = self._get_similar_variables(ref)
+                        error_msg = self._get_scoped_variable_error_message(ref, f"{path}.condition", context)
+                        if suggestions:
+                            error_msg += f". Did you mean: {', '.join(suggestions)}?"
+                        self.errors.append(error_msg)
+                else:
+                    # Regular variable, add to global references for validation
+                    self.referenced_variables.add(ref)
 
         if "then_steps" in step:
             if isinstance(step["then_steps"], list):
                 for i, s in enumerate(step["then_steps"]):
-                    self._validate_step(s, f"{path}.then_steps[{i}]")
+                    self._validate_step(s, f"{path}.then_steps[{i}]", context)
             else:
                 self.errors.append(f"{path}.then_steps must be an array")
 
         if "else_steps" in step:
             if isinstance(step["else_steps"], list):
                 for i, s in enumerate(step["else_steps"]):
-                    self._validate_step(s, f"{path}.else_steps[{i}]")
+                    self._validate_step(s, f"{path}.else_steps[{i}]", context)
             else:
                 self.errors.append(f"{path}.else_steps must be an array")
 
@@ -466,14 +503,14 @@ class WorkflowValidator:
         if "condition" not in step:
             self.errors.append(f"{path} missing 'condition' field")
         else:
-            # Validate condition with loop context (for loop.iteration and state.attempt_number)
+            # Validate condition with loop context (for loop.iteration)
             condition_refs = self._extract_variable_references(step["condition"], f"{path}.condition")
             loop_context = {"in_loop": True, "in_while_loop": True}
             for ref in condition_refs:
                 if self._is_context_specific_variable(ref):
                     if not self._validate_variable_reference(ref, loop_context):
                         suggestions = self._get_similar_variables(ref)
-                        if ref in ["state.attempt_number", "loop.iteration"]:
+                        if ref == "loop.iteration":
                             # These are valid in while loop conditions
                             continue
                         error_msg = self._get_scoped_variable_error_message(ref, f"{path}.condition", loop_context)
@@ -501,8 +538,14 @@ class WorkflowValidator:
 
         if "body" in step:
             if isinstance(step["body"], list):
-                # Pass foreach context for body steps
-                foreach_context = {"in_foreach": True, "in_loop": True, "in_while_loop": False}
+                # Pass foreach context for body steps with loop variables
+                foreach_context = {
+                    "in_foreach": True, 
+                    "in_loop": True, 
+                    "in_while_loop": False,
+                    "loop_variable_name": step.get("variable_name", "item"),
+                    "loop_index_name": step.get("index_name", "index")
+                }
                 for i, s in enumerate(step["body"]):
                     self._validate_step(s, f"{path}.body[{i}]", foreach_context)
             else:
@@ -515,6 +558,17 @@ class WorkflowValidator:
 
         if "sub_agent_task" not in step:
             self.errors.append(f"{path} missing 'sub_agent_task' field")
+        else:
+            # Validate that the referenced sub-agent task exists and is valid within the current context
+            task_name = step["sub_agent_task"]
+            if hasattr(self, '_current_workflow') and self._current_workflow:
+                sub_agent_tasks = self._current_workflow.get("sub_agent_tasks", {})
+                if task_name in sub_agent_tasks:
+                    # Pass loop context to sub-agent task validation if we're in a loop
+                    sub_agent_context = {"in_sub_agent": True, "sub_agent_name": task_name}
+                    if context and context.get("in_loop"):
+                        sub_agent_context.update(context)
+                    self._validate_sub_agent_task(task_name, sub_agent_tasks[task_name], sub_agent_context)
 
     def _validate_agent_prompt_step(self, step: dict[str, Any], path: str, context: dict[str, Any] | None = None):
         """Validate agent_prompt step."""
@@ -584,7 +638,7 @@ class WorkflowValidator:
         for task_name, task_def in tasks.items():
             self._validate_sub_agent_task(task_name, task_def)
 
-    def _validate_sub_agent_task(self, name: str, task: Any):
+    def _validate_sub_agent_task(self, name: str, task: Any, parent_context: dict[str, Any] | None = None):
         """Validate a sub-agent task definition."""
         if not isinstance(task, dict):
             self.errors.append(f"Sub-agent task '{name}' must be an object")
@@ -599,8 +653,13 @@ class WorkflowValidator:
 
         # Validate steps in sub-agent task if present
         if "steps" in task and isinstance(task["steps"], list):
-            # Create a context for sub-agent task validation
+            # Create a context for sub-agent task validation, inheriting from parent context
             sub_agent_context = {"in_sub_agent": True, "sub_agent_name": name}
+            if parent_context:
+                # Inherit loop context from parent (parallel_foreach, while_loop, etc.)
+                for key in ["in_loop", "in_while_loop", "in_foreach"]:
+                    if key in parent_context:
+                        sub_agent_context[key] = parent_context[key]
 
             # Temporarily store parent definitions and clear them for sub-agent isolation
             parent_state_paths = self.state_paths.copy()
@@ -637,20 +696,32 @@ class WorkflowValidator:
                                 if section == "state":
                                     self.state_paths.add(key)
 
-                # Collect computed fields
+            # Collect input parameters first (needed for computed field validation)
+            if "inputs" in task and isinstance(task["inputs"], dict):
+                self.input_params = set(task["inputs"].keys())
+
+            # First pass: collect step types to understand available loop contexts
+            step_context_analysis = self._analyze_step_contexts(task.get("steps", []))
+            if step_context_analysis.get("has_while_loop"):
+                sub_agent_context["in_while_loop"] = True
+                sub_agent_context["in_loop"] = True
+            if step_context_analysis.get("has_foreach"):
+                sub_agent_context["in_foreach"] = True
+                sub_agent_context["in_loop"] = True
+
+            if "state_schema" in task and isinstance(task["state_schema"], dict):
+                # Collect computed fields with loop context awareness
                 computed = task["state_schema"].get("computed", {})
                 if isinstance(computed, dict):
                     # Store computed field definitions for circular dependency checking
                     self._current_computed_definitions = computed
                     for field_name, field_def in computed.items():
                         self.computed_fields.add(field_name)
-                        self._validate_computed_field(field_name, field_def)
+                        # Validate computed field with sub-agent context (including loop context)
+                        self._validate_computed_field(field_name, field_def, sub_agent_context)
                     # Clean up after validation
                     if hasattr(self, '_current_computed_definitions'):
                         delattr(self, '_current_computed_definitions')
-
-            if "inputs" in task and isinstance(task["inputs"], dict):
-                self.input_params = set(task["inputs"].keys())
 
             # Validate steps with sub-agent context
             for i, step in enumerate(task["steps"]):
@@ -671,6 +742,41 @@ class WorkflowValidator:
             self.input_params = parent_input_params
             self.referenced_variables = parent_referenced_variables
 
+    def _analyze_step_contexts(self, steps: list[dict[str, Any]]) -> dict[str, bool]:
+        """Analyze steps to determine what loop contexts will be available.
+        
+        Returns:
+            Dictionary with boolean flags for available contexts like has_while_loop, has_foreach
+        """
+        context_info = {
+            "has_while_loop": False,
+            "has_foreach": False
+        }
+        
+        def analyze_step_list(step_list: list[dict[str, Any]]):
+            for step in step_list:
+                if not isinstance(step, dict) or "type" not in step:
+                    continue
+                    
+                step_type = step["type"]
+                if step_type == "while_loop":
+                    context_info["has_while_loop"] = True
+                elif step_type in ["foreach", "parallel_foreach"]:
+                    context_info["has_foreach"] = True
+                
+                # Recursively analyze nested steps
+                if step_type == "conditional":
+                    if "then_steps" in step and isinstance(step["then_steps"], list):
+                        analyze_step_list(step["then_steps"])
+                    if "else_steps" in step and isinstance(step["else_steps"], list):
+                        analyze_step_list(step["else_steps"])
+                elif step_type in ["foreach", "while_loop"]:
+                    if "body" in step and isinstance(step["body"], list):
+                        analyze_step_list(step["body"])
+        
+        analyze_step_list(steps)
+        return context_info
+
     def _extract_variable_references(self, value: Any, path: str = "") -> set[str]:
         """Extract all variable references from a value (handles templates and direct references)."""
         references = set()
@@ -685,10 +791,17 @@ class WorkflowValidator:
 
             # Also check if the entire string is a variable reference (for "from" fields)
             # Exclude state_update.path fields which are target paths, not references
-            if not value.startswith("{{") and "." in value and not path.endswith(".path"):
+            # Also exclude complex expressions with operators
+            operators = ['>=', '<=', '==', '!=', '>', '<', '&&', '||', '+', '-', '*', '/', '?', ':', '(', ')']
+            if (not value.startswith("{{") and "." in value and not path.endswith(".path") and
+                not any(op in value for op in operators)):
                 parts = value.split(".")
                 if parts[0] in ["state", "computed", "inputs"]:
                     references.add(value)
+            # For condition fields, treat as expressions and extract references from them
+            elif path.endswith(".condition") and not value.startswith("{{"):
+                refs = self._extract_references_from_expression(value)
+                references.update(refs)
 
         elif isinstance(value, dict):
             for k, v in value.items():
@@ -703,6 +816,22 @@ class WorkflowValidator:
     def _extract_references_from_expression(self, expr: str) -> set[str]:
         """Extract variable references from a JavaScript-like expression."""
         references = set()
+
+        # For complex expressions with operators, break them down first
+        # Handle comparison and arithmetic operators by splitting the expression
+        # Include more operators and variations without spaces
+        operators = [' >= ', ' <= ', ' == ', ' != ', ' > ', ' < ', ' && ', ' || ', ' + ', ' - ', ' * ', ' / ', 
+                    '>=', '<=', '==', '!=', '>', '<', '&&', '||', '+', '-', '*', '/', '?', ':']
+        if any(op in expr for op in operators):
+            # Split on operators while keeping the parts
+            parts = re.split(r'\s*(?:>=|<=|==|!=|>|<|&&|\|\||\+|-|\*|/|\?|:)\s*', expr)
+            for part in parts:
+                part = part.strip()
+                if part:
+                    # Recursively extract from each part
+                    sub_refs = self._extract_references_from_expression(part)
+                    references.update(sub_refs)
+            return references
 
         # Match all property access patterns (scope.variable), then validate the scope later
         # This catches both valid and invalid scopes for proper error reporting
@@ -719,6 +848,16 @@ class WorkflowValidator:
             # Normalize array access to dot notation for validation
             ref = re.sub(r'\[(\d+)\]', r'.\1', ref)
             references.add(ref)
+
+        # Handle dynamic property access like state.obj[computed.key]
+        dynamic_access_pattern = r'\b([a-zA-Z_]\w*\.[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)\[\{\{\s*([^}]+)\s*\}\}\]'
+        for match in re.finditer(dynamic_access_pattern, expr):
+            base_ref = match.group(1)
+            dynamic_key = match.group(2).strip()
+            references.add(base_ref)  # Add the base reference
+            # Also extract references from the dynamic key
+            key_refs = self._extract_references_from_expression(dynamic_key)
+            references.update(key_refs)
 
         # Special handling for template variables without dots (e.g., {{ file_path }}, {{ item }})
         # These are often workflow inputs or loop variables
@@ -787,6 +926,28 @@ class WorkflowValidator:
             return False
 
         root = parts[0]
+
+        # Handle built-in JavaScript objects first
+        if root in ["Math", "Object", "Array", "String", "Number", "Date", "JSON", "console"]:
+            # Allow common JavaScript built-in objects and their methods
+            return True
+
+        # Handle foreach loop variables
+        if context and context.get("in_foreach"):
+            loop_variable_name = context.get("loop_variable_name", "item")
+            loop_index_name = context.get("loop_index_name", "index")
+            
+            # Check if ref matches the loop variable or index names
+            if ref == loop_variable_name or ref.startswith(f"{loop_variable_name}."):
+                return True
+            if ref == loop_index_name:
+                return True
+                
+            # Also handle inputs.variable_name pattern for foreach variables
+            if ref.startswith("inputs."):
+                input_var = ref[7:]  # Remove "inputs." prefix
+                if input_var == loop_variable_name or input_var == loop_index_name:
+                    return True
 
         # Handle new scoped syntax
         if root == "this":
@@ -874,17 +1035,13 @@ class WorkflowValidator:
             if root == "item":
                 return context.get("in_foreach", False)
                 
-            # Handle state.attempt_number for while_loop contexts
-            if root == "state" and len(parts) > 1 and parts[1] == "attempt_number":
-                # attempt_number is automatically managed in while loops
-                return context.get("in_loop", False)
+            # Legacy state.attempt_number removed - use loop.iteration instead
 
             # Handle state.loop_item and state.loop_index in loop contexts
             if root == "state" and len(parts) > 1:
                 if parts[1] in ["loop_item", "loop_index"]:
                     return context.get("in_loop", False)
-                if parts[1] == "attempt_number":
-                    return context.get("in_loop", False)  # while_loop specific
+                # Legacy attempt_number no longer supported - use loop.iteration
         
         # Handle bare "item" variable in foreach contexts
         if ref == "item":
@@ -996,7 +1153,7 @@ class WorkflowValidator:
     def _is_context_specific_variable(self, ref: str) -> bool:
         """Check if a variable is only valid in specific contexts."""
         # Legacy context-specific variables
-        legacy_vars = ["state.loop_item", "state.loop_index", "state.attempt_number", "loop.iteration", "loop.index", "loop", "item"]
+        legacy_vars = ["state.loop_item", "state.loop_index", "loop.iteration", "loop.index", "loop", "item"]
         
         # New scoped context-specific variables
         scoped_vars = ["loop.item", "loop.index", "loop.iteration"]
@@ -1024,7 +1181,7 @@ class WorkflowValidator:
             return f"At {path}: Variable '{ref}' is only valid inside loop contexts (while_loop, foreach)"
         elif ref == "loop.iteration":
             return f"At {path}: Variable '{ref}' is only valid inside loop contexts (while_loop, foreach)"
-        elif "loop_" in ref or ref == "state.attempt_number":
+        elif "loop_" in ref:
             return f"At {path}: Variable '{ref}' is only valid inside loop contexts (while_loop, foreach)"
         
         # Handle invalid scope names

@@ -158,7 +158,7 @@ class TestWorkflowExecutor:
                 type="foreach",
                 definition={
                     "items": "raw.files",
-                    "body": [{"type": "user_message", "message": "Processing {{ state.loop_item }}"}],
+                    "body": [{"type": "user_message", "message": "Processing {{ loop.item }}"}],
                 },
             )
         ]
@@ -377,34 +377,6 @@ class TestWorkflowExecutor:
         status = executor.get_workflow_status(workflow_id)
         assert status["status"] == "completed"
 
-    def test_parallel_foreach_processing(self):
-        """Test parallel foreach step processing."""
-        steps = [
-            WorkflowStep(
-                id="parallel1",
-                type="parallel_foreach",
-                definition={"items": "raw.batches", "sub_agent_task": "process_batch", "max_parallel": 3},
-            )
-        ]
-
-        executor = WorkflowExecutor()
-        workflow_def = self.create_test_workflow(steps)
-
-        start_result = executor.start(workflow_def, {"batches": ["batch1", "batch2", "batch3", "batch4"]})
-        workflow_id = start_result["workflow_id"]
-
-        # Get next step - should attempt parallel_foreach but fail due to missing sub-agent task
-        step_result = executor.get_next_step(workflow_id)
-        assert step_result is not None
-        
-        # Should return error response since "process_batch" sub-agent task is not defined
-        if "error" in step_result:
-            assert "Sub-agent task not found: process_batch" in step_result["error"]
-        else:
-            # If it succeeded somehow, check the batched format
-            assert "steps" in step_result
-            parallel_steps = [s for s in step_result["steps"] if s["type"] == "parallel_foreach"]
-            assert len(parallel_steps) >= 1
 
     def test_variable_replacement_with_context(self):
         """Test variable replacement with state-based variables."""

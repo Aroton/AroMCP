@@ -48,13 +48,34 @@ class WorkflowDefinition:
     name: str
     description: str
     version: str
-    default_state: dict[str, Any]
-    state_schema: StateSchema
-    inputs: dict[str, InputDefinition]
-    steps: list[WorkflowStep]
+    default_state: dict[str, Any] = field(default_factory=dict)
+    state_schema: StateSchema = field(default_factory=lambda: StateSchema())
+    inputs: dict[str, InputDefinition] = field(default_factory=dict)
+    steps: list[WorkflowStep] = field(default_factory=list)
     sub_agent_tasks: dict[str, SubAgentTask] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)  # Configuration for debug mode, execution mode, etc.
     loaded_from: str = ""  # File path where loaded
     source: str = ""  # "project" | "global"
+
+    def __post_init__(self):
+        """Convert dict steps to WorkflowStep objects."""
+        if self.steps:
+            converted_steps = []
+            for step in self.steps:
+                if isinstance(step, dict):
+                    # Convert dict to WorkflowStep
+                    step_id = step.get("id", f"step_{len(converted_steps)}")
+                    step_type = step.get("type", "unknown")
+                    # Create definition from all other fields
+                    definition = {k: v for k, v in step.items() if k not in ["id", "type"]}
+                    converted_steps.append(WorkflowStep(
+                        id=step_id,
+                        type=step_type,
+                        definition=definition
+                    ))
+                else:
+                    converted_steps.append(step)
+            self.steps = converted_steps
 
 
 @dataclass

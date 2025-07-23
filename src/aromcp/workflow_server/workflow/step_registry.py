@@ -139,6 +139,25 @@ STEP_TYPES: dict[str, StepConfig] = {
         "required_fields": [],
         "optional_fields": []
     },
+
+    # Debug mode steps (for serial debugging)
+    "debug_task_completion": {
+        "execution": "server",
+        "queuing": "immediate",
+        "description": "Debug marker for task completion in serial mode",
+        "supports_state_update": False,
+        "required_fields": ["task_id", "total_tasks", "completed_task_index"],
+        "optional_fields": []
+    },
+
+    "debug_step_advance": {
+        "execution": "server",
+        "queuing": "immediate",
+        "description": "Debug marker for step advancement in serial mode",
+        "supports_state_update": False,
+        "required_fields": ["task_id", "current_step_index", "total_steps", "total_tasks", "current_task_index"],
+        "optional_fields": []
+    },
 }
 
 

@@ -20,7 +20,7 @@ default_state:
     git_output: ""
     file_list: []
   state:
-    results: {}
+    processing_results: {}
     processed_count: 0
 
 # Complex computed state fields similar to code-standards:enforce
@@ -29,7 +29,7 @@ state_schema:
     git_output: "string"
     file_list: "array"
   state:
-    results: "object"
+    processing_results: "object"
     processed_count: "number"
   computed:
     # First: Parse git output into individual files
@@ -74,11 +74,11 @@ state_schema:
     
     # Processing status
     all_processed:
-      from: ["state.results", "computed.final_files"]
+      from: ["state.processing_results", "computed.final_files"]
       transform: "Object.keys(input[0] || {}).length === input[1].length"
     
     failed_files:
-      from: "state.results"
+      from: "state.processing_results"
       transform: "Object.entries(input || {}).filter(([_, result]) => !result.success).map(([file, _]) => file)"
 
 steps:
@@ -208,29 +208,9 @@ sub_agent_tasks:
                 tool: "hints_for_files"
                 parameters:
                   file_paths: ["{{ file_path }}"]
-                store_result: "hints_output"
-
-              - id: "process_hints_result"
-                type: "conditional"
-                condition: "{{ hints_output.success }}"
-                then_steps:
-                  - id: "store_hints_success"
-                    type: "mcp_call"
-                    tool: "echo"  # Placeholder tool to update state
-                    parameters:
-                      message: "Hints completed successfully"
-                    state_update:
-                      path: "state.step_results.hints"
-                      value: "{\"success\": true, \"completed_at\": {{ state.attempt_number }}}"
-                else_steps:
-                  - id: "store_hints_failure"
-                    type: "mcp_call"
-                    tool: "echo"  # Placeholder tool to update state
-                    parameters:
-                      message: "Failed to get hints"
-                    state_update:
-                      path: "state.step_results.hints"
-                      value: "{\"success\": false, \"error\": \"Failed to get hints\", \"attempt\": {{ state.attempt_number }}}"
+                state_update:
+                  path: "state.step_results.hints"
+                  value: "{{ success ? {\"success\": true, \"completed_at\": state.attempt_number} : {\"success\": false, \"error\": \"Failed to get hints\", \"attempt\": state.attempt_number} }}"
 
           # Step 2: Run linting
           - id: "lint_step"
@@ -243,29 +223,9 @@ sub_agent_tasks:
                 parameters:
                   target_files: ["{{ file_path }}"]
                   use_eslint_standards: true
-                store_result: "lint_output"
-
-              - id: "process_lint_results"
-                type: "conditional"
-                condition: "{{ lint_output.success && (!lint_output.data.errors || lint_output.data.errors.length === 0) }}"
-                then_steps:
-                  - id: "lint_success"
-                    type: "mcp_call"
-                    tool: "echo"
-                    parameters:
-                      message: "Lint completed successfully"
-                    state_update:
-                      path: "state.step_results.lint"
-                      value: "{\"success\": true, \"completed_at\": {{ state.attempt_number }}}"
-                else_steps:
-                  - id: "lint_partial"
-                    type: "mcp_call"
-                    tool: "echo"
-                    parameters:
-                      message: "Lint found errors"
-                    state_update:
-                      path: "state.step_results.lint"
-                      value: "{\"success\": false, \"errors\": {{ lint_output.data.errors.length || 0 }}, \"attempt\": {{ state.attempt_number }}}"
+                state_update:
+                  path: "state.step_results.lint"
+                  value: "{{ success && (!errors || errors.length === 0) ? {\"success\": true, \"completed_at\": state.attempt_number} : {\"success\": false, \"errors\": (errors ? errors.length : 0), \"attempt\": state.attempt_number} }}"
 
           # Step 3: TypeScript check (if applicable)
           - id: "typescript_step"
@@ -277,29 +237,9 @@ sub_agent_tasks:
                 tool: "check_typescript"
                 parameters:
                   file_paths: ["{{ file_path }}"]
-                store_result: "typescript_output"
-
-              - id: "process_typescript_results"
-                type: "conditional"
-                condition: "{{ typescript_output.success && (!typescript_output.data.errors || typescript_output.data.errors.length === 0) }}"
-                then_steps:
-                  - id: "typescript_success"
-                    type: "mcp_call"
-                    tool: "echo"
-                    parameters:
-                      message: "TypeScript check completed successfully"
-                    state_update:
-                      path: "this.step_results.typescript"
-                      value: "{\"success\": true, \"completed_at\": {{ loop.iteration }}}"
-                else_steps:
-                  - id: "typescript_partial"
-                    type: "mcp_call"
-                    tool: "echo"
-                    parameters:
-                      message: "TypeScript check found errors"
-                    state_update:
-                      path: "this.step_results.typescript"
-                      value: "{\"success\": false, \"errors\": {{ typescript_output.data.errors.length || 0 }}, \"attempt\": {{ loop.iteration }}}"
+                state_update:
+                  path: "state.step_results.typescript"
+                  value: "{{ success && (!errors || errors.length === 0) ? {\"success\": true, \"completed_at\": loop.iteration} : {\"success\": false, \"errors\": (errors ? errors.length : 0), \"attempt\": loop.iteration} }}"
 
           # Auto-complete TypeScript for non-TS files
           - id: "skip_typescript_for_non_ts"
@@ -312,7 +252,7 @@ sub_agent_tasks:
                 parameters:
                   message: "Skipping TypeScript check for non-TS file"
                 state_update:
-                  path: "this.step_results.typescript"
+                  path: "state.step_results.typescript"
                   value: "{\"success\": true, \"skipped\": true, \"reason\": \"Not a TypeScript/JavaScript file\"}"
 
       # Final result processing
@@ -326,7 +266,7 @@ sub_agent_tasks:
             parameters:
                 message: "All standards checks completed successfully"
             state_update:
-              path: "this.success"
+              path: "state.success"
               value: "true"
         else_steps:
           - id: "mark_final_failure"
@@ -335,5 +275,5 @@ sub_agent_tasks:
             parameters:
                 message: "Failed to complete all standards checks"
             state_update:
-              path: "this.last_error"
+              path: "state.last_error"
               value: "Failed to complete all standards checks after {{ loop.iteration }} attempts"

@@ -41,14 +41,14 @@ description: "Test basic sequential execution"
 version: "1.0.0"
 
 default_state:
-  raw:
+  state:
     counter: 0
     message: ""
 
 state_schema:
   computed:
     doubled:
-      from: "raw.counter"
+      from: "state.counter"
       transform: "input * 2"
 
 inputs:
@@ -58,17 +58,23 @@ inputs:
     required: true
 
 steps:
-  - type: "state_update"
-    path: "raw.counter"
-    value: 5
+  - id: "set_counter"
+    type: "mcp_call"
+    tool: "workflow_state_update"
+    parameters:
+      updates:
+        - path: "state.counter"
+          value: 5
     
-  - type: "user_message"
-    message: "Counter is {{ raw.counter }}, doubled is {{ computed.doubled }}"
+  - id: "show_message"
+    type: "user_message"
+    message: "Counter is {{ state.counter }}, doubled is {{ computed.doubled }}"
     
-  - type: "shell_command"
+  - id: "run_command"
+    type: "shell_command"
     command: "echo 'Hello from workflow'"
     state_update:
-      path: "raw.message"
+      path: "state.message"
       value: "stdout"
 """
 
@@ -95,18 +101,23 @@ inputs:
     default: []
 
 default_state:
-  raw:
+  state:
     git_output: ""
     file_list: []
-    results: {}
+    processing_results: {}
     processed_count: 0
 
 # Complex computed state fields similar to code-standards:enforce
 state_schema:
+  state:
+    git_output: "string"
+    file_list: "array"
+    processing_results: "object"
+    processed_count: "number"
   computed:
     # First: Parse git output into individual files
     changed_files:
-      from: "raw.git_output"
+      from: "state.git_output"
       transform: "input.split('\\\\n').filter(line => line.trim() !== '')"
     
     # Second: Filter for code files only, excluding certain directories
@@ -124,7 +135,7 @@ state_schema:
     
     # Third: Fallback to direct file list if no git output
     final_files:
-      from: ["computed.code_files", "raw.file_list"]
+      from: ["computed.code_files", "state.file_list"]
       transform: "input[0].length > 0 ? input[0] : input[1]"
     
     # Statistics
@@ -146,24 +157,30 @@ state_schema:
     
     # Processing status
     all_processed:
-      from: ["raw.processing_results", "computed.final_files"]
+      from: ["state.processing_results", "computed.final_files"]
       transform: "Object.keys(input[0] || {}).length === input[1].length"
     
     failed_files:
-      from: "raw.processing_results"
+      from: "state.processing_results"
       transform: "Object.entries(input || {}).filter(([_, result]) => !result.success).map(([file, _]) => file)"
 
 steps:
   # Step 1: Initialize with git output or file list
   - id: "initialize_git_output"
-    type: "state_update"
-    path: "raw.git_output"
-    value: "{{ git_output }}"
+    type: "mcp_call"
+    tool: "workflow_state_update"
+    parameters:
+      updates:
+        - path: "state.git_output"
+          value: "{{ git_output }}"
 
   - id: "initialize_file_list"
-    type: "state_update"
-    path: "raw.file_list"
-    value: "{{ file_list }}"
+    type: "mcp_call"
+    tool: "workflow_state_update"
+    parameters:
+      updates:
+        - path: "state.file_list"
+          value: "{{ file_list }}"
 
   # Step 2: Show what files were found
   - id: "files_found_message"
@@ -188,8 +205,6 @@ steps:
       - id: "no_files_message"
         type: "user_message"
         message: "No files found to process. Workflow complete."
-      - id: "exit_early"
-        type: "break"
 
   # Step 4: Process files in parallel using computed.final_files
   - id: "process_files_parallel"
@@ -200,16 +215,19 @@ steps:
 
   # Step 5: Finalize with computed field reference
   - id: "finalize"
-    type: "state_update"
-    path: "raw.processed_count"
-    value: "{{ computed.total_files }}"
+    type: "mcp_call"
+    tool: "workflow_state_update"
+    parameters:
+      updates:
+        - path: "state.processed_count"
+          value: "{{ computed.total_files }}"
 
   - id: "completion_message"
     type: "user_message"
     message: |
       ✅ Processing complete!
       - Total files: {{ computed.total_files }}
-      - Processed: {{ raw.processed_count }}
+      - Processed: {{ state.processed_count }}
       - Failed: {{ computed.failed_files.length }}
 
 sub_agent_tasks:
@@ -227,90 +245,20 @@ sub_agent_tasks:
         required: false
         default: 5
 
-    prompt_template: |
-      You are processing file: {{ file_path }} (item {{ index }} of {{ total }})
-      
-      Your task is to enforce code standards on this file through the following steps:
-      1. Get hints for the file using hints_for_files
-      2. Apply suggested improvements
-      3. Run linting checks
-      4. Fix any issues found
-      5. Verify all checks pass
-      
-      Continue until all standards are met or max attempts ({{ max_attempts }}) reached.
-
     steps:
-      - id: "mark_processing"
-        type: "state_update"
-        path: "raw.processing_results.{{ task_id }}"
-        value:
-          status: "processing"
-          file: "{{ item }}"
-          started_at: "{{ now() }}"
-          attempts: 0
+      - id: "process_file_message"
+        type: "user_message"
+        message: "Processing file: {{ inputs.file_path }}"
 
       - id: "get_hints"
         type: "mcp_call"
         tool: "hints_for_files"
         parameters:
-          file_paths: ["{{ item }}"]
-        state_update:
-          path: "raw.processing_results.{{ task_id }}.hints"
+          file_paths: ["{{ inputs.file_path }}"]
 
-      - id: "initial_lint"
-        type: "mcp_call"
-        tool: "lint_project"
-        parameters:
-          target_files: ["{{ item }}"]
-          use_eslint_standards: true
-        state_update:
-          path: "raw.processing_results.{{ task_id }}.initial_lint"
-
-      - id: "check_typescript"
-        type: "conditional"
-        condition: "{{ item.endsWith('.ts') || item.endsWith('.tsx') }}"
-        then_steps:
-          - id: "run_typescript_check"
-            type: "mcp_call"
-            tool: "check_typescript"
-            parameters:
-              file_paths: ["{{ item }}"]
-            state_update:
-              path: "raw.processing_results.{{ task_id }}.typescript_check"
-
-      - id: "analyze_issues"
-        type: "state_update"
-        path: "raw.processing_results.{{ task_id }}.has_issues"
-        value: "{{ (initial_lint && initial_lint.issues && initial_lint.issues.length > 0) || (typescript_check && typescript_check.errors && typescript_check.errors.length > 0) }}"
-
-      - id: "mark_success"
-        type: "conditional"
-        condition: "{{ !raw.processing_results[task_id].has_issues }}"
-        then_steps:
-          - id: "mark_completed_success"
-            type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.status"
-            value: "completed"
-          
-          - id: "mark_success_flag"
-            type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.success"
-            value: true
-        else_steps:
-          - id: "mark_completed_with_issues"
-            type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.status"
-            value: "completed_with_issues"
-          
-          - id: "mark_needs_work"
-            type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.success"
-            value: false
-          
-          - id: "record_issues"
-            type: "state_update"
-            path: "raw.processing_results.{{ task_id }}.last_error"
-            value: "File has linting or TypeScript issues that need manual attention"
+      - id: "completion_message"
+        type: "user_message"
+        message: "Completed processing {{ inputs.file_path }}"
 """
 
 
@@ -334,9 +282,9 @@ def assert_tool_response_format(response: Dict[str, Any], success: bool = True):
 
 def assert_workflow_state_structure(state: Dict[str, Any]):
     """Assert that workflow state follows the expected three-tier structure."""
-    assert "raw" in state, f"State missing 'raw' tier: {state.keys()}"
+    assert "state" in state, f"State missing 'state' tier: {state.keys()}"
     assert "computed" in state, f"State missing 'computed' tier: {state.keys()}"
-    # The 'state' tier is optional and may not be present in all workflows
+    # The 'inputs' tier is optional and may not be present in all workflows
 
 
 def assert_step_response_format(step_response: Dict[str, Any]):

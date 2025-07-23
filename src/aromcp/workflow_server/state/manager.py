@@ -171,10 +171,13 @@ class StateManager:
             # New scoped paths - writable
             return True
         elif scope in ("inputs", "state", "raw"):
-            # Legacy paths - inputs/raw/state writable for backward compatibility
+            # Legacy paths - inputs/state/raw writable for backward compatibility
+            # raw is mapped to inputs in _apply_single_update
             return True
-        elif scope == "loop":
-            # Read-only scope - not writable in normal operations
+        elif scope in ("loop", "computed"):
+            # Read-only/auto-managed scopes - not writable
+            # - loop: auto-managed by execution context
+            # - computed: auto-calculated from other fields
             return False
         else:
             # Unknown scope
@@ -215,6 +218,37 @@ class StateManager:
                 "state": dict(state.state),
                 "raw": dict(state.inputs)  # Backward compatibility alias
             }
+
+    def get_state(self, workflow_id: str | None = None) -> dict[str, Any]:
+        """
+        Get the current state for a workflow or return default empty state.
+        
+        This method is used by test mocks and provides backward compatibility.
+        
+        Args:
+            workflow_id: Optional workflow identifier. If None, returns empty state.
+            
+        Returns:
+            Current workflow state or empty dict if workflow doesn't exist
+        """
+        if workflow_id is None:
+            return {}
+            
+        lock = self._get_workflow_lock(workflow_id)
+        
+        with lock:
+            if workflow_id not in self._states:
+                return {}
+                
+            state = self._states[workflow_id]
+            
+            # Return simple flattened state for compatibility
+            result = {}
+            result.update(state.state)
+            result.update(state.inputs)
+            result.update(state.computed)
+            
+            return result
 
     def update(self, workflow_id: str, updates: list[dict[str, Any]], context: ExecutionContext | None = None) -> dict[str, Any]:
         """

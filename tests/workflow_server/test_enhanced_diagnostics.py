@@ -54,7 +54,7 @@ class TestEnhancedDiagnostics:
                 task_id = "failing_task_001"
                 self.subagent_manager.sub_agent_contexts[task_id] = {
                     "sub_agent_state": {
-                        "raw": {"attempt_number": 3, "file_path": "src/error.ts"},
+                        "raw": {"loop.iteration": 3, "file_path": "src/error.ts"},
                         "computed": {"can_continue": False}
                     },
                     "task_context": {"item": "src/error.ts", "index": 0, "total": 1}
@@ -92,7 +92,7 @@ class TestEnhancedDiagnostics:
                         "typescript_completed": False,
                         "is_typescript_file": True
                     },
-                    "raw": {"attempt_number": 1},
+                    "loop": {"iteration": 1},
                     "max_attempts": 10
                 },
                 "expected_analysis": "Hints step failed or never completed"
@@ -106,7 +106,7 @@ class TestEnhancedDiagnostics:
                         "typescript_completed": False,
                         "is_typescript_file": True
                     },
-                    "raw": {"attempt_number": 2},
+                    "loop": {"iteration": 2},
                     "max_attempts": 10
                 },
                 "expected_analysis": "Linting errors not resolved"
@@ -120,7 +120,7 @@ class TestEnhancedDiagnostics:
                         "typescript_completed": False,
                         "is_typescript_file": True
                     },
-                    "raw": {"attempt_number": 3},
+                    "loop": {"iteration": 3},
                     "max_attempts": 10
                 },
                 "expected_analysis": "TypeScript errors not resolved"
@@ -134,7 +134,7 @@ class TestEnhancedDiagnostics:
                         "typescript_completed": True,
                         "is_typescript_file": True
                     },
-                    "raw": {"attempt_number": 10},
+                    "loop": {"iteration": 10},
                     "max_attempts": 10
                 },
                 "expected_analysis": "Maximum attempts exceeded"
@@ -147,7 +147,7 @@ class TestEnhancedDiagnostics:
                 !computed.hints_completed ? 'Hints step failed or never completed' :
                 !computed.lint_completed ? 'Linting errors not resolved' :
                 computed.is_typescript_file && !computed.typescript_completed ? 'TypeScript errors not resolved' :
-                raw.attempt_number >= max_attempts ? 'Maximum attempts exceeded' :
+                loop.iteration >= max_attempts ? 'Maximum attempts exceeded' :
                 'Unknown failure condition'
             }}"""
             
@@ -169,12 +169,14 @@ class TestEnhancedDiagnostics:
                 "can_continue": True
             },
             "raw": {
-                "attempt_number": 2,
                 "step_results": {
                     "hints": {"success": True, "completed_at": 1},
                     "lint": {"success": False, "errors": 3, "error_details": ["Missing semicolon", "Unused variable", "Type error"]},
                     "typescript": None
                 }
+            },
+            "loop": {
+                "iteration": 2
             },
             "max_attempts": 10
         }
@@ -186,7 +188,7 @@ class TestEnhancedDiagnostics:
             "is_typescript": {{ computed.is_typescript_file }}
           },
           "execution_state": {
-            "attempt": {{ raw.attempt_number }},
+            "attempt": {{ loop.iteration }},
             "max_attempts": {{ max_attempts }},
             "can_continue": {{ computed.can_continue }},
             "all_completed": {{ computed.all_steps_completed }}
@@ -222,7 +224,6 @@ class TestEnhancedDiagnostics:
                 "typescript_completed": False
             },
             "raw": {
-                "attempt_number": 3,
                 "step_results": {
                     "hints": {"success": True},
                     "lint": {
@@ -232,11 +233,14 @@ class TestEnhancedDiagnostics:
                     },
                     "typescript": None
                 }
+            },
+            "loop": {
+                "iteration": 3
             }
         }
         
         # Test enhanced failure message
-        failure_template = "❌ Failed to enforce standards on {{ file_path }} after {{ raw.attempt_number }} attempts"
+        failure_template = "❌ Failed to enforce standards on {{ file_path }} after {{ loop.iteration }} attempts"
         result = self.subagent_manager._replace_variables(failure_template, state)
         expected = "❌ Failed to enforce standards on src/complex-component.tsx after 3 attempts"
         assert result == expected

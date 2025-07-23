@@ -1,4 +1,12 @@
-"""Tests for agent step processors (agent_prompt and agent_response)."""
+"""
+Test suite for Agent Step Processors - Acceptance Criteria 3.1 & 3.2
+
+This file tests the following acceptance criteria:
+- AC 3.1: Agent Prompt Step - prompt generation and context handling
+- AC 3.2: Agent Response Step - response processing and state updates
+
+Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
+"""
 
 import pytest
 from unittest.mock import Mock
@@ -8,15 +16,15 @@ from aromcp.workflow_server.workflow.steps.agent_response import AgentResponsePr
 from aromcp.workflow_server.workflow.models import WorkflowStep
 
 
-class TestAgentPromptProcessor:
-    """Test AgentPromptProcessor functionality."""
+class TestAgentPromptStepProcessing:
+    """Test agent prompt step processing functionality - AC 3.1"""
 
     def setup_method(self):
         """Set up test fixtures."""
         self.processor = AgentPromptProcessor()
 
-    def test_basic_agent_prompt_processing(self):
-        """Test basic agent prompt processing."""
+    def test_agent_prompt_step_basic_processing(self):
+        """Test agent prompt step handles basic prompt generation (AC 3.1)."""
         step = WorkflowStep(
             id="agent_prompt_1",
             type="agent_prompt",
@@ -185,8 +193,8 @@ class TestAgentPromptProcessor:
         assert result["response"] == "any response"
 
 
-class TestAgentResponseProcessor:
-    """Test AgentResponseProcessor functionality."""
+class TestAgentResponseStepProcessing:
+    """Test agent response step processing functionality - AC 3.2"""
 
     def setup_method(self):
         """Set up test fixtures."""

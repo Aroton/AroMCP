@@ -45,7 +45,7 @@ description: "Test parameter handling"
 version: "1.0.0"
 
 default_state:
-  raw:
+  state:
     counter: 0
 
 inputs:
@@ -55,9 +55,12 @@ inputs:
     required: true
 
 steps:
-  - type: "state_update"
-    path: "raw.counter"
-    value: 1
+  - id: "update_counter"
+    type: "user_message"
+    message: "Updating counter"
+    state_update:
+      path: "state.counter"
+      value: 1
 """
         
         # Write the workflow file
@@ -71,7 +74,7 @@ steps:
         # Test with dict inputs
         result = executor.start(workflow_def, {"name": "test"})
         assert result["status"] == "running"
-        assert result["state"]["raw"]["name"] == "test"
+        assert result["state"]["state"]["name"] == "test"
 
     def test_workflow_update_state_parameter_types(self, workflow_components):
         """Test workflow state updates with different parameter types."""
@@ -84,18 +87,22 @@ description: "Test state updates"
 version: "1.0.0"
 
 default_state:
-  raw:
+  state:
     counter: 0
 
 inputs:
   name:
-    type: "string" 
+    type: "string"
+    description: "Test name"
     required: true
 
 steps:
-  - type: "state_update"
-    path: "raw.counter"
-    value: 1
+  - id: "init_counter"
+    type: "user_message"
+    message: "Initializing counter"
+    state_update:
+      path: "state.counter"
+      value: 1
 """
         
         # Write the workflow file
@@ -109,7 +116,7 @@ steps:
         workflow_id = result["workflow_id"]
         
         # Test state updates
-        updates = [{"path": "raw.counter", "value": 5}]
+        updates = [{"path": "state.counter", "value": 5}]
         updated_state = executor.update_workflow_state(workflow_id, updates)
         assert updated_state["counter"] == 5
 
@@ -126,14 +133,19 @@ version: "1.0.0"
 inputs:
   name:
     type: "string"
+    description: "Test name"
     required: true
 
 steps:
-  - type: "user_message"
+  - id: "greet_user"
+    type: "user_message"
     message: "Hello {{ name }}"
-  - type: "state_update"
-    path: "raw.counter"
-    value: 1
+  - id: "update_counter"
+    type: "user_message"
+    message: "Updating counter"
+    state_update:
+      path: "state.counter"
+      value: 1
 """
         
         # Write the workflow file
@@ -183,16 +195,21 @@ version: "1.0.0"
 inputs:
   text_input:
     type: "string"
+    description: "Text input parameter"
     required: true
   number_input:
     type: "number"
+    description: "Number input parameter"
     required: false
     default: 0
 
 steps:
-  - type: "state_update"
-    path: "raw.result"
-    value: "{{ text_input }}_{{ number_input }}"
+  - id: "store_result"
+    type: "user_message"
+    message: "Storing result"
+    state_update:
+      path: "state.result"
+      value: "{{ text_input }}_{{ number_input }}"
 """
         
         workflows_dir = Path(temp_dir) / ".aromcp" / "workflows"
@@ -229,12 +246,16 @@ version: "1.0.0"
 inputs:
   flag:
     type: "string"
+    description: "Flag parameter"
     required: true
 
 steps:
-  - type: "state_update"
-    path: "raw.flag"
-    value: "{{ flag }}"
+  - id: "store_flag"
+    type: "user_message"
+    message: "Storing flag value"
+    state_update:
+      path: "state.flag"
+      value: "{{ flag }}"
 """
         
         workflows_dir = Path(temp_dir) / ".aromcp" / "workflows"
@@ -272,12 +293,16 @@ version: "1.0.0"
 inputs:
   name:
     type: "string"
+    description: "Test name"
     required: true
 
 steps:
-  - type: "state_update"
-    path: "raw.data"
-    value: {"nested": {"value": 1}}
+  - id: "init_nested_data"
+    type: "user_message"
+    message: "Initializing nested data"
+    state_update:
+      path: "state.data"
+      value: {"nested": {"value": 1}}
 """
         
         workflows_dir = Path(temp_dir) / ".aromcp" / "workflows"  
@@ -290,7 +315,7 @@ steps:
         # Test nested state update
         workflow_id = result["workflow_id"]
         updates = [
-            {"path": "raw.complex", "value": {"nested": {"deep": {"value": True}}}}
+            {"path": "state.complex", "value": {"nested": {"deep": {"value": True}}}}
         ]
         updated_state = executor.update_workflow_state(workflow_id, updates)
         assert "complex" in updated_state
@@ -308,12 +333,16 @@ version: "1.0.0"
 inputs:
   name:
     type: "string"
+    description: "Test name"
     required: true
 
 steps:
-  - type: "state_update"
-    path: "raw.counter"
-    value: 1
+  - id: "init_counter"
+    type: "user_message"
+    message: "Initializing counter"
+    state_update:
+      path: "state.counter"
+      value: 1
 """
         
         workflows_dir = Path(temp_dir) / ".aromcp" / "workflows"
