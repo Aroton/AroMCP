@@ -21,10 +21,10 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.aromcp.workflow_server.workflow.validator import WorkflowValidator
-from src.aromcp.workflow_server.workflow.loader import WorkflowLoader
-from src.aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor
-from src.aromcp.workflow_server.state.manager import StateManager
+from aromcp.workflow_server.workflow.validator import WorkflowValidator
+from aromcp.workflow_server.workflow.loader import WorkflowLoader
+from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor
+from aromcp.workflow_server.state.manager import StateManager
 
 
 class TestAcceptanceScenario6ValidationEdgeCases:

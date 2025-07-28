@@ -23,8 +23,25 @@ class WorkflowStep:
 
     id: str
     type: str  # "mcp_call", "user_message", "shell_command", "agent_prompt", "agent_response", etc.
-    definition: dict[str, Any]
+    definition: dict[str, Any] = field(default_factory=dict)
     execution_context: str = "server"  # "server" or "client" - where the step executes (only used for shell_command)
+    
+    def __init__(self, id: str, type: str, definition: dict[str, Any] = None, execution_context: str = "server", config: dict[str, Any] = None, **kwargs):
+        """Initialize WorkflowStep with support for config parameter as alias for definition."""
+        self.id = id
+        self.type = type
+        self.execution_context = execution_context
+        
+        # Support config as alias for definition for backwards compatibility
+        if definition is not None:
+            self.definition = definition
+        elif config is not None:
+            self.definition = config
+        else:
+            self.definition = {}
+            
+        # Add any additional kwargs to definition
+        self.definition.update(kwargs)
 
 
 @dataclass
@@ -46,8 +63,8 @@ class WorkflowDefinition:
     """Complete definition of a workflow."""
 
     name: str
-    description: str
-    version: str
+    description: str = ""
+    version: str = "1.0"
     default_state: dict[str, Any] = field(default_factory=dict)
     state_schema: StateSchema = field(default_factory=lambda: StateSchema())
     inputs: dict[str, InputDefinition] = field(default_factory=dict)

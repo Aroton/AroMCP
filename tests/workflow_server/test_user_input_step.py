@@ -8,8 +8,10 @@ This file tests the following acceptance criteria:
 - AC 3.1.4: State updates via state_update field
 - AC 3.1.5: Default values and retry logic
 - AC 3.1.6: Validation failures with max_retries limit
+- AC-UI-011: Complex validation expressions
+- AC-UI-012: Long input handling and timeout scenarios
 
-Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
+Maps to: /documentation/acceptance-criteria/workflow_server/user-interaction.md
 """
 
 import pytest

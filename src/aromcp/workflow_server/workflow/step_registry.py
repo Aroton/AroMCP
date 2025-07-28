@@ -140,6 +140,15 @@ STEP_TYPES: dict[str, StepConfig] = {
         "optional_fields": []
     },
 
+    "while_loop_continuation": {
+        "execution": "server",
+        "queuing": "immediate",
+        "description": "Internal step for while loop continuation",
+        "supports_state_update": False,
+        "required_fields": ["original_loop_step_id", "original_loop_step_type", "original_loop_definition"],
+        "optional_fields": []
+    },
+
     # Debug mode steps (for serial debugging)
     "debug_task_completion": {
         "execution": "server",

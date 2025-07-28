@@ -11,7 +11,40 @@ from .metrics import MetricsCollector, PerformanceMetrics, ResourceMetrics, Work
 logger = logging.getLogger(__name__)
 
 
-class MetricsExporter(ABC):
+class MetricsExporter:
+    """Factory class for metrics exporters."""
+
+    def __init__(self, format: str = "json", **kwargs):
+        """Initialize exporter with specified format."""
+        if format == "json":
+            self._exporter = JSONExporter(**kwargs)
+        elif format == "prometheus":
+            self._exporter = PrometheusExporter(**kwargs)
+        elif format == "csv":
+            self._exporter = CSVExporter(**kwargs)
+        else:
+            raise ValueError(f"Unsupported format: {format}")
+        
+        self.format = format
+
+    def export_workflow_metrics(self, metrics: dict[str, WorkflowMetrics]) -> str:
+        """Export workflow metrics to string format."""
+        return self._exporter.export_workflow_metrics(metrics)
+
+    def export_performance_metrics(self, metrics: list[PerformanceMetrics]) -> str:
+        """Export performance metrics to string format."""
+        return self._exporter.export_performance_metrics(metrics)
+
+    def export_resource_metrics(self, metrics: list[ResourceMetrics]) -> str:
+        """Export resource metrics to string format."""
+        return self._exporter.export_resource_metrics(metrics)
+
+    def export_summary(self, summary: dict[str, Any]) -> str:
+        """Export summary statistics to string format."""
+        return self._exporter.export_summary(summary)
+
+
+class BaseMetricsExporter(ABC):
     """Abstract base class for metrics exporters."""
 
     @abstractmethod
@@ -35,7 +68,7 @@ class MetricsExporter(ABC):
         pass
 
 
-class JSONExporter(MetricsExporter):
+class JSONExporter(BaseMetricsExporter):
     """Exports metrics in JSON format."""
 
     def __init__(self, indent: int | None = 2):
@@ -88,7 +121,7 @@ class JSONExporter(MetricsExporter):
         return json.dumps(data, indent=self.indent)
 
 
-class PrometheusExporter(MetricsExporter):
+class PrometheusExporter(BaseMetricsExporter):
     """Exports metrics in Prometheus format."""
 
     def __init__(self, namespace: str = "workflow_system"):
@@ -268,7 +301,7 @@ class PrometheusExporter(MetricsExporter):
         return "\n".join(lines)
 
 
-class CSVExporter(MetricsExporter):
+class CSVExporter(BaseMetricsExporter):
     """Exports metrics in CSV format."""
 
     def export_workflow_metrics(self, metrics: dict[str, WorkflowMetrics]) -> str:

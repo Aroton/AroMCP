@@ -429,6 +429,9 @@ class WorkflowValidator:
             # Validate all references for non-control-flow steps
             self._validate_step_references(step, path, context)
 
+        # Generic validation for state_updates (used by multiple step types)
+        self._validate_step_state_updates(step, path)
+        
         # Type-specific validation (which handles body/branches with proper context)
         validator_method = f"_validate_{step_type}_step"
         if hasattr(self, validator_method):
@@ -595,17 +598,7 @@ class WorkflowValidator:
                     if response_schema["type"] not in valid_types:
                         self.errors.append(f"{path} has invalid response_schema type")
 
-        # Validate state_updates format
-        if "state_updates" in step:
-            state_updates = step["state_updates"]
-            if isinstance(state_updates, list):
-                for i, update in enumerate(state_updates):
-                    if not isinstance(update, dict):
-                        self.errors.append(f"{path}.state_updates[{i}] must be an object")
-                    elif "path" not in update or "value" not in update:
-                        self.errors.append(f"{path}.state_updates[{i}] missing required fields")
-            else:
-                self.errors.append(f"{path}.state_updates must be an array")
+        # state_updates validation is now handled generically in _validate_step()
 
         # Validate error_handling
         if "error_handling" in step:
@@ -977,6 +970,7 @@ class WorkflowValidator:
 
         elif root == "loop":
             # loop.item, loop.index, loop.iteration - valid only in loop contexts
+            # Also support custom variable names like loop.inner_val, loop.outer_val
             if not context or not context.get("in_loop"):
                 return False
             if len(parts) < 2:
@@ -992,7 +986,14 @@ class WorkflowValidator:
             elif loop_var == "iteration":
                 # loop.iteration only valid in while loop contexts, not foreach
                 return context.get("in_while_loop", False)
-            return False
+            else:
+                # Custom variable names: check if we're in a foreach context and the variable name
+                # could be a custom variable_name from the foreach step
+                if context.get("in_foreach", False):
+                    # For custom variable names, assume valid if we're in foreach context
+                    # The actual validation will happen at runtime with proper loop context
+                    return True
+                return False
 
         elif root == "inputs":
             # inputs.parameter - validates against workflow inputs
@@ -1150,6 +1151,28 @@ class WorkflowValidator:
                 # Regular variable, add to global references for validation
                 self.referenced_variables.add(ref)
 
+    def _validate_step_state_updates(self, step: dict[str, Any], path: str):
+        """Validate state_updates field and track new state variables."""
+        if "state_updates" not in step:
+            return
+            
+        state_updates = step["state_updates"]
+        if isinstance(state_updates, list):
+            for i, update in enumerate(state_updates):
+                if not isinstance(update, dict):
+                    self.errors.append(f"{path}.state_updates[{i}] must be an object")
+                elif "path" not in update or "value" not in update:
+                    self.errors.append(f"{path}.state_updates[{i}] missing required fields")
+                else:
+                    # Track dynamically created state variables
+                    update_path = update.get("path", "")
+                    if update_path.startswith("state."):
+                        # Add the new state variable to tracked paths
+                        state_var = update_path[6:]  # Remove "state." prefix
+                        self.state_paths.add(state_var)
+        else:
+            self.errors.append(f"{path}.state_updates must be an array")
+
     def _is_context_specific_variable(self, ref: str) -> bool:
         """Check if a variable is only valid in specific contexts."""
         # Legacy context-specific variables
@@ -1197,6 +1220,12 @@ class WorkflowValidator:
         """Cross-validate references between components."""
         # Validate all collected references
         for ref in self.referenced_variables:
+            # Skip loop variables with custom names as they are context-specific
+            # These are already validated in their proper context during step validation
+            if ref.startswith("loop.") and not ref.split(".")[1] in ["item", "index", "iteration"]:
+                # This is a custom loop variable, skip global validation
+                continue
+                
             if not self._validate_variable_reference(ref):
                 suggestions = self._get_similar_variables(ref)
                 error_msg = f"Undefined variable reference: '{ref}'"

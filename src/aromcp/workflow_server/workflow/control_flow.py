@@ -165,6 +165,8 @@ class LoopState:
     current_item_index: int = 0  # For foreach loops
     variable_bindings: dict[str, Any] = field(default_factory=dict)  # Loop variables
     control_signal: str | None = None  # "break" or "continue"
+    variable_name: str = "item"  # Custom variable name for foreach loop item
+    index_name: str = "index"  # Custom variable name for foreach loop index
 
     def is_complete(self) -> bool:
         """Check if the loop should terminate."""
@@ -188,11 +190,11 @@ class LoopState:
     def update_loop_variables(self):
         """Update loop variables in variable_bindings based on current state."""
         if self.loop_type == "foreach":
-            # Set loop.item and loop.index for foreach loops
+            # Set custom loop variables for foreach loops
             current_item = self.get_current_item()
             self.variable_bindings.update({
-                "item": current_item,
-                "index": self.current_item_index
+                self.variable_name: current_item,
+                self.index_name: self.current_item_index
             })
         elif self.loop_type == "while":
             # Set loop.iteration for while loops (1-based iteration counter)
@@ -200,6 +202,7 @@ class LoopState:
 
     def advance_iteration(self):
         """Advance to the next iteration and update loop variables."""
+        # print(f"DEBUG: advance_iteration called for {self.loop_id}: {self.current_iteration} -> {self.current_iteration + 1}")
         self.current_iteration += 1
         if self.loop_type == "foreach":
             self.current_item_index += 1

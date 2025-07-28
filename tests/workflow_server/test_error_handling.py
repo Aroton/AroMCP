@@ -5,10 +5,13 @@ This file tests the following acceptance criteria:
 - AC 8.1: Step-Level Error Handling - error handling strategies (retry, continue, fail, fallback)
 - AC 8.2: Timeout Management - step and workflow-level timeout handling
 - AC 8.3: Validation Error Recovery - recovery and reporting for validation failures
+- AC-EH-019: Parallel Error Aggregation - error handling in parallel execution
+- AC-EH-020: Timeout Cascading - timeout propagation in nested operations
 
-Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
+Maps to: /documentation/acceptance-criteria/workflow_server/error-handling-validation.md
 """
 
+import time
 from datetime import datetime, timedelta
 
 import pytest
@@ -965,3 +968,401 @@ class TestPhase5AcceptanceCriteria:
         breaker_state = stats["circuit_breakers"]["wf_test:step_1"]
         assert breaker_state["state"] == "open"
         assert breaker_state["failure_count"] >= 2
+
+
+class TestTimeoutManagement:
+    """Test comprehensive timeout management - AC 8.2 and AC-EH-020"""
+
+    def test_step_level_timeout_enforcement(self):
+        """Test step-level timeout enforcement with TimeoutManager (AC 8.2)."""
+        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
+        
+        timeout_manager = TimeoutManager()
+        
+        # Set step timeout
+        timeout_manager.set_step_timeout("step_1", timeout_seconds=1.0)
+        
+        # Start step execution
+        timeout_manager.start_step("step_1")
+        
+        # Check timeout immediately - should not be timed out
+        assert not timeout_manager.check_timeout("step_1")
+        
+        # Wait for timeout
+        import time
+        time.sleep(1.1)
+        
+        # Should now be timed out
+        assert timeout_manager.check_timeout("step_1")
+        
+        # Get timeout info
+        info = timeout_manager.get_timeout_status("step_1")
+        assert info["exceeded"]
+        assert info["elapsed_seconds"] > 1.0
+
+    def test_workflow_level_timeout_management(self):
+        """Test workflow-level timeout management (AC 8.2)."""
+        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
+        
+        timeout_manager = TimeoutManager()
+        
+        # Set workflow timeout
+        timeout_manager.set_workflow_timeout("wf_123", timeout_seconds=5.0)
+        
+        # Start workflow
+        timeout_manager.start_workflow("wf_123")
+        
+        # Execute multiple steps
+        for i in range(3):
+            timeout_manager.start_step(f"step_{i}", workflow_id="wf_123")
+            time.sleep(0.5)
+            timeout_manager.end_step(f"step_{i}")
+        
+        # Check workflow timeout - should not exceed yet
+        assert not timeout_manager.check_workflow_timeout("wf_123")
+        
+        # Continue with more steps until timeout
+        timeout_manager.start_step("step_long", workflow_id="wf_123")
+        time.sleep(4.0)
+        
+        # Should now exceed workflow timeout
+        assert timeout_manager.check_workflow_timeout("wf_123")
+
+    def test_timeout_cascading_in_nested_operations(self):
+        """Test timeout cascading in nested operations (AC-EH-020)."""
+        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
+        
+        timeout_manager = TimeoutManager()
+        
+        # Set parent and child timeouts
+        timeout_manager.set_step_timeout("parent_step", timeout_seconds=2.0)
+        timeout_manager.set_step_timeout("child_step", timeout_seconds=1.0)
+        
+        # Start parent operation
+        timeout_manager.start_step("parent_step")
+        parent_start = time.time()
+        
+        # Start child operation
+        time.sleep(0.5)
+        timeout_manager.start_step("child_step", parent_step="parent_step")
+        
+        # Child should timeout first (after 1.0s from child start)
+        time.sleep(1.1)  # Total 1.6s from parent start, 1.1s from child start
+        assert timeout_manager.check_timeout("child_step")
+        assert not timeout_manager.check_timeout("parent_step")
+        
+        # Parent should timeout later
+        time.sleep(0.5)  # Total 2.1s from parent start
+        assert timeout_manager.check_timeout("parent_step")
+        
+        # Verify cascade relationship
+        cascade_info = timeout_manager.get_cascade_info("parent_step")
+        assert "child_step" in cascade_info["child_timeouts"]
+
+    def test_timeout_with_resource_cleanup(self):
+        """Test timeout handling with resource cleanup (AC-EH-020)."""
+        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
+        from aromcp.workflow_server.workflow.resource_manager import ResourceManager
+        
+        timeout_manager = TimeoutManager()
+        resource_manager = ResourceManager()
+        
+        workflow_id = "wf_timeout"
+        
+        # Allocate resources
+        resource_manager.allocate_resources(
+            workflow_id=workflow_id,
+            requested_memory_mb=50
+        )
+        
+        # Set timeout with cleanup callback
+        def cleanup_resources():
+            resource_manager.release_resources(workflow_id)
+        
+        timeout_manager.set_workflow_timeout(
+            workflow_id,
+            timeout_seconds=1.0,
+            cleanup_callback=cleanup_resources
+        )
+        
+        # Start workflow
+        timeout_manager.start_workflow(workflow_id)
+        
+        # Wait for timeout
+        time.sleep(1.1)
+        
+        # Check timeout and trigger cleanup
+        if timeout_manager.check_workflow_timeout(workflow_id):
+            timeout_manager.handle_timeout(workflow_id)
+        
+        # Verify resources were cleaned up
+        usage = resource_manager.get_workflow_usage(workflow_id)
+        assert usage is None or usage.get("memory_mb", 0) == 0
+
+
+class TestParallelErrorAggregation:
+    """Test error handling in parallel execution - AC-EH-019"""
+
+    def test_parallel_error_collection(self):
+        """Test error collection from parallel tasks (AC-EH-019)."""
+        from aromcp.workflow_server.errors.parallel import ParallelErrorAggregator
+        
+        aggregator = ParallelErrorAggregator()
+        
+        # Simulate parallel task errors
+        task_errors = [
+            WorkflowError(
+                id=f"err_task_{i}",
+                workflow_id="wf_parallel",
+                step_id=f"parallel_task_{i}",
+                error_type="TaskError",
+                message=f"Task {i} failed",
+                stack_trace="",
+                timestamp=datetime.now()
+            )
+            for i in range(5)
+        ]
+        
+        # Add errors from different tasks
+        for error in task_errors:
+            aggregator.add_task_error(error.step_id, error)
+        
+        # Get aggregated errors
+        aggregated = aggregator.get_aggregated_errors()
+        assert len(aggregated) == 5
+        
+        # Get summary
+        summary = aggregator.get_error_summary()
+        assert summary["total_tasks"] == 5
+        assert summary["failed_tasks"] == 5
+        assert summary["error_types"]["TaskError"] == 5
+
+    def test_parallel_error_strategies(self):
+        """Test different error strategies in parallel execution (AC-EH-019)."""
+        from aromcp.workflow_server.errors.parallel import ParallelErrorHandler
+        
+        handler = ParallelErrorHandler()
+        
+        # Configure fail-fast strategy
+        handler.set_strategy("fail_fast")
+        
+        # First error should stop execution
+        error1 = WorkflowError(
+            id="err_1",
+            workflow_id="wf_parallel",
+            step_id="task_1",
+            error_type="CriticalError",
+            message="Critical failure",
+            stack_trace="",
+            timestamp=datetime.now()
+        )
+        
+        result = handler.handle_task_error(error1, total_tasks=10)
+        assert result["action"] == "stop_all"
+        assert result["reason"] == "fail_fast"
+        
+        # Test continue strategy
+        handler.set_strategy("continue_on_error")
+        
+        result = handler.handle_task_error(error1, total_tasks=10)
+        assert result["action"] == "continue"
+        assert result["failed_count"] == 1
+
+    def test_parallel_error_threshold_handling(self):
+        """Test error threshold handling in parallel execution (AC-EH-019)."""
+        from aromcp.workflow_server.errors.parallel import ParallelErrorHandler
+        
+        handler = ParallelErrorHandler()
+        handler.set_strategy("threshold", error_threshold=0.3)  # 30% failure threshold
+        
+        # Simulate errors accumulating
+        errors_added = 0
+        total_tasks = 10
+        
+        for i in range(4):  # 40% failure rate
+            error = WorkflowError(
+                id=f"err_{i}",
+                workflow_id="wf_parallel",
+                step_id=f"task_{i}",
+                error_type="TaskError",
+                message=f"Task {i} failed",
+                stack_trace="",
+                timestamp=datetime.now()
+            )
+            
+            result = handler.handle_task_error(error, total_tasks=total_tasks)
+            errors_added += 1
+            
+            if errors_added / total_tasks > 0.3:
+                assert result["action"] == "stop_all"
+                assert result["reason"] == "threshold_exceeded"
+                break
+            else:
+                assert result["action"] == "continue"
+
+    def test_parallel_error_recovery_coordination(self):
+        """Test error recovery coordination in parallel tasks (AC-EH-019)."""
+        from aromcp.workflow_server.errors.parallel import ParallelRecoveryCoordinator
+        
+        coordinator = ParallelRecoveryCoordinator()
+        
+        # Configure recovery for specific error types
+        coordinator.add_recovery_rule(
+            error_type="TransientError",
+            recovery_action="retry",
+            max_retries=3
+        )
+        
+        coordinator.add_recovery_rule(
+            error_type="DataError",
+            recovery_action="skip",
+            log_level="warning"
+        )
+        
+        # Test transient error recovery
+        transient_error = WorkflowError(
+            id="err_transient",
+            workflow_id="wf_parallel",
+            step_id="task_1",
+            error_type="TransientError",
+            message="Network timeout",
+            stack_trace="",
+            timestamp=datetime.now()
+        )
+        
+        recovery = coordinator.coordinate_recovery(transient_error)
+        assert recovery["action"] == "retry"
+        assert recovery["retry_count"] == 1
+        
+        # Test data error recovery
+        data_error = WorkflowError(
+            id="err_data",
+            workflow_id="wf_parallel",
+            step_id="task_2",
+            error_type="DataError",
+            message="Invalid input data",
+            stack_trace="",
+            timestamp=datetime.now()
+        )
+        
+        recovery = coordinator.coordinate_recovery(data_error)
+        assert recovery["action"] == "skip"
+        assert recovery["log_level"] == "warning"
+
+
+class TestTimeoutIntegrationWithErrors:
+    """Test timeout integration with error handling"""
+
+    def test_timeout_error_handler_interaction(self):
+        """Test interaction between timeout and error handlers (AC 8.2 + AC-EH-020)."""
+        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
+        from aromcp.workflow_server.errors.handlers import ErrorHandlerRegistry
+        
+        timeout_manager = TimeoutManager()
+        error_registry = ErrorHandlerRegistry()
+        
+        # Register timeout error handler
+        timeout_handler = ErrorHandler(
+            strategy=ErrorStrategyType.RETRY,
+            retry_count=2,
+            retry_delay=500,
+            retry_on_error_types=["TimeoutError"]
+        )
+        error_registry.register_handler("timeout_handler", timeout_handler)
+        
+        # Simulate timeout error
+        timeout_error = WorkflowError(
+            id="err_timeout",
+            workflow_id="wf_test",
+            step_id="slow_step",
+            error_type="TimeoutError",
+            message="Step execution timed out after 5 seconds",
+            stack_trace="",
+            timestamp=datetime.now()
+        )
+        
+        # Handle timeout error
+        result = error_registry.handle_error(timeout_error, "timeout_handler")
+        assert result["action"] == "retry"
+        assert result["retry_delay_ms"] == 500
+
+    def test_cascading_timeout_with_monitoring(self):
+        """Test cascading timeouts with performance monitoring (AC-EH-020)."""
+        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
+        from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
+        
+        timeout_manager = TimeoutManager()
+        monitor = PerformanceMonitor()
+        
+        # Monitor timeout events
+        monitor.start_operation("timeout_cascade_test")
+        
+        # Set up cascading timeouts
+        parent_timeout = 5.0
+        child_timeouts = [1.0, 2.0, 3.0]
+        
+        timeout_manager.set_step_timeout("parent", timeout_seconds=parent_timeout)
+        timeout_manager.start_step("parent")
+        
+        # Start child operations with their own timeouts
+        for i, child_timeout in enumerate(child_timeouts):
+            child_id = f"child_{i}"
+            timeout_manager.set_step_timeout(child_id, timeout_seconds=child_timeout)
+            timeout_manager.start_step(child_id, parent_step="parent")
+            
+            # Record timeout configuration
+            monitor.record_metric("timeout_configured", child_timeout, {"step": child_id})
+        
+        # Simulate execution and check timeouts
+        time.sleep(1.5)
+        
+        # First child should timeout
+        assert timeout_manager.check_timeout("child_0")
+        monitor.record_event("timeout_triggered", {"step": "child_0"})
+        
+        # Check monitoring data
+        events = monitor.get_events("timeout_triggered")
+        assert len(events) >= 1
+        assert events[0]["data"]["step"] == "child_0"
+
+    def test_parallel_timeout_error_aggregation(self):
+        """Test timeout errors in parallel execution with aggregation (AC-EH-019 + AC-EH-020)."""
+        from aromcp.workflow_server.errors.parallel import ParallelErrorAggregator
+        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
+        
+        aggregator = ParallelErrorAggregator()
+        timeout_manager = TimeoutManager()
+        
+        # Simulate parallel tasks with different timeouts
+        task_configs = [
+            ("task_fast", 1.0),
+            ("task_medium", 2.0),
+            ("task_slow", 0.5),  # This will timeout first
+        ]
+        
+        # Start all tasks
+        for task_id, timeout in task_configs:
+            timeout_manager.set_step_timeout(task_id, timeout_seconds=timeout)
+            timeout_manager.start_step(task_id)
+        
+        # Wait and check for timeouts
+        time.sleep(0.6)
+        
+        # Collect timeout errors
+        for task_id, _ in task_configs:
+            if timeout_manager.check_timeout(task_id):
+                timeout_error = WorkflowError(
+                    id=f"err_{task_id}",
+                    workflow_id="wf_parallel",
+                    step_id=task_id,
+                    error_type="TimeoutError",
+                    message=f"{task_id} timed out",
+                    stack_trace="",
+                    timestamp=datetime.now()
+                )
+                aggregator.add_task_error(task_id, timeout_error)
+        
+        # Check aggregated timeout errors
+        summary = aggregator.get_error_summary()
+        assert summary["error_types"]["TimeoutError"] >= 1
+        assert "task_slow" in [e.step_id for e in aggregator.get_aggregated_errors()]

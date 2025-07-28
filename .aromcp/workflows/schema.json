@@ -8,7 +8,7 @@
     "name": {
       "type": "string",
       "description": "Unique workflow identifier in namespace:name format",
-      "pattern": "^[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$"
+      "pattern": "^[a-zA-Z0-9_-]+(:[a-zA-Z0-9_-]+)?$"
     },
     "description": {
       "type": "string",

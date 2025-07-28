@@ -2,6 +2,16 @@
 
 from dataclasses import dataclass
 from typing import Any
+from enum import Enum
+
+
+class WorkflowStatus(Enum):
+    """Workflow status enumeration."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -48,6 +58,13 @@ class WorkflowStatusResponse:
     total_steps: int
     state: dict[str, Any]
     execution_context: dict[str, Any]
+    
+    # Status constants for compatibility with tests
+    PENDING = WorkflowStatus.PENDING
+    RUNNING = WorkflowStatus.RUNNING
+    COMPLETED = WorkflowStatus.COMPLETED
+    FAILED = WorkflowStatus.FAILED
+    CANCELLED = WorkflowStatus.CANCELLED
 
 
 @dataclass

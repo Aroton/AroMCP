@@ -17,6 +17,8 @@ from .metrics import (
     ResourceMetrics,
     WorkflowMetrics,
 )
+from .performance_monitor import PerformanceMonitor
+from .observability import ObservabilityManager
 
 __all__ = [
     "MetricsCollector",
@@ -30,4 +32,6 @@ __all__ = [
     "MetricsExporter",
     "PrometheusExporter",
     "JSONExporter",
+    "PerformanceMonitor",
+    "ObservabilityManager",
 ]

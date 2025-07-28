@@ -33,6 +33,7 @@ class StepProcessor:
                            queue: WorkflowQueue, step_config: dict[str, Any], 
                            context: ExecutionContext | None = None) -> dict[str, Any]:
         """Process a server-side step."""
+        # print(f"DEBUG: Processing step {step.id} of type {step.type}")
         current_state = self.state_manager.read(instance.id)
         
         # Replace variables in step definition
@@ -67,6 +68,9 @@ class StepProcessor:
         elif step.type == "while_loop":
             return self.process_while_loop(instance, step, processed_definition, queue, current_state, context)
         
+        elif step.type == "while_loop_continuation":
+            return self.process_while_loop_continuation(instance, step, processed_definition, queue, context)
+        
         elif step.type == "foreach":
             return self.process_foreach(instance, step, processed_definition, queue, current_state, context)
         
@@ -77,10 +81,10 @@ class StepProcessor:
             return self.process_debug_step_advance(instance, step, processed_definition, queue)
         
         elif step.type == "break":
-            return self.process_break(queue)
+            return self.process_break(queue, context)
         
         elif step.type == "continue":
-            return self.process_continue(queue)
+            return self.process_continue(queue, context)
         
         elif step.type == "mcp_call":
             # Handle workflow_state_update MCP calls server-side
@@ -187,14 +191,65 @@ class StepProcessor:
                 
                 # If path contains template expressions, evaluate them first
                 # This handles dynamic paths like "state.results['large_batch_' + {{ batch_index }}]"
+                original_path = path
                 if isinstance(path, str) and "{{" in path and "}}" in path:
                     path = self._replace_variables(path, current_state, False, instance, False, context)
                     # Convert bracket notation to dot notation for state manager compatibility
                     path = self._convert_bracket_notation_to_dot_notation(path)
                 
+                # ALSO handle JavaScript expressions in paths (like state.items[loop.idx].quantity)
+                # This is needed for loop variables in paths
+                elif isinstance(path, str) and 'loop.' in path and '[' in path and ']' in path:
+                    try:
+                        # Extract the bracket expression and evaluate it
+                        import re
+                        # Find all [expression] patterns
+                        bracket_matches = re.findall(r'\[([^\]]+)\]', path)
+                        for bracket_expr in bracket_matches:
+                            if 'loop.' in bracket_expr:
+                                # Evaluate the expression to get the actual index
+                                evaluated_index = self._evaluate_javascript_expression(bracket_expr, current_state, context, instance.id)
+                                # Replace in the path
+                                path = path.replace(f'[{bracket_expr}]', f'[{evaluated_index}]')
+                        # Convert bracket notation to dot notation
+                        path = self._convert_bracket_notation_to_dot_notation(path)
+                    except Exception as e:
+                        # If evaluation fails, keep original path
+                        print(f"DEBUG: Path JavaScript evaluation failed: {e}")
+                        pass
+                
                 # If value is a template expression, re-evaluate it with current state
+                original_value = value
                 if isinstance(value, str) and "{{" in value and "}}" in value:
                     value = self._replace_variables(value, current_state, False, instance, False, context)
+                # If value is a JavaScript expression (not template), evaluate it
+                elif isinstance(value, str) and (
+                    # Arithmetic operations
+                    any(op in value for op in ['+', '-', '*', '/']) or
+                    # Comparison operations
+                    any(op in value for op in ['===', '!==', '>', '<', '>=', '<=', '&&', '||']) or
+                    # Property access
+                    any(ref in value for ref in ['state.', 'inputs.', 'computed.', 'loop.']) or
+                    # Array/object operations
+                    value.startswith('[') or value.startswith('{') or
+                    # Template literals
+                    '`' in value or
+                    # Special cases
+                    '...' in value or
+                    # Numeric strings (treat as numbers in JavaScript context)
+                    (value.isdigit() or (value.startswith('-') and value[1:].isdigit()) or 
+                     ('.' in value and value.replace('.', '').replace('-', '').isdigit()))
+                ):
+                    try:
+                        # Use PythonMonkey for full JavaScript expression evaluation
+                        value = self._evaluate_javascript_expression(value, current_state, context, instance.id)
+                    except Exception as e:
+                        # If expression evaluation fails, keep the original value
+                        # Log the error for debugging
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"JavaScript expression evaluation failed: {e}")
+                        pass
                 
                 # For shell commands, allow value to reference output fields
                 if step.type == "shell_command" and isinstance(value, str):
@@ -232,19 +287,29 @@ class StepProcessor:
         """
         Convert bracket notation to dot notation for state manager compatibility.
         Example: "state.results['large_batch_0']" -> "state.results.large_batch_0"
+        Example: "state.items[0].quantity" -> "state.items.0.quantity"
         """
         import re
         
-        # Pattern to match bracket notation like ['key'] or ["key"]
-        pattern = r"\[(['\"])([^'\"]+)\1\]"
+        # Pattern to match quoted bracket notation like ['key'] or ["key"]
+        quoted_pattern = r"\[(['\"])([^'\"]+)\1\]"
         
-        def replace_brackets(match):
+        # Pattern to match numeric bracket notation like [0] or [123]
+        numeric_pattern = r"\[(\d+)\]"
+        
+        def replace_quoted_brackets(match):
             # Extract the key without quotes
             key = match.group(2)
             return f".{key}"
         
+        def replace_numeric_brackets(match):
+            # Extract the numeric index
+            index = match.group(1)
+            return f".{index}"
+        
         # Replace all bracket notation with dot notation
-        converted_path = re.sub(pattern, replace_brackets, path)
+        converted_path = re.sub(quoted_pattern, replace_quoted_brackets, path)
+        converted_path = re.sub(numeric_pattern, replace_numeric_brackets, converted_path)
         return converted_path
     
     def _process_shell_command(self, instance: WorkflowInstance, step: WorkflowStep,
@@ -286,11 +351,12 @@ class StepProcessor:
                 'inputs': eval_state.get('inputs', {}),
                 'state': eval_state.get('state', {}),
                 'global': eval_state.get('global', {}),
-                'loop': eval_state.get('loop', {})
+                'loop': self._get_current_loop_variables(context)
             }
             
             result = self.expression_evaluator.evaluate(condition, eval_state, scoped_context)
             condition_result = bool(result)
+            
         except Exception as e:
             return create_workflow_error(f"Error evaluating condition: {enhance_exception_message(e)}", instance.id, step.id)
         
@@ -390,6 +456,11 @@ class StepProcessor:
             eval_state = self.state_manager.read(instance.id)
             scoped_context = self._build_scoped_context(instance, eval_state, context)
             
+            # Debug: show state during condition evaluation
+            # category_index = eval_state.get('state', {}).get('category_index', 'unknown')
+            # has_more_categories = eval_state.get('computed', {}).get('has_more_categories', 'unknown')
+            # print(f"DEBUG: Condition evaluation - category_index={category_index}, has_more_categories={has_more_categories}")
+            
             result = self.expression_evaluator.evaluate(condition, eval_state, scoped_context)
             condition_result = bool(result)
         except Exception as e:
@@ -404,6 +475,19 @@ class StepProcessor:
         # Get current loop state
         current_loop = context.current_loop() if context else None
         
+        # Check for break/continue signals first
+        if current_loop and current_loop.control_signal:
+            from .context import LoopControl
+            if current_loop.control_signal == LoopControl.BREAK:
+                context.exit_loop()
+                return {"executed": False, "reason": "Break signal"}
+            elif current_loop.control_signal == LoopControl.CONTINUE:
+                # Clear the continue signal and continue to next iteration
+                current_loop.control_signal = None
+        
+        # print(f"DEBUG: While loop {step.id}: condition_result={condition_result}, body_length={len(body) if body else 0}")
+        # if current_loop:
+        #     print(f"DEBUG: While loop {step.id}: current_iteration={current_loop.current_iteration}, max_iterations={max_iterations}")
         if condition_result and body:
             # Check if we've reached max iterations before adding body steps
             if current_loop:
@@ -444,8 +528,18 @@ class StepProcessor:
                 )
                 workflow_steps.append(workflow_step)
             
-            # Add the while loop step again for next iteration
-            workflow_steps.append(step)
+            # Add a continuation step that will check for break signals before re-queuing the loop
+            continuation_step = WorkflowStep(
+                id=f"{step.id}.continuation",
+                type="while_loop_continuation",
+                definition={
+                    "original_loop_step_id": step.id,
+                    "original_loop_step_type": step.type,
+                    "original_loop_definition": step.definition
+                },
+                execution_context="server"
+            )
+            workflow_steps.append(continuation_step)
             
             queue.prepend_steps(workflow_steps)
             
@@ -468,6 +562,51 @@ class StepProcessor:
                 # Modern scoped loop variables are automatically cleaned up
             
             return {"executed": False, "reason": "Condition false"}
+    
+    def process_while_loop_continuation(self, instance: WorkflowInstance, step: WorkflowStep,
+                                      definition: dict[str, Any], queue: WorkflowQueue,
+                                      context: ExecutionContext | None = None) -> dict[str, Any]:
+        """Process a while loop continuation step by checking for break signals and re-queuing the loop."""
+        if not context:
+            return create_workflow_error("while_loop_continuation requires execution context", instance.id, step.id)
+            
+        # Get current loop state
+        current_loop = context.current_loop()
+        if not current_loop:
+            return create_workflow_error("while_loop_continuation used outside of loop", instance.id, step.id)
+        
+        original_step_id = definition.get("original_loop_step_id", "unknown")
+        # print(f"DEBUG: Processing continuation for loop {original_step_id}, current_loop.loop_id={current_loop.loop_id}, control_signal={current_loop.control_signal}")
+        
+        # Check for break/continue signals
+        from .context import LoopControl
+        if current_loop.control_signal == LoopControl.BREAK:
+            # Break signal received - exit the loop
+            context.exit_loop()
+            return {"executed": False, "reason": "Break signal"}
+        elif current_loop.control_signal == LoopControl.CONTINUE:
+            # Continue signal received - clear it and re-queue the loop
+            current_loop.control_signal = None
+        
+        # No break signal - re-queue the original while loop step
+        # Note: iteration will be incremented by advance_iteration() in process_while_loop
+        
+        # Recreate the original loop step from the definition
+        original_step_id = definition.get("original_loop_step_id")
+        original_step_type = definition.get("original_loop_step_type")
+        original_definition = definition.get("original_loop_definition")
+        
+        if original_step_id and original_step_type and original_definition:
+            original_step = WorkflowStep(
+                id=original_step_id,
+                type=original_step_type,
+                definition=original_definition,
+                execution_context="server"
+            )
+            queue.prepend_steps([original_step])
+            return {"executed": False, "reason": "Loop continuation"}
+        else:
+            return create_workflow_error("Missing original loop step information in continuation", instance.id, step.id)
     
     def process_foreach(self, instance: WorkflowInstance, step: WorkflowStep,
                        definition: dict[str, Any], queue: WorkflowQueue,
@@ -496,6 +635,16 @@ class StepProcessor:
             current_loop = context.current_loop()
             
             if current_loop and current_loop.loop_id == step.id:
+                # Check for break/continue signals FIRST (before advancing iteration)
+                if current_loop.control_signal:
+                    from .context import LoopControl
+                    if current_loop.control_signal == LoopControl.BREAK:
+                        context.exit_loop()
+                        return {"executed": False, "reason": "Break signal"}
+                    elif current_loop.control_signal == LoopControl.CONTINUE:
+                        # Clear the continue signal and advance to next iteration
+                        current_loop.control_signal = None
+                
                 # Continuing existing loop - advance to next iteration
                 current_loop.advance_iteration()
                 
@@ -507,11 +656,16 @@ class StepProcessor:
             else:
                 # Create new foreach loop
                 from .control_flow import LoopState
+                variable_name = definition.get("variable_name", "item")
+                index_name = definition.get("index_name", "index")
+                
                 loop_state = LoopState(
                     loop_type="foreach",
                     loop_id=step.id,
                     items=items,
-                    max_iterations=len(items)
+                    max_iterations=len(items),
+                    variable_name=variable_name,
+                    index_name=index_name
                 )
                 # Prepare initial loop variables
                 loop_state.prepare_for_iteration()
@@ -559,6 +713,9 @@ class StepProcessor:
                     definition=definition_copy,
                     execution_context=execution_context
                 )
+                # Store the original step ID and loop information for break/continue logic
+                workflow_step._loop_id = step.id
+                workflow_step._loop_body_index = i
                 workflow_steps.append(workflow_step)
             
             # Add the foreach step again for next iteration
@@ -633,6 +790,9 @@ class StepProcessor:
                         definition=definition_copy,
                         execution_context=execution_context
                     )
+                    # Store the original step ID and loop information for break/continue logic
+                    workflow_step._loop_id = step.id
+                    workflow_step._loop_body_index = i
                     workflow_steps.append(workflow_step)
                 
                 # Add the foreach step again for next iteration
@@ -655,8 +815,51 @@ class StepProcessor:
         
         return {"executed": False, "reason": "Loop completed"}
     
-    def process_break(self, queue: WorkflowQueue) -> dict[str, Any]:
+    def process_break(self, queue: WorkflowQueue, context: ExecutionContext | None = None) -> dict[str, Any]:
         """Process a break statement by exiting the current loop."""
+        # Try modern context system first
+        if context:
+            current_loop = context.current_loop()
+            if not current_loop:
+                return create_workflow_error("break used outside of loop", "", "")
+            
+            from .context import LoopControl
+            context.signal_loop_control(LoopControl.BREAK)
+            
+            # Remove remaining steps from queue that belong to the current loop only
+            # This ensures break only affects the innermost loop, not outer loops
+            loop_id = current_loop.loop_id
+            steps_removed = 0
+            
+            # Remove steps that belong to the current loop, using both ID prefix and loop metadata
+            steps_to_remove = []
+            for step in queue.main_queue:
+                if step.id == loop_id:
+                    # Found the loop step itself - include it and stop
+                    steps_to_remove.append(step)
+                    break
+                elif step.id.startswith(f"{loop_id}."):
+                    # This step belongs to the current loop body (auto-generated ID)
+                    steps_to_remove.append(step)
+                elif hasattr(step, '_loop_id') and step._loop_id == loop_id:
+                    # This step belongs to the current loop body (custom ID with metadata)
+                    steps_to_remove.append(step)
+                else:
+                    # This step doesn't belong to the current loop - stop removing
+                    break
+            
+            # Remove the identified steps
+            for step_to_remove in steps_to_remove:
+                if queue.main_queue and queue.main_queue[0].id == step_to_remove.id:
+                    queue.pop_next()
+                    steps_removed += 1
+                else:
+                    # Step not at front of queue - this shouldn't happen in normal execution
+                    break
+            
+            return {"executed": False, "signal": "break", "steps_removed": steps_removed}
+        
+        # Fall back to legacy queue-based system
         current_loop = queue.get_current_loop()
         if not current_loop:
             return create_workflow_error("break used outside of loop", "", "")
@@ -680,8 +883,50 @@ class StepProcessor:
         
         return {"executed": False, "steps_removed": steps_removed}
     
-    def process_continue(self, queue: WorkflowQueue) -> dict[str, Any]:
+    def process_continue(self, queue: WorkflowQueue, context: ExecutionContext | None = None) -> dict[str, Any]:
         """Process a continue statement by skipping to next iteration."""
+        # Try modern context system first
+        if context:
+            current_loop = context.current_loop()
+            if not current_loop:
+                return create_workflow_error("continue used outside of loop", "", "")
+            
+            from .context import LoopControl
+            context.signal_loop_control(LoopControl.CONTINUE)
+            
+            # Remove remaining body steps from queue that belong to the current loop only
+            # This ensures continue only affects the innermost loop, not outer loops
+            loop_id = current_loop.loop_id
+            steps_removed = 0
+            
+            # Remove steps that belong to the current loop, using both ID prefix and loop metadata
+            steps_to_remove = []
+            for step in queue.main_queue:
+                if step.id == loop_id:
+                    # Found the loop step itself - keep it for next iteration
+                    break
+                elif step.id.startswith(f"{loop_id}."):
+                    # This step belongs to the current loop body (auto-generated ID)
+                    steps_to_remove.append(step)
+                elif hasattr(step, '_loop_id') and step._loop_id == loop_id:
+                    # This step belongs to the current loop body (custom ID with metadata)
+                    steps_to_remove.append(step)
+                else:
+                    # This step doesn't belong to the current loop - stop removing
+                    break
+            
+            # Remove the identified steps
+            for step_to_remove in steps_to_remove:
+                if queue.main_queue and queue.main_queue[0].id == step_to_remove.id:
+                    queue.pop_next()
+                    steps_removed += 1
+                else:
+                    # Step not at front of queue - this shouldn't happen in normal execution
+                    break
+            
+            return {"executed": False, "signal": "continue", "steps_removed": steps_removed}
+        
+        # Fall back to legacy queue-based system
         current_loop = queue.get_current_loop()
         if not current_loop:
             return create_workflow_error("continue used outside of loop", "", "")
@@ -1083,3 +1328,151 @@ class StepProcessor:
                 "execution_context": "client",
                 "error": f"Failed to process parallel_foreach: {str(e)}"
             }
+    
+    def _evaluate_javascript_expression(self, expression: str, state: dict[str, Any], context: ExecutionContext | None = None, workflow_id: str | None = None) -> Any:
+        """
+        Evaluate a JavaScript expression using PythonMonkey with full state context.
+        
+        Args:
+            expression: JavaScript expression to evaluate
+            state: Full workflow state
+            context: Execution context for scoped variables
+            
+        Returns:
+            Evaluated result
+        """
+        try:
+            import pythonmonkey as pm
+            
+            # Get fresh state if workflow_id is provided to ensure we have the latest updates
+            if workflow_id and hasattr(self, 'state_manager'):
+                fresh_state = self.state_manager.read(workflow_id)
+                pm.globalThis.state = fresh_state.get('state', {})
+                pm.globalThis.inputs = fresh_state.get('inputs', {})
+                pm.globalThis.computed = fresh_state.get('computed', {})
+            else:
+                # Fallback to provided state
+                pm.globalThis.state = state.get('state', {})
+                pm.globalThis.inputs = state.get('inputs', {})
+                pm.globalThis.computed = state.get('computed', {})
+            
+            # Add loop variables if available
+            if context:
+                loop_vars = context.get_nested_loop_variables()
+                pm.globalThis.loop = loop_vars
+            else:
+                # Check if loop variables are in state (fallback for legacy support)
+                state_data = state.get('state', {})
+                loop_vars = {}
+                # Check for common loop variable names
+                for key in ['idx', 'qty', 'item', 'index', 'loop_item', 'loop_index']:
+                    if key in state_data:
+                        loop_vars[key] = state_data[key]
+                pm.globalThis.loop = loop_vars
+            
+            # Evaluate the expression
+            js_code = f"({expression})"
+            result = pm.eval(js_code)
+            
+            # Convert PythonMonkey proxy objects to native Python objects
+            result = self._convert_pythonmonkey_to_native(result)
+            
+            # Convert numeric strings to numbers for consistency
+            if isinstance(result, str) and result.isdigit():
+                result = int(result)
+            elif isinstance(result, str):
+                try:
+                    # Try to convert to float if it's a decimal number
+                    if '.' in result and result.replace('.', '').replace('-', '').isdigit():
+                        result = float(result)
+                except ValueError:
+                    pass
+            
+            # Convert JavaScript floats to integers if they are whole numbers
+            if isinstance(result, float) and result.is_integer():
+                result = int(result)
+            
+            # Cleanup global context
+            for attr in ['state', 'inputs', 'computed', 'loop']:
+                try:
+                    delattr(pm.globalThis, attr)
+                except:
+                    pass
+            
+            return result
+            
+        except ImportError:
+            # PythonMonkey not available, fallback to basic evaluation
+            return expression
+        except Exception as e:
+            # Clean up on error
+            try:
+                import pythonmonkey as pm
+                for attr in ['state', 'inputs', 'computed', 'loop']:
+                    try:
+                        delattr(pm.globalThis, attr)
+                    except:
+                        pass
+            except:
+                pass
+            raise
+    
+    def _convert_pythonmonkey_to_native(self, obj: Any) -> Any:
+        """
+        Convert PythonMonkey proxy objects to native Python objects.
+        
+        Args:
+            obj: Object that may contain PythonMonkey proxies
+            
+        Returns:
+            Native Python object
+        """
+        # IMPORTANT: Check for arrays FIRST, before checking for objects with keys
+        # JavaScript arrays have both length and keys(), but should be treated as arrays
+        if hasattr(obj, 'length') and hasattr(obj, '__getitem__'):
+            try:
+                # Convert length to integer as PythonMonkey may return float
+                length = int(obj.length)
+                result = [self._convert_pythonmonkey_to_native(obj[i]) for i in range(length)]
+                return result
+            except Exception as e:
+                # If array conversion fails, fall through to other conversion methods
+                pass
+        
+        # If it's a dict-like object (including PythonMonkey proxies), manually convert
+        if hasattr(obj, 'keys') and callable(getattr(obj, 'keys')):
+            try:
+                # Manual dictionary conversion to handle PythonMonkey proxy dicts
+                native_dict = {}
+                for key in obj.keys():
+                    value = obj[key]
+                    # Recursively convert values
+                    native_dict[str(key)] = self._convert_pythonmonkey_to_native(value)
+                return native_dict
+            except:
+                pass
+        
+        # If it's a primitive value that might be a PythonMonkey proxy, convert to native type
+        if isinstance(obj, (int, float, str, bool)) or obj is None:
+            # Convert numeric strings to numbers for consistency with JavaScript behavior
+            if isinstance(obj, str):
+                # Check if it's a pure integer
+                if obj.isdigit() or (obj.startswith('-') and obj[1:].isdigit()):
+                    return int(obj)
+                # Check if it's a float
+                try:
+                    if '.' in obj and obj.replace('.', '').replace('-', '').isdigit():
+                        return float(obj)
+                except:
+                    pass
+            return obj
+        
+        # For other objects, try to convert to string as fallback
+        if hasattr(obj, 'toString'):
+            try:
+                return str(obj)
+            except:
+                pass
+        
+        # Return as-is if we can't convert it
+        return obj

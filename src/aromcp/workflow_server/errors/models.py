@@ -30,7 +30,7 @@ class ErrorSeverity(Enum):
 class ErrorHandler:
     """Configuration for error handling behavior."""
 
-    strategy: ErrorStrategyType
+    strategy: ErrorStrategyType = ErrorStrategyType.FAIL
     retry_count: int = 3
     retry_delay: int = 1000  # milliseconds
     retry_backoff_multiplier: float = 2.0
