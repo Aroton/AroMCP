@@ -20,7 +20,6 @@ mcp = FastMCP(
         
         Simplified Aliases:
         - run_tests: Alias for run_test_suite with sensible defaults
-        - quality_check: Run all quality checks (lint + TypeScript + tests)
         
         All tools support:
         - Automatic project type detection
@@ -31,7 +30,7 @@ mcp = FastMCP(
         Best Practices:
         - Use lint_project instead of running ESLint directly
         - Use check_typescript for type validation
-        - Run quality_check before commits
+        - Run lint_project and check_typescript before commits
         - Configure tools via project config files (eslintrc, tsconfig, etc.)
     """,
 )

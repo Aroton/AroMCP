@@ -502,7 +502,6 @@ When implementing AI agent features, prefer these simplified tools:
 - **Quality Checks**: `lint_project`, `check_typescript`, `run_tests`
 - **Code Analysis**: `find_who_imports`, `find_dead_code`, `find_import_cycles`
 - **Commands**: `execute_command` (instead of `run_command`)
-- **Composite**: `quality_check` (runs lint + TypeScript + tests)
 
 ### Common Workflows
 Implement these patterns for common tasks:

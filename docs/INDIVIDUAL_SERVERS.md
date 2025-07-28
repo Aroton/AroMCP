@@ -108,7 +108,7 @@ Each server has its own configuration file in `.aromcp/servers/`:
 - `check_typescript` - Check TypeScript errors
 - `run_test_suite` - Execute tests
 - `run_tests` - Simplified test execution
-- `quality_check` - Run all quality checks
+- `lint_project`, `check_typescript`, `run_tests` - Individual quality checks
 
 ### Analysis Server Tools
 - `find_dead_code` - Find unused code

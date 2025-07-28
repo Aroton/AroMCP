@@ -186,8 +186,10 @@ aromcp.lint_project(linter="eslint")
 aromcp.check_typescript()
 aromcp.run_tests()
 
-# One-command workflow
-aromcp.quality_check(include_typescript=True, include_tests=True)
+# Individual quality checks
+aromcp.lint_project()
+aromcp.check_typescript()
+aromcp.run_tests()
 ```
 
 ### Advanced File Operations (Power Users)
@@ -284,8 +286,9 @@ check_typescript(files=["src/auth/*.ts"])  # TypeScript validation
 Discover available tools via MCP, but these are commonly helpful:
 - **`read_files()`/`write_files()`** - Batch file operations
 - **`find_who_imports()`** - Check dependencies before changes
+- **`lint_project()`** - Run ESLint with standards
+- **`check_typescript()`** - Validate TypeScript compilation  
 - **`run_test_suite()`** - Execute tests with detailed results
-- **`quality_check()`** - Combined lint + TypeScript + tests (NOT IMPLEMENTED YET)
 
 ### Best Practices
 ✅ Always check standards before editing (the one hard rule)

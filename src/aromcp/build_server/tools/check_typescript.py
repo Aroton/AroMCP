@@ -130,15 +130,9 @@ def check_typescript_impl(files: str | list[str] | None = None) -> CheckTypescri
                 success=True,
             )
         else:
-            # Cap errors at first file's errors
-            first_file_errors = []
-            if typed_errors:
-                first_file = typed_errors[0].file
-                first_file_errors = [err for err in typed_errors if err.file == first_file]
-
-            # Create response
+            # Return all errors from all files
             return CheckTypescriptResponse(
-                errors=first_file_errors,
+                errors=typed_errors,
                 total_errors=len(typed_errors),
                 files_checked=files_checked,
                 check_again=True,  # Always suggest checking again after fixing TypeScript errors

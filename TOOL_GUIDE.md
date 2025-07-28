@@ -16,7 +16,7 @@ This guide helps AI agents and developers choose the right tools for specific ta
 - `lint_project` - Run ESLint/Prettier
 - `check_typescript` - Find type errors
 - `run_tests` - Execute test suite
-- `quality_check` - Run all checks at once
+- `lint_project` + `check_typescript` + `run_tests` - Individual quality checks
 
 #### **...modify code**
 - `read_files` - Always read first!
@@ -54,7 +54,7 @@ What do you want to do?
 │  ├─ Style issues → lint_project
 │  ├─ Type errors → check_typescript
 │  ├─ Test failures → run_tests
-│  └─ All checks → quality_check
+│  └─ All checks → lint_project + check_typescript + run_tests
 │
 ├─ Make changes?
 │  ├─ New files → write_files
@@ -181,7 +181,7 @@ Understanding existing code structure
 
 ### 2. **Code Quality**
 Checking and improving code quality
-- Primary: `lint_project`, `check_typescript`, `quality_check`
+- Primary: `lint_project`, `check_typescript`, `run_tests`
 - Advanced: `parse_lint_results`, `parse_typescript_errors`
 
 ### 3. **Code Modification**

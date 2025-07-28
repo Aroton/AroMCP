@@ -79,7 +79,7 @@ categories = [
 # Simplified tools recommended for AI agents
 file_operations = ["list_files", "read_files", "write_files"]
 code_analysis = ["find_who_imports", "find_dead_code", "find_import_cycles"]
-quality_checks = ["lint_project", "check_typescript", "run_tests", "quality_check"]
+quality_checks = ["lint_project", "check_typescript", "run_tests"]
 build_tools = ["execute_command", "detect_build_tools", "check_dependencies"]
 documentation = ["extract_api_endpoints", "load_project_documents"]
 standards = ["hints_for_file", "register_standard", "add_rule"]
@@ -104,7 +104,7 @@ name = "AroMCP Build Server"
 version = "0.1.0"
 description = "Compilation, linting, and testing tools"
 entry_point = "servers/build/main.py"
-tools = ["lint_project", "check_typescript", "run_test_suite", "run_tests", "quality_check"]
+tools = ["lint_project", "check_typescript", "run_test_suite", "run_tests"]
 
 [tool.aromcp.servers.analysis]
 name = "AroMCP Analysis Server"

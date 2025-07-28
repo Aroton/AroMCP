@@ -256,17 +256,11 @@ def lint_project_impl(
         # Estimate files checked first (before converting to dataclasses)
         files_checked = len({issue["file"] for issue in all_issues}) if all_issues else 1
 
-        # Cap issues to first file only (like check_typescript)
-        first_file_issues = []
-        if all_issues:
-            first_file = all_issues[0]["file"]
-            first_file_issues = [issue for issue in all_issues if issue["file"] == first_file]
+        # Return all issues from all files
+        issues_to_convert = all_issues
 
-            if debug:
-                debug_info.append(f"🔍 DEBUG: First file: {first_file}")
-                debug_info.append(f"🔍 DEBUG: First file issues: {len(first_file_issues)}")
-        
-        issues_to_convert = first_file_issues if first_file_issues else []
+        if debug:
+            debug_info.append(f"🔍 DEBUG: Converting all {len(issues_to_convert)} issues")
 
         # Convert issues to LintIssue dataclasses
         lint_issues = []
