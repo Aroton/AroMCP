@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from ...filesystem_server._security import get_project_root
+from ..models.build_models import CheckTypescriptResponse, TypescriptError
 
 
-def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any]:
+def check_typescript_impl(files: str | list[str] | None = None) -> CheckTypescriptResponse:
     """Run TypeScript compiler to find type errors.
 
     Args:
@@ -105,29 +106,44 @@ def check_typescript_impl(files: str | list[str] | None = None) -> dict[str, Any
         # Count files checked (estimate based on command)
         files_checked = 1 if files else 100  # Rough estimate for project-wide check
 
+        # Convert dict errors to TypescriptError dataclasses
+        typed_errors = []
+        for error in errors:
+            typed_errors.append(
+                TypescriptError(
+                    file=error["file"],
+                    line=error["line"],
+                    column=error["column"],
+                    message=error["message"],
+                    code=error["code"],
+                    severity=error["severity"],
+                )
+            )
+
         # Build result - only show errors if there are any
-        if len(errors) == 0:
-            return {
-                "errors": [],
-                "total_errors": 0,
-                "files_checked": files_checked,
-                "check_again": False,
-                "success": True,
-            }
+        if len(typed_errors) == 0:
+            return CheckTypescriptResponse(
+                errors=[],
+                total_errors=0,
+                files_checked=files_checked,
+                check_again=False,
+                success=True,
+            )
         else:
             # Cap errors at first file's errors
             first_file_errors = []
-            if errors:
-                first_file = errors[0]["file"]
-                first_file_errors = [err for err in errors if err["file"] == first_file]
+            if typed_errors:
+                first_file = typed_errors[0].file
+                first_file_errors = [err for err in typed_errors if err.file == first_file]
 
-            return {
-                "errors": first_file_errors,
-                "total_errors": len(errors),
-                "files_checked": files_checked,
-                "check_again": True,  # Always suggest checking again after fixing TypeScript errors
-                "success": False,
-            }
+            # Create response
+            return CheckTypescriptResponse(
+                errors=first_file_errors,
+                total_errors=len(typed_errors),
+                files_checked=files_checked,
+                check_again=True,  # Always suggest checking again after fixing TypeScript errors
+                success=False,
+            )
 
     except Exception as e:
         raise ValueError(f"TypeScript check failed: {str(e)}") from e

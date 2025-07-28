@@ -1,7 +1,14 @@
 """Dataclass models for filesystem server MCP tool output schemas."""
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Union
+
+
+# Standard cursor pagination fields for all paginated responses:
+# - total: int - Total number of items across all pages  
+# - page_size: int | None - Number of items in current page
+# - next_cursor: str | None - Cursor for next page (None if no more pages)
+# - has_more: bool | None - Whether there are more pages
 
 
 @dataclass
@@ -10,7 +17,11 @@ class ListFilesResponse:
 
     files: list[str]
     pattern_used: str | list[str]
-    total_files: int
+    # Standard cursor pagination fields
+    total: int = 0
+    page_size: int | None = None
+    next_cursor: str | None = None
+    has_more: bool | None = None
 
 
 @dataclass
@@ -30,10 +41,11 @@ class ReadFilesResponse:
     """Response schema for read_files tool."""
 
     items: list[ReadFileItem]
-    page: int
-    total_pages: int
-    total_files: int
-    has_more: bool
+    # Standard cursor pagination fields
+    total: int = 0
+    page_size: int | None = None
+    next_cursor: str | None = None
+    has_more: bool | None = None
 
 
 @dataclass
@@ -71,6 +83,13 @@ class ExtractMethodSignaturesResponse:
     total_signatures: int
     files_processed: int
     patterns_used: str | list[str]
+    # Optional fields
+    errors: list[dict[str, Any]] | None = None
+    # Standard cursor pagination fields
+    total: int = 0
+    page_size: int | None = None
+    next_cursor: str | None = None
+    has_more: bool | None = None
 
 
 @dataclass
@@ -92,3 +111,8 @@ class FindWhoImportsResponse:
     total_dependents: int
     safe_to_delete: bool
     impact_analysis: dict[str, Any]
+    # Standard cursor pagination fields
+    total: int = 0
+    page_size: int | None = None
+    next_cursor: str | None = None
+    has_more: bool | None = None

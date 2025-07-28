@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from aromcp.filesystem_server.tools import extract_method_signatures_impl
+from aromcp.filesystem_server.models.filesystem_models import ExtractMethodSignaturesResponse
 
 
 class TestExtractMethodSignatures:
@@ -55,9 +56,10 @@ class TestClass:
 
         result = extract_method_signatures_impl(file_paths="test.py")
 
-        assert len(result["signatures"]) > 0
-        # Find function signatures
-        function_names = {sig["name"] for sig in result["signatures"] if "name" in sig}
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert len(result.signatures) > 0
+        # Find function signatures - signatures are dictionaries
+        function_names = {sig["name"] for sig in result.signatures if "name" in sig}
         expected = {"simple_function", "function_with_args", "method", "prop"}
 
         # We expect to find at least some functions
@@ -89,8 +91,8 @@ class MyClass {
         result = extract_method_signatures_impl(file_paths="test.js")
 
         # For JS files, we expect some results or errors
-        assert isinstance(result, dict)
-        assert "signatures" in result
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert hasattr(result, 'signatures')
 
     def test_unsupported_file_type(self, temp_project):
         """Test handling of unsupported file types."""
@@ -99,9 +101,9 @@ class MyClass {
 
         result = extract_method_signatures_impl(file_paths="test.txt")
 
-        # Should return dict with errors for unsupported files
-        assert isinstance(result, dict)
-        assert "errors" in result
+        # Should return response with errors for unsupported files
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert result.errors is not None
 
     def test_parameter_variations(self, temp_project):
         """Test different parameter combinations."""
@@ -117,13 +119,13 @@ def decorated_function():
 
         # Test without docstrings
         result = extract_method_signatures_impl(file_paths="test.py", include_docstrings=False, include_decorators=True)
-        assert isinstance(result, dict)
-        assert "signatures" in result
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert hasattr(result, 'signatures')
 
         # Test without decorators
         result = extract_method_signatures_impl(file_paths="test.py", include_docstrings=True, include_decorators=False)
-        assert isinstance(result, dict)
-        assert "signatures" in result
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert hasattr(result, 'signatures')
 
     def test_async_functions(self, temp_project):
         """Test async function detection."""
@@ -141,8 +143,8 @@ async def async_with_args(a: int, b: str) -> None:
         test_file.write_text(python_code)
 
         result = extract_method_signatures_impl(file_paths="test.py")
-        assert isinstance(result, dict)
-        assert "signatures" in result
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert hasattr(result, 'signatures')
 
     def test_complex_type_annotations(self, temp_project):
         """Test complex type annotations."""
@@ -161,8 +163,8 @@ def complex_function(
         test_file.write_text(python_code)
 
         result = extract_method_signatures_impl(file_paths="test.py")
-        assert isinstance(result, dict)
-        assert "signatures" in result
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert hasattr(result, 'signatures')
 
     def test_pattern_expansion_basic(self, temp_project):
         """Test basic pattern expansion."""
@@ -175,8 +177,8 @@ def complex_function(
         # Test *.py pattern
         result = extract_method_signatures_impl(file_paths=["*.py"], expand_patterns=True)
 
-        assert isinstance(result, dict)
-        assert "signatures" in result
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert hasattr(result, 'signatures')
 
     def test_pattern_expansion_multiple_files(self, temp_project):
         """Test pattern expansion with multiple file types."""
@@ -196,8 +198,8 @@ def complex_function(
         # Test **/*.py pattern
         result = extract_method_signatures_impl(file_paths=["**/*.py"], expand_patterns=True)
 
-        assert isinstance(result, dict)
-        assert "signatures" in result
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert hasattr(result, 'signatures')
 
     def test_pattern_expansion_mixed_with_static_paths(self, temp_project):
         """Test mixing pattern expansion with static file paths."""
@@ -214,8 +216,8 @@ def complex_function(
         # Test mixing pattern and static path
         result = extract_method_signatures_impl(file_paths=["*.py", "specific.js"], expand_patterns=True)
 
-        assert isinstance(result, dict)
-        assert "signatures" in result
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert hasattr(result, 'signatures')
 
     def test_pattern_expansion_disabled(self, temp_project):
         """Test pattern expansion disabled."""
@@ -228,9 +230,9 @@ def complex_function(
         # Test with patterns but expansion disabled
         result = extract_method_signatures_impl(file_paths=["*.py"], expand_patterns=False)
 
-        # Should return dict with errors since "*.py" is treated as literal filename
-        assert isinstance(result, dict)
-        assert "errors" in result
+        # Should return response with errors since "*.py" is treated as literal filename
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert result.errors is not None
 
     def test_pattern_expansion_summary_statistics(self, temp_project):
         """Test summary statistics in pattern expansion."""
@@ -242,5 +244,5 @@ def complex_function(
 
         result = extract_method_signatures_impl(file_paths=["*.py"], expand_patterns=True)
 
-        assert isinstance(result, dict)
-        assert "signatures" in result
+        assert isinstance(result, ExtractMethodSignaturesResponse)
+        assert hasattr(result, 'signatures')

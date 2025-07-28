@@ -158,7 +158,7 @@ def tool_name(
         sort_key=lambda x: x.get("sort_field"),  # Deterministic sorting
         metadata=metadata
     )
-    
+
     # Return typed response
     return MyToolResponseModel(**paginated_result)
 ```
@@ -354,13 +354,13 @@ def my_tool(patterns: str | list[str]) -> dict[str, Any]:
 def my_tool(
     # For list parameters - MUST include str option
     file_paths: str | list[str],  # NOT just list[str]
-    
-    # For dict parameters - MUST include str option  
+
+    # For dict parameters - MUST include str option
     metadata: dict[str, Any] | str,  # NOT just dict[str, Any]
-    
+
     # For complex nested types - MUST include str option
     diffs: list[dict[str, Any]] | str,  # NOT just list[dict[str, Any]]
-    
+
     # Simple types don't need str unions
     project_root: str | None = None,  # str types are fine as-is
 ) -> dict[str, Any]:
@@ -380,7 +380,7 @@ def my_tool(
 @mcp.tool
 def workflow_start(workflow: str, inputs: dict[str, Any] | str | None = None) -> WorkflowStartResponse:
     result = executor.start(workflow_def, inputs)
-    
+
     # Simple type casting - let FastMCP handle serialization
     return WorkflowStartResponse(
         workflow_id=str(result.workflow_id),
@@ -390,7 +390,7 @@ def workflow_start(workflow: str, inputs: dict[str, Any] | str | None = None) ->
         execution_context=dict(result.execution_context)
     )
 
-# AVOID: Manual serialization complexity  
+# AVOID: Manual serialization complexity
 def old_pattern():
     serialized_result = serialize_for_json(result)  # Don't do this
     return WorkflowStartResponse(**serialized_result)
@@ -440,7 +440,7 @@ src/aromcp/
 
 ### Quick Type Conversion Reference
 - **DateTime objects**: Use `.isoformat()` → strings
-- **DataClass objects**: Use `asdict()` → dictionaries  
+- **DataClass objects**: Use `asdict()` → dictionaries
 - **Enum objects**: Use `.value` → underlying values
 - **Complex objects**: Convert to basic types (str, int, dict, list)
 
@@ -532,3 +532,65 @@ Implement these patterns for common tasks:
 - **Tool Selection Guide**: See `TOOL_GUIDE.md` for decision trees and workflows
 - **Agent Guidance**: `src/aromcp/utils/agent_guidance.py` (for reference only)
 - **Tool Categories**: Defined in `pyproject.toml` under `[tool.aromcp]`
+
+# Specialized Development Agents
+
+This project benefits from specialized agents that provide battle-tested patterns for TDD, code analysis, and systematic refactoring.
+
+## Available Agents
+
+### Implementation Agents
+- **@tdd-code-writer**: Implements code to satisfy tests following TDD principles. Analyzes failing tests, writes minimal code to pass, then refactors for clarity.
+- **@technology-specialist**: Researches proven patterns from industry leaders. Discovers production-ready solutions and documents them for future reference.
+- **@codebase-specialist**: Maps architecture and traces code flows. Provides deep understanding of code relationships and dependencies.
+
+### Testing & Quality Agents
+- **@tdd-test-writer**: Creates comprehensive test suites from requirements. Translates acceptance criteria into failing tests that drive development.
+- **@acceptance-criteria-agent**: Generates testable acceptance criteria from code or requirements. Maintains living documentation synchronized with implementation.
+- **@automated-code-reviewer**: Performs security and quality analysis. Reviews code against best practices, identifies vulnerabilities, and suggests improvements.
+
+## TDD Workflow
+
+These agents work together in a structured Test-Driven Development flow:
+
+1. **Requirements Analysis**: The @acceptance-criteria-agent analyzes requirements or existing code to generate clear, testable acceptance criteria.
+
+2. **Test Creation**: The @tdd-test-writer takes these criteria and creates comprehensive failing tests that cover:
+   - Happy path scenarios
+   - Edge cases and error conditions
+   - Performance requirements
+   - Integration behaviors
+
+3. **Implementation**: The @tdd-code-writer analyzes the failing tests and implements the minimal code needed to make them pass, focusing on:
+   - Understanding test expectations
+   - Writing clean, maintainable solutions
+   - Handling all tested scenarios
+
+4. **Refactoring**: Once tests pass, the code writer refactors for:
+   - Better structure and organization
+   - Performance optimization
+   - Code reusability
+   - Consistent patterns
+
+5. **Validation**: The test writer validates the implementation against acceptance criteria and provides feedback if gaps exist.
+
+6. **Review**: The @automated-code-reviewer performs final quality checks for security, performance, and maintainability.
+
+## Agent Philosophy
+
+- **Test Readability > DRY**: One clear test per behavior, prioritizing clarity over abstraction
+- **Phased Implementation**: Complex work broken into validated phases
+- **Research First**: Analyze multiple approaches before recommending solutions
+- **Aggressive Deletion**: Remove obsolete code when backwards compatibility isn't needed
+- **Continuous Validation**: Every phase must pass tests before proceeding
+- **Living Documentation**: Acceptance criteria stay synchronized with code
+
+## Best Practices
+
+1. **Clear Acceptance Criteria**: Start with well-defined, testable requirements
+2. **Test-First Development**: Always write tests before implementation
+3. **Small Iterations**: Work in small, verifiable increments
+4. **Continuous Integration**: Validate changes frequently
+5. **Documentation as Code**: Keep acceptance criteria in version control
+
+The agents excel at systematic, thorough work. They follow a disciplined approach that ensures quality through comprehensive testing and validation at every step.

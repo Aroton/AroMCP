@@ -18,19 +18,67 @@ A comprehensive suite of MCP (Model Context Protocol) servers designed as intell
 
 ## ⚡ Quick Start
 
-### Installation
+### Installation & Setup
 ```bash
 # Clone and install
 git clone <repository-url>
 cd AroMCP
 uv sync --dev
 
+# Create system-wide symlink (recommended)
+sudo mkdir -p /usr/mcp
+sudo ln -sf $(pwd) /usr/mcp/AroMCP
+
+# Verify symlink
+ls -la /usr/mcp/AroMCP  # Should point to your AroMCP directory
+
 # Install Claude Code commands (optional)
 ./install.sh
 
-# Start the server
+# Start the server (unified - deprecated)
 uv run python main.py
 ```
+
+### Why Use a Symlink?
+
+Creating a symlink at `/usr/mcp/AroMCP` provides several benefits:
+
+- **🔗 Consistent Path**: All Claude Desktop configurations use the same path regardless of where you clone AroMCP
+- **📝 Simplified Config**: No need to update configurations when moving the repository
+- **🔄 Easy Updates**: Pull updates to your local directory, symlink automatically points to latest code
+- **👥 Team Consistency**: All team members can use identical Claude Desktop configurations
+
+**Alternative without symlink**: If you prefer not to use a symlink, replace `/usr/mcp/AroMCP` with your actual AroMCP directory path in all configurations below.
+
+### 🆕 Individual Servers (Recommended)
+
+AroMCP now supports running individual MCP servers, allowing you to enable only the functionality you need:
+
+```bash
+# Run individual servers
+uv run python servers/filesystem/main.py   # File operations and code analysis
+uv run python servers/build/main.py        # Build, lint, and test tools
+uv run python servers/analysis/main.py     # Code quality analysis
+uv run python servers/standards/main.py    # ESLint rules and coding guidelines
+uv run python servers/workflow/main.py     # Workflow execution and state management
+
+# Or run all servers in background
+./scripts/run-all-servers.sh
+
+# Check server health
+./scripts/health-check.py
+
+# Stop all servers
+./scripts/stop-all-servers.sh
+```
+
+**Benefits of Individual Servers:**
+- 🎯 **Selective Deployment** - Enable only the servers you need
+- 📦 **Minimal Dependencies** - Each server has its own minimal requirements
+- 🚀 **Better Performance** - Reduced memory footprint per server
+- 🔧 **Independent Development** - Work on servers in isolation
+
+See [Individual Servers Guide](docs/INDIVIDUAL_SERVERS.md) for detailed configuration and Claude Desktop setup.
 
 ### Claude Code Commands Installation
 

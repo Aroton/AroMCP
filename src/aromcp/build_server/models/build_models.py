@@ -1,7 +1,14 @@
 """Dataclass models for build server MCP tool output schemas."""
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Union
+
+
+# Standard cursor pagination fields for all paginated responses:
+# - total: int | None - Total number of items across all pages (None if not paginated)
+# - page_size: int | None - Number of items in current page
+# - next_cursor: str | None - Cursor for next page (None if no more pages)
+# - has_more: bool | None - Whether there are more pages
 
 
 @dataclass
@@ -25,6 +32,11 @@ class CheckTypescriptResponse:
     files_checked: int
     check_again: bool
     success: bool
+    # Standard cursor pagination fields
+    total: int | None = None
+    page_size: int | None = None
+    next_cursor: str | None = None
+    has_more: bool | None = None
 
 
 @dataclass
@@ -50,6 +62,11 @@ class LintProjectResponse:
     files_checked: int
     check_again: bool
     success: bool
+    # Standard cursor pagination fields
+    total: int | None = None
+    page_size: int | None = None
+    next_cursor: str | None = None
+    has_more: bool | None = None
 
 
 @dataclass
@@ -86,3 +103,8 @@ class RunTestSuiteResponse:
     coverage: dict[str, Any] | None
     test_results: list[TestResult]
     test_suites: TestSuiteInfo | None = None
+    # Standard cursor pagination fields
+    total: int | None = None
+    page_size: int | None = None
+    next_cursor: str | None = None
+    has_more: bool | None = None

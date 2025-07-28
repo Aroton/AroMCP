@@ -6,20 +6,28 @@ from pathlib import Path
 from typing import Any
 
 from ...filesystem_server._security import get_project_root
+from ...utils.pagination import auto_paginate_cursor_response
+from ..models.build_models import LintIssue, LintProjectResponse
 
 
 def lint_project_impl(
-    use_standards: bool = True, target_files: str | list[str] | None = None, debug: bool = False
-) -> dict[str, Any]:
+    use_standards: bool = True,
+    target_files: str | list[str] | None = None,
+    debug: bool = False,
+    cursor: str | None = None,
+    max_tokens: int = 20000,
+) -> LintProjectResponse:
     """Run ESLint to find code style issues and bugs.
 
     Args:
         use_standards: Whether to use standards server generated ESLint config
         target_files: Specific files to lint (optional)
         debug: Enable detailed debug output for troubleshooting
+        cursor: Cursor for pagination (None for first page)
+        max_tokens: Maximum tokens per response
 
     Returns:
-        Dictionary with issues and fixable count
+        LintProjectResponse with issues and pagination info
     """
     try:
         # Use MCP_FILE_ROOT
@@ -245,6 +253,9 @@ def lint_project_impl(
             debug_info.append(f"🔍 DEBUG: Fixable issues: {fixable_count}")
             debug_info.append(f"🔍 DEBUG: Commands run: {commands_run}")
 
+        # Estimate files checked first (before converting to dataclasses)
+        files_checked = len({issue["file"] for issue in all_issues}) if all_issues else 1
+
         # Cap issues to first file only (like check_typescript)
         first_file_issues = []
         if all_issues:
@@ -254,40 +265,74 @@ def lint_project_impl(
             if debug:
                 debug_info.append(f"🔍 DEBUG: First file: {first_file}")
                 debug_info.append(f"🔍 DEBUG: First file issues: {len(first_file_issues)}")
+        
+        issues_to_convert = first_file_issues if first_file_issues else []
 
-        # Estimate files checked
-        files_checked = len({issue["file"] for issue in all_issues}) if all_issues else 1
+        # Convert issues to LintIssue dataclasses
+        lint_issues = []
+        for issue in issues_to_convert:
+            lint_issues.append(
+                LintIssue(
+                    file=issue["file"],
+                    line=issue["line"],
+                    column=issue["column"],
+                    rule=issue["rule"],
+                    message=issue["message"],
+                    severity=issue["severity"],
+                    fixable=issue["fixable"],
+                )
+            )
 
-        # Build result - always show issues array, add total if there are issues
-        if total_issues == 0:
-            result = {
-                "issues": [],
-                "total_issues": 0,
-                "fixable_issues": 0,
-                "files_checked": files_checked,
-                "check_again": False,
-                "success": True,
-            }
-        else:
-            result = {
-                "issues": first_file_issues,
-                "total_issues": total_issues,
-                "fixable_issues": fixable_count,
-                "files_checked": files_checked,
-                "check_again": fixable_count > 0,  # Suggest checking again if issues are fixable
-                "success": False,
-            }
+        # Build the response using the dataclass
+        response = LintProjectResponse(
+            issues=lint_issues,
+            total_issues=total_issues,
+            fixable_issues=fixable_count,
+            files_checked=files_checked,
+            check_again=fixable_count > 0,  # Suggest checking again if issues are fixable
+            success=total_issues == 0,
+        )
+
+        # Apply auto-pagination with proper sort key
+        paginated_response = auto_paginate_cursor_response(
+            response=response,
+            items_field="issues",
+            cursor=cursor,
+            max_tokens=max_tokens,
+            sort_key=lambda x: (x.file if hasattr(x, 'file') else x['file'], 
+                               x.line if hasattr(x, 'line') else x['line']),  # Handle both dict and dataclass
+        )
 
         # Add debug info if requested
         if debug:
-            result["debug_info"] = debug_info
+            if isinstance(paginated_response, dict):
+                paginated_response["debug_info"] = debug_info
+            elif hasattr(paginated_response, "__dict__"):
+                # If it's still a dataclass, convert to dict to add debug info
+                from dataclasses import asdict
+                result_dict = asdict(paginated_response)
+                result_dict["debug_info"] = debug_info
+                return result_dict
 
-        return result
+        return paginated_response
 
     except Exception as e:
         if debug:
-            # Return debug info even on error
-            return {"error": {"code": "LINT_FAILED", "message": str(e)}, "debug_info": debug_info}
+            # Return error response with debug info
+            error_response = LintProjectResponse(
+                issues=[],
+                total_issues=0,
+                fixable_issues=0,
+                files_checked=0,
+                check_again=False,
+                success=False,
+            )
+            # Convert to dict and add error info
+            from dataclasses import asdict
+            result_dict = asdict(error_response)
+            result_dict["error"] = {"code": "LINT_FAILED", "message": str(e)}
+            result_dict["debug_info"] = debug_info
+            return result_dict
         raise ValueError(f"Lint failed: {str(e)}") from e
 
 

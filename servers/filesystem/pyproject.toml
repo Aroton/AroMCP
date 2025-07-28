@@ -1,0 +1,22 @@
+[project]
+name = "aromcp-filesystem"
+version = "0.1.0"
+description = "AroMCP FileSystem Server - File operations and code analysis tools"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=2.10.5",
+    "chardet>=5.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.black]
+line-length = 120
+target-version = ['py312']

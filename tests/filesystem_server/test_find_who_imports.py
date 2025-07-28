@@ -27,12 +27,12 @@ class TestFindWhoImports:
 
             result = find_who_imports_impl("utils.py")
 
-            assert "dependents" in result
-            assert len(result["dependents"]) == 1
-            assert result["dependents"][0]["file"] == "main.py"
-            assert len(result["dependents"][0]["imports"]) > 0
-            assert result["safe_to_delete"] is False
-            assert result["impact_analysis"]["risk_level"] == "low"
+            assert hasattr(result, "dependents")
+            assert len(result.dependents) == 1
+            assert result.dependents[0]["file"] == "main.py"
+            assert len(result.dependents[0]["imports"]) > 0
+            assert result.safe_to_delete is False
+            assert result.impact_analysis["risk_level"] == "low"
 
     def test_javascript_import(self):
         """Test finding JavaScript imports."""
@@ -52,10 +52,10 @@ class TestFindWhoImports:
 
             result = find_who_imports_impl("utils.js")
 
-            assert "dependents" in result
-            assert len(result["dependents"]) == 1
-            assert result["dependents"][0]["file"] == "main.js"
-            assert result["safe_to_delete"] is False
+            assert hasattr(result, "dependents")
+            assert len(result.dependents) == 1
+            assert result.dependents[0]["file"] == "main.js"
+            assert result.safe_to_delete is False
 
     def test_no_imports_found(self):
         """Test when no files import the target."""
@@ -75,10 +75,10 @@ class TestFindWhoImports:
 
             result = find_who_imports_impl("unused.py")
 
-            assert "dependents" in result
-            assert len(result["dependents"]) == 0
-            assert result["safe_to_delete"] is True
-            assert result["impact_analysis"]["risk_level"] == "low"
+            assert hasattr(result, "dependents")
+            assert len(result.dependents) == 0
+            assert result.safe_to_delete is True
+            assert result.impact_analysis["risk_level"] == "low"
 
     def test_multiple_importers(self):
         """Test file with multiple importers."""
@@ -99,10 +99,10 @@ class TestFindWhoImports:
 
             result = find_who_imports_impl("common.py")
 
-            assert "dependents" in result
-            assert len(result["dependents"]) == 5
-            assert result["safe_to_delete"] is False
-            assert result["impact_analysis"]["risk_level"] == "medium"
+            assert hasattr(result, "dependents")
+            assert len(result.dependents) == 5
+            assert result.safe_to_delete is False
+            assert result.impact_analysis["risk_level"] == "medium"
 
     def test_high_risk_many_importers(self):
         """Test file with many importers (high risk)."""
@@ -123,10 +123,10 @@ class TestFindWhoImports:
 
             result = find_who_imports_impl("core.py")
 
-            assert "dependents" in result
-            assert len(result["dependents"]) == 15
-            assert result["safe_to_delete"] is False
-            assert result["impact_analysis"]["risk_level"] == "high"
+            assert hasattr(result, "dependents")
+            assert len(result.dependents) == 15
+            assert result.safe_to_delete is False
+            assert result.impact_analysis["risk_level"] == "high"
 
     def test_file_not_found(self):
         """Test error when file doesn't exist."""
@@ -160,6 +160,6 @@ class TestFindWhoImports:
 
             result = find_who_imports_impl("types.ts")
 
-            assert "dependents" in result
-            assert len(result["dependents"]) == 1
-            assert result["dependents"][0]["file"] == "main.ts"
+            assert hasattr(result, "dependents")
+            assert len(result.dependents) == 1
+            assert result.dependents[0]["file"] == "main.ts"

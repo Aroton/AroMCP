@@ -9,10 +9,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from aromcp.utils.pagination import (
-    ListPaginator,
+    CursorPaginator,
     TokenEstimator,
-    create_paginator,
-    paginate_list,
+    simplify_cursor_pagination,
 )
 
 
@@ -216,6 +215,90 @@ class TestCreatePaginator:
         assert paginator.max_tokens == 10000
         assert paginator.min_items_per_page == 5
         assert paginator.sort_key == sort_key
+
+
+class TestSimplifyPagination:
+    """Test the simplify_pagination function for consistency bugs."""
+
+    def test_pagination_consistency_bug(self):
+        """Test that reproduces the has_more=true but total_pages=1 inconsistency bug.
+        
+        This test reproduces the exact scenario from the bug report:
+        - Response shows: "page": 1, "total_pages": 1, "total_files": 21, "has_more": true
+        - This is logically inconsistent - if has_more=true, total_pages should be > 1
+        """
+        # Create 21 items with enough content to trigger pagination
+        items = [{"file": f"file_{i:02d}.py", "content": f"{'x' * 50}"} for i in range(21)]
+        
+        # Use a small max_tokens to force pagination
+        result = simplify_pagination(
+            items=items,
+            page=1,
+            max_tokens=1000,  # Small enough to require multiple pages
+            sort_key=lambda x: x["file"],
+            metadata={"total_files": 21}
+        )
+        
+        # Bug reproduction: The current implementation returns inconsistent values
+        # If we're on page 1 and has_more=True, then total_pages MUST be > 1
+        if result.get("has_more") is True:
+            # This assertion should pass but currently fails due to the bug
+            # The simplify_pagination function doesn't include total_pages in output
+            # but if it did, it should be consistent with has_more
+            
+            # For now, let's verify we have the bug:
+            # has_more=True means there are more pages, so we should have more than 10 total items
+            # and we should be on page 1
+            assert result["page"] == 1
+            assert result["has_more"] is True
+            assert result["total_files"] == 21  # From metadata
+            
+            # The bug: simplify_pagination doesn't return total_pages at all
+            # but the underlying logic calculates it correctly
+            assert "total_pages" not in result  # This exposes the bug - missing field
+            
+            # Let's also verify the bug by calling the underlying paginator directly
+            from aromcp.utils.pagination import create_paginator
+            paginator = create_paginator(max_tokens=1000, sort_key=lambda x: x["file"])
+            full_response = paginator.paginate(items, page=1, metadata={"total_files": 21})
+            
+            # The full response should have consistent values
+            assert full_response.pagination.has_next is True
+            assert full_response.pagination.total_pages > 1  # This should be true
+            
+            # But the simplified version loses this information, creating inconsistency
+            # This is the root cause of the bug
+    
+    def test_pagination_consistency_fix(self):
+        """Test that verifies the fixed behavior - has_more and total_pages should be consistent.
+        
+        This test should FAIL before the fix and PASS after the fix.
+        """
+        # Create 21 items with enough content to trigger pagination
+        items = [{"file": f"file_{i:02d}.py", "content": f"{'x' * 500}"} for i in range(21)]
+        
+        # Use a small max_tokens to force pagination
+        result = simplify_pagination(
+            items=items,
+            page=1,
+            max_tokens=1000,  # Small enough to require multiple pages
+            sort_key=lambda x: x["file"],
+            metadata={"total_files": 21}
+        )
+        
+        # After the fix, these should be consistent:
+        if result.get("has_more") is True:
+            # If has_more is True, we should have total_pages information
+            # and it should be > 1 (indicating multiple pages exist)
+            assert "total_pages" in result, "total_pages should be included when has_more=True"
+            assert result["total_pages"] > 1, f"total_pages should be > 1 when has_more=True, got {result.get('total_pages')}"
+            assert result["page"] == 1, "Should be on page 1"
+        
+        # Test consistency from the other direction
+        if result.get("total_pages", 1) > 1:
+            # If there are multiple pages and we're on page 1, has_more should be True
+            if result["page"] == 1:
+                assert result.get("has_more") is True, "has_more should be True when on page 1 of multiple pages"
 
 
 if __name__ == "__main__":

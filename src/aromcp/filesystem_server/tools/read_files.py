@@ -5,17 +5,17 @@ from typing import Any
 
 import chardet
 
-from ...utils.pagination import simplify_pagination
+from ...utils.pagination import simplify_cursor_pagination
 from .._security import get_project_root, validate_file_path_legacy
 
 
-def read_files_impl(files: str | list[str], page: int = 1, max_tokens: int = 20000) -> dict[str, Any]:
+def read_files_impl(files: str | list[str], cursor: str | None = None, max_tokens: int = 20000) -> dict[str, Any]:
     """Read multiple files and return their contents.
 
     Args:
         files: File paths to read
-        page: Page number (1-based) for pagination
-        max_tokens: Maximum tokens per page
+        cursor: Cursor for pagination (None for first page)
+        max_tokens: Maximum tokens per response
 
     Returns:
         Dictionary with paginated file contents and metadata
@@ -63,8 +63,9 @@ def read_files_impl(files: str | list[str], page: int = 1, max_tokens: int = 200
         # Apply pagination
         metadata = {"total_files": len(file_contents), "files_requested": len(files)}
 
-        return simplify_pagination(
-            items=file_contents, page=page, max_tokens=max_tokens, sort_key=lambda x: x["file"], metadata=metadata
+        # Use cursor-based pagination
+        return simplify_cursor_pagination(
+            items=file_contents, cursor=cursor, max_tokens=max_tokens, sort_key=lambda x: x["file"], metadata=metadata
         )
 
     except Exception as e:

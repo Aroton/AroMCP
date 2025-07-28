@@ -1,0 +1,117 @@
+# Workflow Server Configuration
+name: AroMCP Workflow Server
+version: 0.1.0
+description: Workflow execution and state management for AI agents
+
+# Server metadata
+metadata:
+  category: workflow_management
+  stability: stable
+  maintainer: AroMCP Team
+
+# Tool definitions
+tools:
+  # Workflow execution tools
+  - name: workflow_start
+    description: Start a new workflow execution
+    category: workflow_execution
+    
+  - name: workflow_step
+    description: Execute the next step in a workflow
+    category: workflow_execution
+    
+  - name: workflow_status
+    description: Get workflow execution status
+    category: workflow_monitoring
+    
+  - name: workflow_stop
+    description: Stop a running workflow
+    category: workflow_control
+    
+  - name: workflow_list
+    description: List available workflows
+    category: workflow_discovery
+    
+  # State management tools
+  - name: state_get
+    description: Get values from workflow state
+    category: state_management
+    
+  - name: state_update
+    description: Update workflow state values
+    category: state_management
+    
+  - name: state_transform
+    description: Transform state with JavaScript
+    category: state_management
+    
+  - name: state_clear
+    description: Clear workflow state
+    category: state_management
+
+# Configuration options
+config:
+  # Workflow settings
+  workflows:
+    # Workflow directory
+    directory: .aromcp/workflows
+    
+    # Auto-reload workflows
+    auto_reload: true
+    
+    # Validation settings
+    validation:
+      strict: true
+      schema_version: "1.0"
+      
+  # Execution settings
+  execution:
+    # Maximum concurrent workflows
+    max_concurrent: 10
+    
+    # Default timeout (ms)
+    default_timeout: 300000  # 5 minutes
+    
+    # Step execution
+    step_timeout: 60000  # 1 minute
+    max_retries: 3
+    
+    # Parallel execution
+    parallel:
+      enabled: true
+      max_workers: 5
+      
+  # State management
+  state:
+    # State persistence
+    persist: true
+    
+    # JavaScript engine
+    js_engine: pythonmonkey  # pythonmonkey or builtin
+    
+    # Variable scoping
+    scoping:
+      enabled: true
+      isolation: strict
+      
+  # Monitoring
+  monitoring:
+    # Performance tracking
+    track_performance: true
+    
+    # Metrics collection
+    collect_metrics: true
+    
+    # Debug mode
+    debug_enabled: false
+
+# Resource limits
+resources:
+  # Memory limits
+  max_memory_mb: 1024
+  
+  # CPU limits
+  max_cpu_percent: 80
+  
+  # Storage limits
+  max_state_size_mb: 100

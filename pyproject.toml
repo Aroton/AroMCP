@@ -1,17 +1,10 @@
 [project]
 name = "aromcp"
 version = "0.1.0"
-description = "A suite of MCP servers for AI-driven development workflows"
+description = "AroMCP - A suite of MCP servers for AI-driven development workflows (DEPRECATED - Use individual servers)"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "fastmcp>=2.10.5",
-    "chardet>=5.0.0",
-    "pyyaml>=6.0.0",
-    "pythonmonkey>=1.1.1",
-    "psutil>=5.9.0",
-    "jsonschema>=4.0.0",
-]
+dependencies = []
 
 keywords = [
     "mcp",
@@ -29,6 +22,16 @@ dev = [
     "black>=25.1.0",
     "pytest>=8.4.1",
     "ruff>=0.12.1",
+    "pytest-asyncio>=1.0.0",
+]
+# Legacy - for backward compatibility only
+all-servers = [
+    "fastmcp>=2.10.5",
+    "chardet>=5.0.0",
+    "pyyaml>=6.0.0",
+    "pythonmonkey>=1.1.1",
+    "psutil>=5.9.0",
+    "jsonschema>=4.0.0",
 ]
 
 [build-system]
@@ -87,3 +90,39 @@ pre_commit = ["lint_project", "check_typescript", "run_tests"]
 explore_project = ["list_files", "read_files", "detect_build_tools"]
 refactor_safe = ["find_who_imports", "read_files", "write_files", "lint_project"]
 cleanup_code = ["find_dead_code", "find_import_cycles", "check_dependencies"]
+
+# Individual server configurations
+[tool.aromcp.servers.filesystem]
+name = "AroMCP FileSystem Server"
+version = "0.1.0"
+description = "File operations and code analysis tools"
+entry_point = "servers/filesystem/main.py"
+tools = ["list_files", "read_files", "write_files", "extract_method_signatures", "find_who_imports"]
+
+[tool.aromcp.servers.build]
+name = "AroMCP Build Server"
+version = "0.1.0"
+description = "Compilation, linting, and testing tools"
+entry_point = "servers/build/main.py"
+tools = ["lint_project", "check_typescript", "run_test_suite", "run_tests", "quality_check"]
+
+[tool.aromcp.servers.analysis]
+name = "AroMCP Analysis Server"
+version = "0.1.0"
+description = "Code quality and dependency analysis tools"
+entry_point = "servers/analysis/main.py"
+tools = ["find_dead_code", "find_import_cycles", "extract_api_endpoints"]
+
+[tool.aromcp.servers.standards]
+name = "AroMCP Standards Server"
+version = "0.1.0"
+description = "Coding guidelines and ESLint rule management"
+entry_point = "servers/standards/main.py"
+tools = ["register_standard", "add_rule", "add_hint", "hints_for_file", "update_rule", "delete_standard", "delete_rule", "delete_hint", "check_updates"]
+
+[tool.aromcp.servers.workflow]
+name = "AroMCP Workflow Server"
+version = "0.1.0"
+description = "Workflow execution and state management"
+entry_point = "servers/workflow/main.py"
+tools = ["workflow_start", "workflow_step", "workflow_status", "workflow_stop", "workflow_list", "state_get", "state_update", "state_transform", "state_clear"]

@@ -1,5 +1,5 @@
 """
-Reusable pagination utilities for MCP tools that return lists.
+Reusable cursor-based pagination utilities for MCP tools that return lists.
 
 Provides deterministic pagination based on token estimation to keep responses
 under 20k tokens while maintaining consistent ordering across identical inputs.
@@ -7,32 +7,19 @@ under 20k tokens while maintaining consistent ordering across identical inputs.
 
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from typing import Any, TypeVar
 
 T = TypeVar("T")
 
 
-@dataclass
-class PaginationInfo:
-    """Information about pagination state."""
-
-    page: int
-    page_size: int
-    total_items: int
-    total_pages: int
-    has_next: bool
-    has_previous: bool
-    estimated_tokens: int
-    max_tokens: int
-
-
 class TokenEstimator:
     """Estimates token count for JSON responses."""
 
-    # Rough approximation: 1 token ≈ 4 characters for JSON content
-    # This accounts for structure overhead and is conservative
-    CHARS_PER_TOKEN = 4
+    # More accurate approximation: 1 token ≈ 3.5 characters for JSON content
+    # Adding 10% safety margin as requested
+    CHARS_PER_TOKEN = 3.5
+    SAFETY_MARGIN = 1.1  # 10% safety margin
 
     @classmethod
     def estimate_tokens(cls, data: Any) -> int:
@@ -43,60 +30,53 @@ class TokenEstimator:
             data: The data to estimate tokens for
 
         Returns:
-            Estimated token count
+            Estimated token count with safety margin
         """
         try:
             # Convert to JSON string to get serialized size
             json_str = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
             char_count = len(json_str)
-            return max(1, char_count // cls.CHARS_PER_TOKEN)
+            base_estimate = char_count / cls.CHARS_PER_TOKEN
+            # Apply safety margin
+            return max(1, int(base_estimate * cls.SAFETY_MARGIN))
         except (TypeError, ValueError):
             # Fallback for non-serializable data
-            return len(str(data)) // cls.CHARS_PER_TOKEN
+            base_estimate = len(str(data)) / cls.CHARS_PER_TOKEN
+            return max(1, int(base_estimate * cls.SAFETY_MARGIN))
 
 
-class PaginatedResponse[T]:
-    """Generic paginated response container."""
-
-    def __init__(self, items: list[T], pagination: PaginationInfo, metadata: dict[str, Any] | None = None):
-        self.items = items
-        self.pagination = pagination
-        self.metadata = metadata or {}
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary format for MCP responses."""
-        return {
-            "data": {
-                "items": self.items,
-                "pagination": {
-                    "page": self.pagination.page,
-                    "page_size": self.pagination.page_size,
-                    "total_items": self.pagination.total_items,
-                    "total_pages": self.pagination.total_pages,
-                    "has_next": self.pagination.has_next,
-                    "has_previous": self.pagination.has_previous,
-                    "estimated_tokens": self.pagination.estimated_tokens,
-                    "max_tokens": self.pagination.max_tokens,
-                },
-                **self.metadata,
-            }
-        }
+def _serialize_for_json(obj: Any) -> Any:
+    """Convert objects to JSON-serializable format."""
+    if is_dataclass(obj):
+        return asdict(obj)
+    elif hasattr(obj, "__dict__"):
+        return obj.__dict__
+    elif isinstance(obj, (list, tuple)):
+        return [_serialize_for_json(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {k: _serialize_for_json(v) for k, v in obj.items()}
+    else:
+        return obj
 
 
-class ListPaginator[T]:
+class CursorPaginator[T]:
     """
-    Deterministic paginator for lists with token-based sizing.
-
-    Ensures consistent ordering and pagination based on token estimation
-    to keep responses under the specified token limit.
+    Cursor-based paginator for lists with token-based sizing.
+    
+    Provides consistent, reliable pagination using cursors instead of page numbers.
+    Builds actual response to determine exact cutoff point and avoids inconsistent
+    metadata like has_more=True with total_pages=1.
     """
-
+    
     def __init__(
-        self, max_tokens: int = 20000, min_items_per_page: int = 1, sort_key: Callable[[T], Any] | None = None
+        self, 
+        max_tokens: int = 20000, 
+        min_items_per_page: int = 1, 
+        sort_key: Callable[[T], Any] | None = None
     ):
         """
-        Initialize paginator.
-
+        Initialize cursor paginator.
+        
         Args:
             max_tokens: Maximum tokens per page (default 20k)
             min_items_per_page: Minimum items per page regardless of token count
@@ -106,230 +86,246 @@ class ListPaginator[T]:
         self.min_items_per_page = min_items_per_page
         self.sort_key = sort_key
         self.estimator = TokenEstimator()
-
-    def paginate(self, items: list[T], page: int = 1, metadata: dict[str, Any] | None = None) -> PaginatedResponse[T]:
+    
+    def paginate(
+        self, 
+        items: list[T], 
+        cursor: str | None = None, 
+        metadata: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
-        Paginate a list of items with token-based sizing.
-
+        Paginate a list of items using cursor-based pagination.
+        
         Args:
             items: List of items to paginate
-            page: Page number (1-based)
+            cursor: Start after this item (None for first page)
             metadata: Additional metadata to include in response
-
+            
         Returns:
-            PaginatedResponse with paginated items and metadata
+            Dict with items, has_more, next_cursor, total, and metadata
         """
         if not items:
-            return self._empty_response(metadata)
-
+            return self._empty_cursor_response(metadata)
+        
         # Ensure deterministic ordering
         sorted_items = self._sort_items(items)
-
-        # Calculate dynamic page sizes based on token estimation
-        page_boundaries = self._calculate_page_boundaries(sorted_items)
-        total_pages = len(page_boundaries)
-
-        # Validate page number
-        page = max(1, min(page, total_pages))
-
-        # Get items for the requested page
-        start_idx, end_idx = page_boundaries[page - 1]
+        
+        # Find starting position based on cursor
+        start_idx = self._find_cursor_position(sorted_items, cursor)
+        
+        if start_idx >= len(sorted_items):
+            # Cursor is beyond end of data
+            return self._empty_cursor_response(metadata)
+        
+        # Find optimal end position using binary search
+        end_idx = self._find_optimal_end(sorted_items, start_idx, metadata)
+        
+        # Extract page items
         page_items = sorted_items[start_idx:end_idx]
-
-        # Calculate token estimate for this page
-        estimated_tokens = self.estimator.estimate_tokens(
-            {"items": page_items, "pagination": {"page": page, "total_pages": total_pages}, **(metadata or {})}
-        )
-
-        pagination_info = PaginationInfo(
-            page=page,
-            page_size=len(page_items),
-            total_items=len(sorted_items),
-            total_pages=total_pages,
-            has_next=page < total_pages,
-            has_previous=page > 1,
-            estimated_tokens=estimated_tokens,
-            max_tokens=self.max_tokens,
-        )
-
-        return PaginatedResponse(page_items, pagination_info, metadata)
-
+        
+        # Determine next cursor
+        next_cursor = None
+        has_more = end_idx < len(sorted_items)
+        if has_more:
+            next_cursor = self._generate_cursor(sorted_items[end_idx - 1])
+        
+        # Build response with standardized pagination fields
+        response = {
+            "items": page_items,
+            "total": len(sorted_items),
+            "page_size": len(page_items),
+            "next_cursor": next_cursor,
+            "has_more": has_more
+        }
+        
+        # Add metadata
+        if metadata:
+            response.update(metadata)
+        
+        return response
+    
     def _sort_items(self, items: list[T]) -> list[T]:
-        """Sort items deterministically."""
+        """Sort items using the configured sort key."""
         if self.sort_key:
             return sorted(items, key=self.sort_key)
-
-        # Default sorting based on string representation for deterministic order
-        try:
-            return sorted(items, key=lambda x: str(x))
-        except TypeError:
-            # If items aren't comparable, use their string representation
-            return sorted(items, key=lambda x: repr(x))
-
-    def _calculate_page_boundaries(self, items: list[T]) -> list[tuple[int, int]]:
-        """
-        Calculate page boundaries based on token estimation.
-
-        Returns list of (start_idx, end_idx) tuples for each page.
-        """
-        if not items:
-            return [(0, 0)]
-
-        boundaries = []
-        current_start = 0
-
-        while current_start < len(items):
-            # Find the optimal end index for this page
-            end_idx = self._find_page_end(items, current_start)
-            boundaries.append((current_start, end_idx))
-            current_start = end_idx
-
-        return boundaries
-
-    def _find_page_end(self, items: list[T], start_idx: int) -> int:
-        """
-        Find the optimal end index for a page starting at start_idx.
-
-        Uses binary search to find the largest subset that fits within token limit.
-        """
-        total_items = len(items)
-
+        return items[:]  # Return a copy to avoid modifying the original
+    
+    def _empty_cursor_response(self, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Create an empty cursor response."""
+        response = {
+            "items": [],
+            "total": 0,
+            "page_size": 0,
+            "next_cursor": None,
+            "has_more": False
+        }
+        if metadata:
+            response.update(metadata)
+        return response
+    
+    def _find_cursor_position(self, sorted_items: list[T], cursor: str | None) -> int:
+        """Find the starting position based on cursor."""
+        if cursor is None:
+            return 0
+        
+        # For simplicity, cursor is the string representation of the last item
+        # In a real implementation, you might use a more sophisticated cursor
+        for i, item in enumerate(sorted_items):
+            if self._generate_cursor(item) == cursor:
+                return i + 1  # Start after the cursor item
+        
+        # If cursor not found, start from beginning
+        return 0
+    
+    def _generate_cursor(self, item: T) -> str:
+        """Generate a cursor string for an item."""
+        if self.sort_key:
+            sort_value = self.sort_key(item)
+            return str(sort_value)
+        return str(item)
+    
+    def _find_optimal_end(
+        self, 
+        sorted_items: list[T], 
+        start_idx: int, 
+        metadata: dict[str, Any] | None = None
+    ) -> int:
+        """Find optimal end index using binary search."""
+        total_items = len(sorted_items)
+        
         # Ensure minimum items per page
         min_end = min(start_idx + self.min_items_per_page, total_items)
-
-        # Binary search for optimal page size
-        left, right = min_end, total_items
-        best_end = min_end
-
-        while left <= right:
-            mid = (left + right) // 2
-            page_items = items[start_idx:mid]
-
-            # Estimate tokens for this page subset
-            estimated_tokens = self.estimator.estimate_tokens({"items": page_items, "pagination": {"estimated": True}})
-
+        
+        # If we're already at or past the end, return the end
+        if start_idx >= total_items:
+            return total_items
+        
+        # Start with a reasonable upper bound
+        max_end = total_items
+        
+        # Binary search for the optimal end point
+        while min_end < max_end:
+            mid = (min_end + max_end + 1) // 2
+            test_items = sorted_items[start_idx:mid]
+            
+            # Build a test response to estimate tokens
+            test_response = {"items": test_items}
+            if metadata:
+                test_response.update(metadata)
+            
+            estimated_tokens = self.estimator.estimate_tokens(test_response)
+            
             if estimated_tokens <= self.max_tokens:
-                best_end = mid
-                left = mid + 1
+                min_end = mid
             else:
-                right = mid - 1
-
-        return best_end
-
-    def _empty_response(self, metadata: dict[str, Any] | None) -> PaginatedResponse[T]:
-        """Create response for empty lists."""
-        pagination_info = PaginationInfo(
-            page=1,
-            page_size=0,
-            total_items=0,
-            total_pages=1,
-            has_next=False,
-            has_previous=False,
-            estimated_tokens=self.estimator.estimate_tokens({"items": [], "pagination": {}}),
-            max_tokens=self.max_tokens,
-        )
-
-        return PaginatedResponse([], pagination_info, metadata)
+                max_end = mid - 1
+        
+        return max(min_end, start_idx + 1)  # Ensure at least one item
 
 
-def create_paginator(
-    max_tokens: int = 20000, sort_key: Callable[[Any], Any] | None = None, min_items_per_page: int = 1
-) -> ListPaginator:
-    """
-    Convenience function to create a paginator with common defaults.
-
-    Args:
-        max_tokens: Maximum tokens per page
-        sort_key: Function to extract sort key for deterministic ordering
-        min_items_per_page: Minimum items per page
-
-    Returns:
-        Configured ListPaginator instance
-    """
-    return ListPaginator(max_tokens=max_tokens, min_items_per_page=min_items_per_page, sort_key=sort_key)
-
-
-def simplify_pagination(
+def simplify_cursor_pagination(
     items: list[Any],
-    page: int,
-    max_tokens: int,
+    cursor: str | None = None,
+    max_tokens: int = 20000,
     sort_key: Callable[[Any], Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Simplified pagination pattern that uses token-based pagination but cleaner output.
-
-    Uses the existing token-based pagination logic but returns simplified metadata.
+    Simplified cursor-based pagination with cleaner output.
+    
     For small results, skips pagination entirely.
-    For larger results, uses minimal pagination metadata.
-
+    For larger results, uses cursor-based pagination.
+    
     Args:
         items: All items to paginate (not pre-paginated)
-        page: Current page number
+        cursor: Start after this cursor (None for first page)
         max_tokens: Maximum tokens per page
         sort_key: Function to extract sort key for deterministic ordering
         metadata: Additional metadata to include
-
+        
     Returns:
-        Simplified response format with token-based pagination
+        Simplified response format with cursor-based pagination
     """
     if not items:
         result = {"items": []}
         if metadata:
             result.update(metadata)
         return result
-
+    
     # For small results, skip pagination entirely
     if len(items) <= 10:
         # Still sort for consistency
         if sort_key:
             items = sorted(items, key=sort_key)
-        result = {"items": items}
+        result = {
+            "items": items,
+            "total": len(items),
+            "page_size": len(items),
+            "next_cursor": None,
+            "has_more": False
+        }
         if metadata:
             result.update(metadata)
         return result
-
-    # For larger results, use token-based pagination with simplified output
-    paginator = create_paginator(max_tokens=max_tokens, sort_key=sort_key)
-    response = paginator.paginate(items, page=page, metadata=metadata)
-    full_result = response.to_dict()["data"]
-
-    # Simplify the pagination metadata
-    pagination_info = full_result["pagination"]
-    simplified_result = {
-        "items": full_result["items"],
-        "page": pagination_info["page"],
-        "has_more": pagination_info["has_next"],
-        "total": pagination_info["total_items"] if pagination_info["total_items"] < 100 else "100+",
-    }
-
-    # Add any additional metadata
-    if metadata:
-        simplified_result.update(metadata)
-
-    return simplified_result
+    
+    # For larger results, use cursor-based pagination
+    paginator = CursorPaginator(max_tokens=max_tokens, sort_key=sort_key)
+    return paginator.paginate(items, cursor=cursor, metadata=metadata)
 
 
-def paginate_list(
-    items: list[Any],
-    page: int = 1,
+def auto_paginate_cursor_response(
+    response: Any,
+    items_field: str,
+    cursor: str | None = None,
     max_tokens: int = 20000,
     sort_key: Callable[[Any], Any] | None = None,
-    metadata: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+) -> Any:
     """
-    Quick utility function to paginate a list and return MCP-formatted response.
-
+    Apply cursor-based auto-pagination to any response with an items field.
+    
     Args:
-        items: List of items to paginate
-        page: Page number (1-based)
-        max_tokens: Maximum tokens per page
+        response: Response object (dataclass or dict) containing items
+        items_field: Name of the field containing the list of items
+        cursor: Cursor for pagination (None for first page)
+        max_tokens: Maximum tokens per response
         sort_key: Function to extract sort key for deterministic ordering
-        metadata: Additional metadata to include in response
-
+        
     Returns:
-        MCP-formatted response dictionary
+        Response object with cursor-based pagination applied
     """
-    paginator = create_paginator(max_tokens=max_tokens, sort_key=sort_key)
-    response = paginator.paginate(items, page=page, metadata=metadata)
-    return response.to_dict()
+    # Convert response to dict if it's a dataclass
+    if is_dataclass(response):
+        response_dict = asdict(response)
+    else:
+        response_dict = dict(response)
+    
+    # Extract items
+    items = response_dict.get(items_field, [])
+    
+    # Build metadata from all fields except items and pagination fields
+    pagination_fields = {"total", "page_size", "next_cursor", "has_more"}
+    metadata = {k: v for k, v in response_dict.items() if k != items_field and k not in pagination_fields}
+    
+    # Apply cursor pagination
+    paginated_result = simplify_cursor_pagination(
+        items=items,
+        cursor=cursor,
+        max_tokens=max_tokens,
+        sort_key=sort_key,
+        metadata=metadata
+    )
+    
+    # Update the items field with paginated items
+    response_dict[items_field] = paginated_result["items"]
+    
+    # Always set standardized cursor pagination fields
+    response_dict["total"] = paginated_result.get("total", 0)
+    response_dict["page_size"] = paginated_result.get("page_size", None)
+    response_dict["next_cursor"] = paginated_result.get("next_cursor", None)
+    response_dict["has_more"] = paginated_result.get("has_more", False)
+    
+    # Return original type if it was a dataclass
+    if is_dataclass(response):
+        return type(response)(**response_dict)
+    else:
+        return response_dict

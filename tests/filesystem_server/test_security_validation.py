@@ -9,6 +9,7 @@ from aromcp.filesystem_server.tools import (
     read_files_impl,
     write_files_impl,
 )
+from aromcp.filesystem_server.models.filesystem_models import ExtractMethodSignaturesResponse
 
 
 class TestSecurityValidation:
@@ -37,10 +38,10 @@ class TestSecurityValidation:
                 os.environ["MCP_FILE_ROOT"] = temp_dir
                 try:
                     result = extract_method_signatures_impl(path)
-                    # Should return dict with errors for invalid paths
-                    assert isinstance(result, dict)
-                    assert "errors" in result
-                    assert len(result["errors"]) > 0
+                    # Should return response with errors for invalid paths
+                    assert isinstance(result, ExtractMethodSignaturesResponse)
+                    assert result.errors is not None
+                    assert len(result.errors) > 0
                 except ValueError as e:
                     assert "Failed to extract" in str(e) or "Invalid" in str(e)
                 finally:

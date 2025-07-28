@@ -5,7 +5,6 @@ from ..models.build_models import (
     CheckTypescriptResponse,
     LintProjectResponse,
     RunTestSuiteResponse,
-    TestSuiteInfo,
 )
 from .check_typescript import check_typescript_impl
 from .lint_project import lint_project_impl
@@ -53,38 +52,25 @@ def register_build_tools(mcp):
         Shows only first file's errors with total count. When check_again=true, fix errors and run again.
         Code should NOT be considered complete until this returns check_again=false.
         """
-        from ..models.build_models import TypescriptError
-
-        result = check_typescript_impl(files)
-
-        # Convert dict errors to TypescriptError dataclasses
-        errors = []
-        for error in result["errors"]:
-            errors.append(
-                TypescriptError(
-                    file=error["file"],
-                    line=error["line"],
-                    column=error["column"],
-                    message=error["message"],
-                    code=error["code"],
-                    severity=error["severity"],
-                )
-            )
-
-        return CheckTypescriptResponse(
-            errors=errors,
-            total_errors=result["total_errors"],
-            files_checked=result["files_checked"],
-            check_again=result["check_again"],
-            success=result["success"],
-        )
+        # Simply return the result from check_typescript_impl, which now returns CheckTypescriptResponse
+        return check_typescript_impl(files)
 
     @mcp.tool
     @json_convert
     def lint_project(
-        use_standards: bool = True, files: str | list[str] | None = None, debug: bool = False
+        use_standards: bool = True,
+        files: str | list[str] | None = None,
+        debug: bool = False,
+        cursor: str | None = None,
+        max_tokens: int = 20000,
     ) -> LintProjectResponse:  # noqa: F841
         """Run ESLint to find code style issues and potential bugs.
+
+        This tool uses server-side cursor pagination. The server handles all pagination automatically.
+        To retrieve all lint issues:
+        1. First call: Always use cursor=None
+        2. If response has_more=true, make another call with cursor=next_cursor from response
+        3. Repeat until has_more=false
 
         Use this tool when:
         - REQUIRED: After every code edit to catch style issues and bugs early
@@ -100,6 +86,8 @@ def register_build_tools(mcp):
             files: Files, directories, or glob patterns (directories auto-glob with /*,
                 glob patterns passed through)
             debug: Enable detailed debug output for troubleshooting linting issues
+            cursor: Pagination cursor from previous response. MUST be None for first request, then use exact next_cursor value from previous response. Never generate your own cursor values.
+            max_tokens: Maximum tokens per response
 
         Example:
             # WORKFLOW: After editing code, always run this
@@ -120,37 +108,34 @@ def register_build_tools(mcp):
             lint_project(files="src/**/*.ts")  # Glob patterns passed directly to eslint
             → {"issues": [], "check_again": false}
 
+        Cursor Pagination Examples:
+            # First request - ALWAYS start with cursor=None
+            lint_project(cursor=None, max_tokens=5000)
+            → {"issues": [...25 lint issues...], "total": 150, "next_cursor": "src/utils.js", "has_more": true}
+            
+            # Second request - use EXACT next_cursor from previous response
+            lint_project(cursor="src/utils.js", max_tokens=5000)
+            → {"issues": [...25 more lint issues...], "total": 150, "next_cursor": "tests/test_app.js", "has_more": true}
+            
+            # Continue until has_more is false
+            lint_project(cursor="tests/test_app.js", max_tokens=5000)
+            → {"issues": [...final lint issues...], "total": 150, "next_cursor": null, "has_more": false}
+
+        Response always includes:
+        - issues: Array of lint issue objects for this page
+        - total: Total number of lint issues across all pages
+        - next_cursor: Cursor for next page (null if no more pages)
+        - has_more: Boolean indicating if more pages exist
+
+        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination. 
+        Simply use the cursor values provided in responses.
+
         Note: ESSENTIAL quality gate - run this after EVERY code edit. Always use use_standards=True for best results.
         Shows only first file's issues with total count. When check_again=true, fix issues and run again.
         Code should NOT be considered complete until this returns check_again=false.
         """
-        from ..models.build_models import LintIssue
-
-        result = lint_project_impl(use_standards, files, debug)
-
-        # Convert dict issues to LintIssue dataclasses
-        issues = []
-        for issue in result["issues"]:
-            issues.append(
-                LintIssue(
-                    file=issue["file"],
-                    line=issue["line"],
-                    column=issue["column"],
-                    rule=issue["rule"],
-                    message=issue["message"],
-                    severity=issue["severity"],
-                    fixable=issue["fixable"],
-                )
-            )
-
-        return LintProjectResponse(
-            issues=issues,
-            total_issues=result["total_issues"],
-            fixable_issues=result["fixable_issues"],
-            files_checked=result["files_checked"],
-            check_again=result["check_again"],
-            success=result["success"],
-        )
+        # Simply return the result from lint_project_impl, which now returns LintProjectResponse
+        return lint_project_impl(use_standards, files, debug, cursor, max_tokens)
 
     @mcp.tool
     def run_test_suite(  # noqa: F841
@@ -159,8 +144,16 @@ def register_build_tools(mcp):
         pattern: str | None = None,
         coverage: bool = False,
         timeout: int = 300,
+        cursor: str | None = None,
+        max_tokens: int = 20000,
     ) -> RunTestSuiteResponse:
         """Execute tests with parsed results.
+
+        This tool uses server-side cursor pagination. The server handles all pagination automatically.
+        To retrieve all test results:
+        1. First call: Always use cursor=None
+        2. If response has_more=true, make another call with cursor=next_cursor from response
+        3. Repeat until has_more=false
 
         Use this tool when:
         - Running project test suites to verify functionality
@@ -176,57 +169,41 @@ def register_build_tools(mcp):
             pattern: Test file pattern to run specific tests
             coverage: Whether to generate coverage report
             timeout: Maximum execution time in seconds
+            cursor: Pagination cursor from previous response. MUST be None for first request, then use exact next_cursor value from previous response. Never generate your own cursor values.
+            max_tokens: Maximum tokens per response
 
         Example:
             run_test_suite()
             → {"tests_passed": 42, "tests_failed": 1, "framework": "jest", "success": false}
 
+        Cursor Pagination Examples:
+            # First request - ALWAYS start with cursor=None
+            run_test_suite(cursor=None, max_tokens=5000)
+            → {"test_results": [...50 test results...], "total": 155, "next_cursor": "tests/components/Button.test.js", "has_more": true}
+            
+            # Second request - use EXACT next_cursor from previous response
+            run_test_suite(cursor="tests/components/Button.test.js", max_tokens=5000)
+            → {"test_results": [...50 more test results...], "total": 155, "next_cursor": "tests/utils/helpers.test.js", "has_more": true}
+            
+            # Continue until has_more is false
+            run_test_suite(cursor="tests/utils/helpers.test.js", max_tokens=5000)
+            → {"test_results": [...final test results...], "total": 155, "next_cursor": null, "has_more": false}
+
+        Response always includes:
+        - test_results: Array of test result objects for this page
+        - total: Total number of test results across all pages
+        - next_cursor: Cursor for next page (null if no more pages)
+        - has_more: Boolean indicating if more pages exist
+
+        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination. 
+        Simply use the cursor values provided in responses.
+
         Note: Auto-detects test framework from package.json or project files. For linting use lint_project,
         for TypeScript checking use check_typescript. Supports parallel test execution where available.
+        Results are automatically paginated if they exceed max_tokens.
         """
-        from ..models.build_models import TestResult
-
-        result = run_test_suite_impl(test_command, test_framework, pattern, coverage, timeout)
-
-        # Convert test_results to TestResult dataclasses
-        test_results = []
-        for test_result in result["test_results"]:
-            if isinstance(test_result, dict):
-                status = test_result.get("status", "unknown")
-                # Filter out test results with unknown status
-                if status != "unknown":
-                    test_results.append(
-                        TestResult(
-                            name=test_result.get("name", ""),
-                            status=status,
-                            duration=test_result.get("duration", 0.0),
-                            file=test_result.get("file", ""),
-                            error_message=test_result.get("error_message"),
-                        )
-                    )
-
-        # Handle test_suites if present
-        test_suites = None
-        if "test_suites" in result:
-            test_suites_data = result["test_suites"]
-            test_suites = TestSuiteInfo(
-                total=test_suites_data["total"],
-                passed=test_suites_data["passed"],
-                failed=test_suites_data["failed"],
-            )
-
-        return RunTestSuiteResponse(
-            tests_passed=result["tests_passed"],
-            tests_failed=result["tests_failed"],
-            tests_skipped=result["tests_skipped"],
-            total_tests=result["total_tests"],
-            framework=result["framework"],
-            duration=result["duration"],
-            success=result["success"],
-            coverage=result["coverage"],
-            test_results=test_results,
-            test_suites=test_suites,
-        )
+        # Implementation now returns RunTestSuiteResponse directly
+        return run_test_suite_impl(test_command, test_framework, pattern, coverage, timeout, cursor, max_tokens)
 
 
 __all__ = ["check_typescript_impl", "lint_project_impl", "run_test_suite_impl", "register_build_tools"]

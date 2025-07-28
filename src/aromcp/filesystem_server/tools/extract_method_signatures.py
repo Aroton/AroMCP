@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ...utils.pagination import auto_paginate_cursor_response
+from ..models.filesystem_models import ExtractMethodSignaturesResponse
 from .._security import get_project_root, validate_file_path_legacy
 
 
@@ -13,7 +15,9 @@ def extract_method_signatures_impl(
     include_docstrings: bool = True,
     include_decorators: bool = True,
     expand_patterns: bool = True,
-) -> dict[str, Any]:
+    cursor: str | None = None,
+    max_tokens: int = 20000,
+) -> ExtractMethodSignaturesResponse:
     """Parse code files to extract function/method signatures programmatically.
 
     Args:
@@ -21,9 +25,11 @@ def extract_method_signatures_impl(
         include_docstrings: Whether to include function docstrings
         include_decorators: Whether to include function decorators
         expand_patterns: Whether to expand glob patterns in file_paths (default: True)
+        cursor: Cursor for pagination (None for first page)
+        max_tokens: Maximum tokens per response
 
     Returns:
-        List of extracted signatures
+        ExtractMethodSignaturesResponse with signatures and optional pagination
     """
 
     try:
@@ -114,14 +120,23 @@ def extract_method_signatures_impl(
             except Exception as e:
                 errors.append({"file": file_path, "error": str(e)})
 
-        # Return structured data with metadata
-        return {
-            "signatures": all_signatures,
-            "total_signatures": len(all_signatures),
-            "files_processed": files_processed,
-            "patterns_used": file_paths,
-            "errors": errors,
-        }
+        # Build response using dataclass
+        response = ExtractMethodSignaturesResponse(
+            signatures=all_signatures,
+            total_signatures=len(all_signatures),
+            files_processed=files_processed,
+            patterns_used=file_paths,
+            errors=errors if errors else None
+        )
+        
+        # Use auto_paginate_cursor_response - it handles everything
+        return auto_paginate_cursor_response(
+            response=response,
+            items_field="signatures",
+            cursor=cursor,
+            max_tokens=max_tokens,
+            sort_key=lambda x: (x.get("file_path", ""), x.get("line", 0))  # Sort by file then line
+        )
 
     except Exception as e:
         raise ValueError(f"Failed to extract signatures: {str(e)}") from e

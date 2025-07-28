@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from ...filesystem_server._security import get_project_root, validate_file_path
+from ...utils.pagination import auto_paginate_cursor_response
+from ..models.build_models import RunTestSuiteResponse, TestResult, TestSuiteInfo
 
 
 def run_test_suite_impl(
@@ -15,7 +17,9 @@ def run_test_suite_impl(
     pattern: str | None = None,
     coverage: bool = False,
     timeout: int = 300,
-) -> dict[str, Any]:
+    cursor: str | None = None,
+    max_tokens: int = 20000,
+) -> RunTestSuiteResponse:
     """Execute tests with parsed results.
 
     Args:
@@ -24,9 +28,11 @@ def run_test_suite_impl(
         pattern: Test file pattern to run specific tests
         coverage: Whether to generate coverage report
         timeout: Maximum execution time in seconds
+        cursor: Cursor for pagination (None for first page)
+        max_tokens: Maximum tokens per response
 
     Returns:
-        Dictionary with test results
+        RunTestSuiteResponse with test results and optional pagination
     """
     try:
         # Use MCP_FILE_ROOT
@@ -47,14 +53,9 @@ def run_test_suite_impl(
                 test_command = detected_command
 
         if not test_command:
-            return {
-                "error": {
-                    "code": "NOT_FOUND",
-                    "message": (
-                        "No test command found. Please specify test_command or ensure test framework is configured."
-                    ),
-                }
-            }
+            raise ValueError(
+                "No test command found. Please specify test_command or ensure test framework is configured."
+            )
 
         # Build test command
         cmd = test_command.split()
@@ -90,24 +91,53 @@ def run_test_suite_impl(
             # Extract standard fields from parsed results
             summary = parsed_results.get("summary", {})
 
-            # Build standardized response
-            standardized_result = {
-                "tests_passed": summary.get("passed", 0),
-                "tests_failed": summary.get("failed", 0),
-                "tests_skipped": summary.get("skipped", 0),
-                "total_tests": summary.get("total", 0),
-                "framework": test_framework,
-                "duration": summary.get("duration", 0),
-                "success": result.returncode == 0,
-                "coverage": parsed_results.get("coverage", None),
-                "test_results": parsed_results.get("test_files", []),
-            }
+            # Convert test_files to TestResult dataclasses
+            test_results = []
+            for test_file in parsed_results.get("test_files", []):
+                if isinstance(test_file, dict):
+                    # Create TestResult for each file
+                    test_results.append(
+                        TestResult(
+                            name=test_file.get("file", ""),
+                            status="passed" if test_file.get("failed", 0) == 0 else "failed",
+                            duration=test_file.get("duration", 0.0),
+                            file=test_file.get("file", ""),
+                            error_message=None
+                        )
+                    )
 
-            # Add test suite information if available (Jest provides this)
+            # Handle test_suites if present
+            test_suites = None
             if "test_suites" in parsed_results:
-                standardized_result["test_suites"] = parsed_results["test_suites"]
+                test_suites_data = parsed_results["test_suites"]
+                test_suites = TestSuiteInfo(
+                    total=test_suites_data["total"],
+                    passed=test_suites_data["passed"],
+                    failed=test_suites_data["failed"],
+                )
 
-            return standardized_result
+            # Build response using dataclass
+            response = RunTestSuiteResponse(
+                tests_passed=summary.get("passed", 0),
+                tests_failed=summary.get("failed", 0),
+                tests_skipped=summary.get("skipped", 0),
+                total_tests=summary.get("total", 0),
+                framework=test_framework,
+                duration=summary.get("duration", 0),
+                success=result.returncode == 0,
+                coverage=parsed_results.get("coverage", None),
+                test_results=test_results,
+                test_suites=test_suites
+            )
+
+            # Apply pagination with sort key
+            return auto_paginate_cursor_response(
+                response,
+                items_field="test_results",
+                cursor=cursor,
+                max_tokens=max_tokens,
+                sort_key=lambda x: (x.file, x.name) if hasattr(x, 'file') else (x.get("file", ""), x.get("name", ""))
+            )
 
         except subprocess.TimeoutExpired as e:
             raise TimeoutError(f"Test execution timed out after {timeout} seconds") from e

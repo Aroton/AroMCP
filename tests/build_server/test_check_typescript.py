@@ -30,10 +30,10 @@ class TestCheckTypeScript:
                 result = check_typescript_impl()
 
                 # Should contain errors array and check_again flag when no errors
-                assert result["errors"] == []
-                assert not result["check_again"]
-                assert "total_errors" in result
-                assert "success" in result
+                assert result.errors == []
+                assert not result.check_again
+                assert hasattr(result, "total_errors")
+                assert hasattr(result, "success")
 
     def test_errors_capped_to_first_file(self):
         """Test that errors are capped to first file only, with total count."""
@@ -58,12 +58,12 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 result = check_typescript_impl()
 
                 # Should cap errors to first file only
-                assert len(result["errors"]) == 2  # Only errors from file1.ts
-                assert result["total_errors"] == 4  # Total across all files
-                assert result["check_again"]  # Should suggest checking again
-                assert all(err["file"] == "src/file1.ts" for err in result["errors"])
-                assert result["errors"][0]["message"] == "Cannot find name 'foo'."
-                assert result["errors"][1]["message"] == "Cannot find name 'bar'."
+                assert len(result.errors) == 2  # Only errors from file1.ts
+                assert result.total_errors == 4  # Total across all files
+                assert result.check_again  # Should suggest checking again
+                assert all(err.file == "src/file1.ts" for err in result.errors)
+                assert result.errors[0].message == "Cannot find name 'foo'."
+                assert result.errors[1].message == "Cannot find name 'bar'."
 
     def test_directory_auto_globbing(self):
         """Test that directory paths are automatically globbed with /*."""
@@ -152,8 +152,8 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 # Test with string input
                 result = check_typescript_impl(files="test.ts")
 
-                assert result["errors"] == []
-                assert not result["check_again"]
+                assert result.errors == []
+                assert not result.check_again
                 mock_subprocess.assert_called_once()
 
     def test_list_files_input(self):
@@ -182,8 +182,8 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 # Test with list input
                 result = check_typescript_impl(files=["test1.ts", "test2.ts"])
 
-                assert result["errors"] == []
-                assert not result["check_again"]
+                assert result.errors == []
+                assert not result.check_again
                 mock_subprocess.assert_called_once()
                 call_args = mock_subprocess.call_args[0][0]
                 assert "test1.ts" in call_args
@@ -215,8 +215,8 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 # Test with JSON string input
                 result = check_typescript_impl(files='["test1.ts", "test2.ts"]')
 
-                assert result["errors"] == []
-                assert not result["check_again"]
+                assert result.errors == []
+                assert not result.check_again
                 mock_subprocess.assert_called_once()
                 call_args = mock_subprocess.call_args[0][0]
                 assert "test1.ts" in call_args
@@ -248,8 +248,8 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 # Test with mixed input
                 result = check_typescript_impl(files=["test.ts", "src"])
 
-                assert result["errors"] == []
-                assert not result["check_again"]
+                assert result.errors == []
+                assert not result.check_again
                 mock_subprocess.assert_called_once()
                 call_args = mock_subprocess.call_args[0][0]
                 assert "test.ts" in call_args  # File unchanged
@@ -298,16 +298,16 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             ):
                 result = check_typescript_impl()
 
-                assert len(result["errors"]) == 1
-                assert result["total_errors"] == 1
-                assert result["check_again"]
-                error = result["errors"][0]
-                assert error["file"] == "src/test.ts"
-                assert error["line"] == 10
-                assert error["column"] == 5
-                assert error["severity"] == "error"
-                assert error["code"] == "TS2304"
-                assert error["message"] == "Cannot find name 'undefinedVar'."
+                assert len(result.errors) == 1
+                assert result.total_errors == 1
+                assert result.check_again
+                error = result.errors[0]
+                assert error.file == "src/test.ts"
+                assert error.line == 10
+                assert error.column == 5
+                assert error.severity == "error"
+                assert error.code == "TS2304"
+                assert error.message == "Cannot find name 'undefinedVar'."
 
     def test_glob_patterns_passed_through(self):
         """Test that glob patterns are passed directly to TypeScript compiler."""
@@ -329,8 +329,8 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 # Test with glob pattern
                 result = check_typescript_impl(files="src/**/*.ts")
 
-                assert result["errors"] == []
-                assert not result["check_again"]
+                assert result.errors == []
+                assert not result.check_again
                 mock_subprocess.assert_called_once()
                 call_args = mock_subprocess.call_args[0][0]
                 assert "src/**/*.ts" in call_args  # Glob pattern passed through unchanged
@@ -356,14 +356,14 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
             ):
                 result = check_typescript_impl()
 
-                assert len(result["errors"]) == 1
-                assert result["total_errors"] == 1
-                assert result["check_again"]
+                assert len(result.errors) == 1
+                assert result.total_errors == 1
+                assert result.check_again
 
-                error = result["errors"][0]
-                assert error["file"] == "src/test.ts"
-                assert error["line"] == 10
-                assert error["message"] == "Cannot find name 'undefinedVar'."
+                error = result.errors[0]
+                assert error.file == "src/test.ts"
+                assert error.line == 10
+                assert error.message == "Cannot find name 'undefinedVar'."
 
     def test_no_files_parameter_checks_entire_project(self):
         """Test that calling check_typescript() with no files parameter checks the entire project."""
@@ -385,8 +385,8 @@ src/file2.ts(7,12): error TS2304: Cannot find name 'qux'."""
                 # Test with no files parameter (None)
                 result = check_typescript_impl(files=None)
 
-                assert result["errors"] == []
-                assert not result["check_again"]
+                assert result.errors == []
+                assert not result.check_again
                 mock_subprocess.assert_called_once()
                 call_args = mock_subprocess.call_args[0][0]
                 # Should contain more comprehensive TypeScript check

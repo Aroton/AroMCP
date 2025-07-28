@@ -153,10 +153,10 @@ class TestRunTestSuite:
                     assert cmd == ["npm", "run", "test", "--", "--json"]
 
                     # Verify the result includes test suite information
-                    assert result["tests_passed"] == 187
-                    assert result["total_tests"] == 187
-                    assert "test_suites" in result
-                    assert result["test_suites"]["total"] == 13
+                    assert result.tests_passed == 187
+                    assert result.total_tests == 187
+                    assert result.test_suites is not None
+                    assert result.test_suites.total == 13
 
     def test_fallback_parsing_when_json_fails(self):
         """Test that fallback parsing works when JSON is malformed."""
@@ -233,20 +233,20 @@ class TestRunTestSuite:
                     result = run_test_suite_impl()
 
                     # This should match what SmallBusinessWebsite should get
-                    assert result["tests_passed"] == 187
-                    assert result["tests_failed"] == 0
-                    assert result["total_tests"] == 187
-                    assert result["framework"] == "jest"
-                    assert result["success"] is True
+                    assert result.tests_passed == 187
+                    assert result.tests_failed == 0
+                    assert result.total_tests == 187
+                    assert result.framework == "jest"
+                    assert result.success is True
 
                     # The key assertion - test_suites should be present
-                    assert "test_suites" in result, "test_suites field should be present in result"
-                    assert result["test_suites"]["total"] == 13
-                    assert result["test_suites"]["passed"] == 13
-                    assert result["test_suites"]["failed"] == 0
+                    assert result.test_suites is not None, "test_suites field should be present in result"
+                    assert result.test_suites.total == 13
+                    assert result.test_suites.passed == 13
+                    assert result.test_suites.failed == 0
 
                     # Duration should be calculated
-                    assert result["duration"] > 0
+                    assert result.duration > 0
 
     def test_actual_smallbusinesswebsite_output(self):
         """Test with the actual simplified output from SmallBusinessWebsite."""
@@ -323,10 +323,10 @@ class TestRunTestSuite:
                     impl_result = run_test_suite_impl()
 
                     # This should have test_suites in the implementation result
-                    assert impl_result["tests_passed"] == 187
-                    assert impl_result["total_tests"] == 187
-                    assert "test_suites" in impl_result, "test_suites should be present in implementation result"
-                    assert impl_result["test_suites"]["total"] == 13
+                    assert impl_result.tests_passed == 187
+                    assert impl_result.total_tests == 187
+                    assert impl_result.test_suites is not None, "test_suites should be present in implementation result"
+                    assert impl_result.test_suites.total == 13
 
     def test_mixed_text_and_json_output(self):
         """Test Jest output that contains both text and JSON (common real-world scenario)."""
@@ -440,6 +440,6 @@ Test Suites: 13 passed, 13 total
                     result = run_test_suite_impl()
 
                     # Verify Jest was detected and npm run test is used
-                    assert result["framework"] == "jest"
+                    assert result.framework == "jest"
                     assert len(captured_commands) == 1
                     assert captured_commands[0] == ["npm", "run", "test", "--", "--json"]

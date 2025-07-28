@@ -5,17 +5,21 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ...utils.pagination import auto_paginate_cursor_response
+from ..models.filesystem_models import FindWhoImportsResponse
 from .._security import get_project_root
 
 
-def find_who_imports_impl(file_path: str) -> dict[str, Any]:
+def find_who_imports_impl(file_path: str, cursor: str | None = None, max_tokens: int = 20000) -> FindWhoImportsResponse:
     """Find all files that import the specified file.
 
     Args:
         file_path: File to find importers for
+        cursor: Cursor for pagination (None for first page)
+        max_tokens: Maximum tokens per response
 
     Returns:
-        Dictionary with dependents and safety info
+        FindWhoImportsResponse with dependents and optional pagination
     """
     try:
         # Use MCP_FILE_ROOT
@@ -58,17 +62,27 @@ def find_who_imports_impl(file_path: str) -> dict[str, Any]:
         safe_to_delete = len(dependents) == 0
         risk_level = "low" if len(dependents) <= 2 else "medium" if len(dependents) <= 10 else "high"
 
-        return {
-            "target_file": file_path,
-            "dependents": dependents,
-            "total_dependents": len(dependents),
-            "safe_to_delete": safe_to_delete,
-            "impact_analysis": {
+        # Build response using dataclass
+        response = FindWhoImportsResponse(
+            target_file=file_path,
+            dependents=dependents,
+            total_dependents=len(dependents),
+            safe_to_delete=safe_to_delete,
+            impact_analysis={
                 "risk_level": risk_level,
                 "files_affected": len(dependents),
                 "total_imports": sum(len(dep["imports"]) for dep in dependents),
             },
-        }
+        )
+        
+        # Use auto_paginate_cursor_response - it handles everything
+        return auto_paginate_cursor_response(
+            response=response,
+            items_field="dependents",
+            cursor=cursor,
+            max_tokens=max_tokens,
+            sort_key=lambda x: x.get("file", "")  # Sort by file path
+        )
 
     except Exception as e:
         raise ValueError(f"Failed to find imports: {str(e)}") from e

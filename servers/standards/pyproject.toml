@@ -1,0 +1,22 @@
+[project]
+name = "aromcp-standards"
+version = "0.1.0"
+description = "AroMCP Standards Server - Coding guidelines and ESLint rule management"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=2.10.5",
+    "pyyaml>=6.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.black]
+line-length = 120
+target-version = ['py312']
