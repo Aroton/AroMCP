@@ -320,24 +320,19 @@ def get_function_details_impl(
                 # Also check function's resolved types for generic instantiations
                 if func_detail.types:
                     for type_name, type_def in func_detail.types.items():
-                        if type_def.kind == "generic_instantiation" and '<' in type_name:
-                            base_type = type_name.split('<')[0]
-                            if base_type not in type_instantiations:
-                                type_instantiations[base_type] = []
-                            
-                            # Extract type arguments
-                            type_args_match = type_name[len(base_type):]
-                            if type_args_match.startswith('<') and type_args_match.endswith('>'):
-                                type_args = [arg.strip() for arg in type_args_match[1:-1].split(',')]
-                            else:
-                                type_args = []
+                        # Check both the type name and the definition for generic instantiations
+                        sources_to_check = [type_name, type_def.definition]
+                        
+                        for source in sources_to_check:
+                            if source and '<' in source:
+                                source_instantiations = _extract_generic_instantiations_from_signature(
+                                    source, type_def.location, f"Type definition for {func_name}"
+                                )
                                 
-                            type_instantiations[base_type].append(TypeInstantiation(
-                                type_name=base_type,
-                                type_args=type_args,
-                                location=type_def.location,
-                                context=f"Function {func_name}"
-                            ))
+                                for base_type, instantiation_list in source_instantiations.items():
+                                    if base_type not in type_instantiations:
+                                        type_instantiations[base_type] = []
+                                    type_instantiations[base_type].extend(instantiation_list)
                             
         if resolve_imports:
             # Create basic import graph
@@ -478,31 +473,62 @@ def _extract_generic_instantiations_from_signature(signature: str, location: str
     instantiations = {}
     
     # Pattern to match generic instantiations like Repository<User>, Map<string, number>
+    # Need to handle nested generics and balanced brackets properly
     import re
-    generic_pattern = r'(\w+)<([^<>]+(?:<[^<>]*>[^<>]*)?)>'
     
-    matches = re.finditer(generic_pattern, signature)
-    
-    for match in matches:
-        base_type = match.group(1)
-        type_args_str = match.group(2)
-        
-        # Skip TypeScript built-in generics that aren't user-defined
-        if base_type in {'Promise', 'Array', 'Map', 'Set', 'Record', 'Partial', 'Required', 'Pick', 'Omit'}:
-            continue
+    # Find all generic patterns using a more robust approach
+    i = 0
+    while i < len(signature):
+        # Look for identifier followed by <
+        if signature[i].isalpha() or signature[i] == '_':
+            # Extract identifier
+            start = i
+            while i < len(signature) and (signature[i].isalnum() or signature[i] == '_'):
+                i += 1
             
-        # Parse type arguments, handling nested generics
-        type_args = _parse_generic_type_arguments(type_args_str)
-        
-        if base_type not in instantiations:
-            instantiations[base_type] = []
+            base_type = signature[start:i]
             
-        instantiations[base_type].append(TypeInstantiation(
-            type_name=base_type,
-            type_args=type_args,
-            location=location,
-            context=context
-        ))
+            # Check if followed by <
+            if i < len(signature) and signature[i] == '<':
+                # Extract type arguments using balanced bracket matching
+                bracket_count = 0
+                type_args_start = i + 1
+                j = i
+                
+                while j < len(signature):
+                    if signature[j] == '<':
+                        bracket_count += 1
+                    elif signature[j] == '>':
+                        bracket_count -= 1
+                        if bracket_count == 0:
+                            # Found closing bracket
+                            type_args_str = signature[type_args_start:j]
+                            
+                            # Skip TypeScript built-in generics that aren't user-defined
+                            if base_type not in {'Promise', 'Array', 'Map', 'Set', 'Record', 'Partial', 'Required', 'Pick', 'Omit'}:
+                                # Parse type arguments, handling nested generics
+                                type_args = _parse_generic_type_arguments(type_args_str)
+                                
+                                if base_type not in instantiations:
+                                    instantiations[base_type] = []
+                                    
+                                instantiations[base_type].append(TypeInstantiation(
+                                    type_name=base_type,
+                                    type_args=type_args,
+                                    location=location,
+                                    context=context
+                                ))
+                            
+                            i = j + 1
+                            break
+                    j += 1
+                else:
+                    # No closing bracket found, skip
+                    i += 1
+            else:
+                i += 1
+        else:
+            i += 1
     
     return instantiations
 

@@ -119,7 +119,7 @@ class TypeResolver:
                     result = self._resolve_with_generics(type_annotation, file_path,
                                                        max_constraint_depth=max_constraint_depth,
                                                        handle_recursive_types=handle_recursive_types)
-                elif resolution_depth == "full_type":
+                elif resolution_depth in ["full_type", "full_inference"]:
                     result = self._resolve_with_full_inference(type_annotation, file_path,
                                                              resolve_conditional_types=resolve_conditional_types,
                                                              handle_recursive_types=handle_recursive_types,
@@ -211,6 +211,32 @@ class TypeResolver:
                 location=base_def.location
             )
         
+        # Handle object type literals (e.g., { id: string, name: string })
+        if type_annotation.strip().startswith('{') and type_annotation.strip().endswith('}'):
+            return TypeDefinition(
+                kind="object_type",
+                definition=type_annotation.strip(),
+                location=f"{file_path}:object_literal"
+            )
+        
+        # Handle intersection types (e.g., T & U)
+        if '&' in type_annotation and not type_annotation.strip().startswith('('):
+            return TypeDefinition(
+                kind="intersection",
+                definition=type_annotation.strip(),
+                location=f"{file_path}:intersection"
+            )
+        
+        # Handle function types (e.g., (t: T, u: U) => ReturnType)
+        if ('=>' in type_annotation and 
+            type_annotation.strip().startswith('(') and 
+            ')' in type_annotation):
+            return TypeDefinition(
+                kind="function_type",
+                definition=type_annotation.strip(),
+                location=f"{file_path}:function_type"
+            )
+        
         # Try to find custom type definition
         return self._find_type_definition(type_annotation, file_path, 
                                         check_inheritance_depth=True, 
@@ -261,8 +287,13 @@ class TypeResolver:
                 if base_def.kind == "error":
                     return base_def
                     
+                # Preserve the base type's kind if it's a template literal
+                result_kind = "generic_instantiation"
+                if base_def.kind == "template_literal":
+                    result_kind = "template_literal"
+                    
                 return TypeDefinition(
-                    kind="generic_instantiation",
+                    kind=result_kind,
                     definition=f"{base_def.definition}<{', '.join(resolved_args)}>",
                     location=base_def.location
                 )
@@ -315,11 +346,21 @@ class TypeResolver:
             # Check for recursive patterns like TreeNode<T> { children: TreeNode<T>[] }
             # or DeepReadonly<T> = { readonly [P in keyof T]: T[P] extends object ? DeepReadonly<T[P]> : T[P] }
             if self._is_recursive_type(type_annotation, file_path):
-                return TypeDefinition(
-                    kind="recursive",
-                    definition=f"Recursive type: {type_annotation}",
-                    location=f"{file_path}:recursive"
-                )
+                # Try to get the actual definition but mark it as recursive
+                base_type = type_annotation.split('<')[0] if '<' in type_annotation else type_annotation
+                actual_def = self._find_type_definition(base_type, file_path, check_inheritance_depth=False)
+                if actual_def and actual_def.kind != "error" and actual_def.kind != "unknown":
+                    return TypeDefinition(
+                        kind="recursive",
+                        definition=actual_def.definition,
+                        location=actual_def.location
+                    )
+                else:
+                    return TypeDefinition(
+                        kind="recursive", 
+                        definition=f"Recursive type: {type_annotation}",
+                        location=f"{file_path}:recursive"
+                    )
         
         return generic_result
     

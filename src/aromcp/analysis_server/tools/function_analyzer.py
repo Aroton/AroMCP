@@ -349,6 +349,8 @@ class FunctionAnalyzer:
             if return_type_start < len(content) and content[return_type_start] == ':':
                 # Found return type annotation
                 type_start = return_type_start + 1
+                
+                
                 # Find the end of the return type (before { or => or ;)
                 type_end = type_start
                 brace_count = 0
@@ -359,6 +361,7 @@ class FunctionAnalyzer:
                 
                 while type_end < len(content):
                     char = content[type_end]
+                    
                     
                     # Track angle brackets for generics
                     if char == '<':
@@ -398,80 +401,63 @@ class FunctionAnalyzer:
                                         break
                         
                         continue  # Continue parsing from type_end
-                    # For regular functions, stop at opening brace
+                    # For regular functions, handle opening brace carefully
                     elif char == '{' and brace_count == 0 and paren_count == 0 and angle_count == 0:
-                        # But only if it's the function body, not part of a type
-                        # Look ahead to check if this brace starts the function body
-                        # Function body braces typically have whitespace/newline before them
-                        # and are followed by statements (not type syntax)
+                        # Check if this is the start of an object return type or function body
+                        # Look ahead to see if this looks like an object type definition
+                        lookahead_pos = type_end + 1
+                        while lookahead_pos < len(content) and content[lookahead_pos].isspace():
+                            lookahead_pos += 1
                         
-                        # Check what's before the brace
-                        check_pos = type_end - 1
-                        while check_pos >= type_start and content[check_pos].isspace():
-                            check_pos -= 1
-                        
-                        # If the last non-whitespace char before { indicates we're in a type context,
-                        # treat { as part of the type. Type context indicators:
-                        # - } (end of another object type)
-                        # - > (end of generic)
-                        # - ] (end of array type)  
-                        # - ' or " (end of string literal type)
-                        # - ? (conditional type)
-                        # - : (after conditional type branch)
-                        # - & (intersection type)
-                        # - | (union type)
-                        if check_pos >= type_start:
-                            last_char = content[check_pos]
-                            # Check for simple type names (e.g., "User {" where { starts function body)
-                            # Look back further to see if we just have a simple type name
-                            if last_char.isalnum():
-                                # Check if we're at the end of a simple type name
-                                # by looking for word boundaries
-                                word_start = check_pos
-                                while word_start > type_start and content[word_start - 1].isalnum():
-                                    word_start -= 1
-                                
-                                # Get the word
-                                word = content[word_start:check_pos + 1]
-                                
-                                # Check what's before the word
-                                before_word = word_start - 1
-                                while before_word >= type_start and content[before_word].isspace():
-                                    before_word -= 1
-                                
-                                # Check what's before the word to understand context
-                                if before_word >= type_start:
-                                    # Look for => pattern before the word
-                                    arrow_check = before_word
-                                    while arrow_check > type_start and content[arrow_check].isspace():
-                                        arrow_check -= 1
-                                    if arrow_check > type_start and content[arrow_check] == '>' and arrow_check > type_start and content[arrow_check - 1] == '=':
-                                        # We have "=> word {" - this is function body
-                                        break
-                                
-                                # Check if this is function body or part of type
-                                # Function body indicators: "): ReturnType {" 
-                                # Type indicators: "&", "|", ":", complex type context
-                                if before_word < type_start or content[before_word] in ':&|':
-                                    # If preceded by &, |, or :, this is likely part of intersection/union/conditional type
-                                    if before_word >= type_start and content[before_word] in '&|:':
-                                        # Part of a complex type expression (intersection/union/conditional)
-                                        brace_count += 1
-                                    else:
-                                        # This is likely "ReturnType {" where { starts the function body
-                                        break
+                        # If we see identifier:, it's likely an object type, not function body
+                        if lookahead_pos < len(content):
+                            # Look for patterns like "identifier:" or "readonly identifier:" or "[...]:""
+                            if content[lookahead_pos] == '[':
+                                # Handle mapped type patterns like [P in keyof T]:
+                                bracket_count = 0
+                                temp_pos = lookahead_pos
+                                while temp_pos < len(content):
+                                    if content[temp_pos] == '[':
+                                        bracket_count += 1
+                                    elif content[temp_pos] == ']':
+                                        bracket_count -= 1
+                                        if bracket_count == 0:
+                                            # Found closing bracket, look for colon
+                                            temp_pos += 1
+                                            while temp_pos < len(content) and content[temp_pos].isspace():
+                                                temp_pos += 1
+                                            if temp_pos < len(content) and content[temp_pos] == ':':
+                                                # This is a mapped type, continue parsing
+                                                brace_count += 1
+                                                break
+                                            else:
+                                                # No colon after bracket, assume function body
+                                                break
+                                    temp_pos += 1
                                 else:
-                                    # Part of a complex type expression
-                                    brace_count += 1
-                            elif last_char in '}]>\'"' or last_char in '?:&|':
-                                # Likely object type - continue parsing
-                                brace_count += 1
+                                    # No closing bracket found, assume function body
+                                    break
                             else:
-                                # Likely function body - stop here
-                                break
+                                # Regular identifier pattern
+                                identifier_start = lookahead_pos
+                                while (lookahead_pos < len(content) and 
+                                       (content[lookahead_pos].isalnum() or content[lookahead_pos] in '_<>')):
+                                    lookahead_pos += 1
+                                
+                                # Skip whitespace
+                                while lookahead_pos < len(content) and content[lookahead_pos].isspace():
+                                    lookahead_pos += 1
+                                    
+                                # If we see a colon, this is an object type property
+                                if lookahead_pos < len(content) and content[lookahead_pos] == ':':
+                                    # This is an object type, continue parsing
+                                    brace_count += 1
+                                else:
+                                    # This might be function body, stop parsing return type
+                                    break
                         else:
-                            # Start of type, unlikely to be function body
-                            brace_count += 1
+                            # Empty braces or end of content, assume function body
+                            break
                     elif char == ';' and brace_count == 0 and paren_count == 0 and angle_count == 0:
                         break
                     elif char == '(':
@@ -503,6 +489,16 @@ class FunctionAnalyzer:
                     type_end += 1
                 
                 return_type_str = content[type_start:type_end].strip()
+                
+                
+                # Debug: Print what was extracted for complex types
+                if len(return_type_str) > 50 or '{' in return_type_str:
+                    # Find function name from the content for debugging
+                    import re
+                    func_name_match = re.search(r'function\s+(\w+)', content[max(0, type_start-500):type_start])
+                    func_name = func_name_match.group(1) if func_name_match else "unknown"
+                    print(f"DEBUG: Extracted return type for function '{func_name}': '{return_type_str[:200]}{'...' if len(return_type_str) > 200 else ''}'")
+                
                 # Clean up return type - remove trailing => if present
                 if return_type_str.endswith('=>'):
                     return_type_str = return_type_str[:-2].strip()
@@ -586,6 +582,7 @@ class FunctionAnalyzer:
                     if n == 0:
                         return self.func_name  # Return function name
                     return ""
+            
             
             return {
                 'match': MockMatch(start_pos, function_name),
@@ -683,6 +680,7 @@ class FunctionAnalyzer:
         signature += f"({', '.join(param_strings)})"
         
         # Add return type and arrow
+        
         if pattern_type in ["arrow_const", "arrow_let", "async_arrow_const"]:
             # For arrow functions
             if return_type_str and return_type_str != "any":
@@ -967,12 +965,26 @@ class FunctionAnalyzer:
             
             # Always add the full return type too
             param_types.append(return_type)
+            
+            # For conditional types, also create a special entry to ensure something shows up in types
+            if 'extends' in return_type and '?' in return_type and ':' in return_type:
+                # This is a conditional type, ensure we have at least the conditional type construct
+                param_types.append("ConditionalReturnType")
         
         # Resolve each type
         for type_annotation in param_types:
             if type_annotation not in self.type_resolver.primitive_types:
                 # Extract just the base type name for the key
                 base_type_name = type_annotation.split('<')[0] if '<' in type_annotation else type_annotation
+                
+                # Handle special conditional type marker
+                if base_type_name == "ConditionalReturnType":
+                    types["ConditionalReturnType"] = TypeDefinition(
+                        kind="conditional",
+                        definition=f"Conditional return type: {return_type}",
+                        location=f"{file_path}:return_type"
+                    )
+                    continue
                 
                 # Check if this is a builtin utility type first
                 if base_type_name in self.type_resolver.builtin_generics and resolution_depth in ["generics", "full_inference", "full_type"]:
@@ -982,6 +994,27 @@ class FunctionAnalyzer:
                             definition=f"TypeScript utility type: {base_type_name}",
                             location=f"{file_path}:builtin"
                         )
+                    
+                    # Extract type arguments for nested resolution (e.g., Profile from Partial<Profile>)
+                    if '<' in type_annotation and '>' in type_annotation:
+                        start = type_annotation.find('<') + 1
+                        end = type_annotation.rfind('>')
+                        if start < end:
+                            type_args_str = type_annotation[start:end]
+                            # Parse type arguments (simple comma split for now)
+                            type_args = [arg.strip() for arg in type_args_str.split(',')]
+                            for arg in type_args:
+                                if arg and arg not in self.type_resolver.primitive_types and arg not in types:
+                                    arg_base = arg.split('<')[0]  # Handle nested generics
+                                    arg_def = self.type_resolver.resolve_type(
+                                        arg, file_path, resolution_depth,
+                                        max_constraint_depth=max_constraint_depth,
+                                        track_instantiations=track_instantiations,
+                                        resolve_conditional_types=resolve_conditional_types,
+                                        handle_recursive_types=handle_recursive_types
+                                    )
+                                    if arg_def.kind not in ["error", "unknown"]:
+                                        types[arg_base] = arg_def
                 else:
                     # Otherwise resolve normally
                     type_def = self.type_resolver.resolve_type(
@@ -1137,7 +1170,133 @@ class FunctionAnalyzer:
                     else:
                         types[local_type] = type_def
         
+        # Additional type extraction for full inference level
+        if resolution_depth in ["full_inference", "full_type"]:
+            # Extract types from function parameter types (e.g., function types like (t: T) => U)
+            params_str = function_info['parameters']
+            function_param_types = self._extract_function_parameter_types(params_str)
+            
+            for func_type in function_param_types:
+                if func_type not in types and func_type not in self.type_resolver.primitive_types:
+                    # Use a simple key for complex function types
+                    type_key = func_type.split('<')[0] if '<' in func_type else func_type
+                    if type_key not in types:
+                        type_def = self.type_resolver.resolve_type(
+                            func_type, file_path, resolution_depth,
+                            max_constraint_depth=max_constraint_depth,
+                            track_instantiations=track_instantiations,
+                            resolve_conditional_types=resolve_conditional_types,
+                            handle_recursive_types=handle_recursive_types
+                        )
+                        if type_def.kind != "error":
+                            types[type_key] = type_def
+            
+            # Extract nested types from resolved interfaces (e.g., Date from BaseEntity.createdAt)
+            for type_name, type_def in list(types.items()):
+                if type_def.kind == "interface" and type_def.definition:
+                    nested_types = self._extract_nested_interface_types(type_def.definition)
+                    for nested_type in nested_types:
+                        if (nested_type not in types and 
+                            nested_type not in self.type_resolver.primitive_types and
+                            nested_type not in ['T', 'U', 'K', 'V']):
+                            nested_def = self.type_resolver.resolve_type(
+                                nested_type, file_path, resolution_depth,
+                                max_constraint_depth=max_constraint_depth,
+                                track_instantiations=track_instantiations,
+                                resolve_conditional_types=resolve_conditional_types,
+                                handle_recursive_types=handle_recursive_types
+                            )
+                            if nested_def.kind not in ["error", "unknown"]:
+                                types[nested_type] = nested_def
+        
+        # Recursive nested type resolution for generics and full_inference
+        if resolution_depth in ["generics", "full_inference", "full_type"]:
+            # Keep resolving nested types until no new types are found
+            max_iterations = 3  # Prevent infinite loops
+            for iteration in range(max_iterations):
+                initial_type_count = len(types)
+                
+                # Look for nested types in all resolved interfaces
+                for type_name, type_def in list(types.items()):
+                    if type_def.kind == "interface" and type_def.definition:
+                        # Extract referenced types from interface properties
+                        referenced_types = self._extract_nested_interface_types(type_def.definition)
+                        
+                        for ref_type in referenced_types:
+                            if (ref_type not in types and 
+                                ref_type not in self.type_resolver.primitive_types and
+                                ref_type not in ['T', 'U', 'K', 'V', 'P']):
+                                ref_def = self.type_resolver.resolve_type(
+                                    ref_type, file_path, resolution_depth,
+                                    max_constraint_depth=max_constraint_depth,
+                                    track_instantiations=track_instantiations,
+                                    resolve_conditional_types=resolve_conditional_types,
+                                    handle_recursive_types=handle_recursive_types
+                                )
+                                if ref_def.kind not in ["error", "unknown"]:
+                                    types[ref_type] = ref_def
+                
+                # Stop if no new types were found
+                if len(types) == initial_type_count:
+                    break
+        
         return types, errors
+    
+    def _extract_function_parameter_types(self, params_str: str) -> list[str]:
+        """
+        Extract function types from parameter declarations for full inference.
+        
+        Args:
+            params_str: Function parameters string
+            
+        Returns:
+            List of function type expressions found in parameters
+        """
+        function_types = []
+        
+        # Pattern to match function type parameters: (param: (args) => ReturnType)
+        # This matches patterns like: (t: T, u: U) => T & U
+        function_type_pattern = r'\([^)]*\)\s*=>\s*[^,)]+'
+        matches = re.findall(function_type_pattern, params_str)
+        
+        for match in matches:
+            # Clean up the match and add to function types
+            func_type = match.strip()
+            if func_type:
+                function_types.append(func_type)
+        
+        # Also look for intersection types (T & U) and union types in function parameters
+        intersection_pattern = r'\b\w+\s*&\s*\w+(?:\s*&\s*\w+)*'
+        intersection_matches = re.findall(intersection_pattern, params_str)
+        function_types.extend(intersection_matches)
+        
+        return function_types
+    
+    def _extract_nested_interface_types(self, interface_definition: str) -> list[str]:
+        """
+        Extract type names from interface property definitions.
+        
+        Args:
+            interface_definition: Interface definition string
+            
+        Returns:
+            List of type names found in the interface
+        """
+        nested_types = []
+        
+        # Pattern to match property types: propertyName: TypeName
+        property_pattern = r'\w+\s*:\s*([A-Z]\w*(?:\[\])?(?:\s*\|\s*[A-Z]\w*)*)'  
+        matches = re.findall(property_pattern, interface_definition)
+        
+        for match in matches:
+            # Handle union types and arrays
+            type_parts = match.replace('[]', '').split('|')
+            for part in type_parts:
+                type_name = part.strip()
+                if type_name and type_name[0].isupper():  # Only capitalize types
+                    nested_types.append(type_name)
+        
+        return nested_types
     
     def _extract_imported_types(self, file_path: str) -> list[str]:
         """
