@@ -50,7 +50,7 @@ class TestMainServer:
 
         build_tools = ["check_typescript", "lint_project", "run_test_suite"]
 
-        analysis_tools = []  # All analysis tools have been removed
+        analysis_tools = ["find_references", "get_function_details", "get_call_trace"]  # TypeScript analysis tools
 
         standards_tools = [
             "check_updates",
@@ -91,8 +91,8 @@ class TestMainServer:
         filesystem_present = any("files" in name or "imports" in name or "documents" in name for name in tool_names)
         workflow_present = any("workflow" in name for name in tool_names)
         build_present = any("typescript" in name or "lint" in name or "test" in name for name in tool_names)
-        # Analysis tools have been removed, so we don't check for them
-        analysis_present = True  # Set to True to avoid failing the assertion
+        # Check for TypeScript analysis tools
+        analysis_present = any("references" in name or "function_details" in name or "call_trace" in name for name in tool_names)
         standards_present = any(
             "check_updates" in name
             or "register" in name
@@ -120,7 +120,7 @@ class TestMainServer:
             "workflow_state_read",  # workflow state
             "workflow_start",  # workflow execution
             "check_typescript",  # build
-            # "find_dead_code",  # analysis - removed
+            "find_references",  # analysis - TypeScript tools
             "check_updates",  # standards
             "get_session_stats",  # standards v2
         ]

@@ -1,14 +1,171 @@
 """Analysis server tools implementations.
 
-Currently empty - all analysis tools have been removed."""
+TypeScript analysis tools for Phase 1 implementation.
+"""
+
+from ...utils.json_parameter_middleware import json_convert
+from ..models.typescript_models import (
+    FindReferencesResponse,
+    FunctionDetailsResponse,
+    CallTraceResponse,
+)
+from .find_references import find_references_impl
+from .get_function_details import get_function_details_impl
+from .get_call_trace import get_call_trace_impl
 
 
 def register_analysis_tools(mcp):
-    """Register analysis tools with the MCP server.
+    """Register TypeScript analysis tools with the MCP server."""
     
-    Currently no tools are registered in this module.
-    """
-    pass
+    @mcp.tool
+    @json_convert
+    def find_references(
+        symbol: str,
+        file_paths: str | list[str] | None = None,
+        include_declarations: bool = True,
+        include_usages: bool = True,
+        include_tests: bool = False,
+        resolution_depth: str = "semantic",
+        page: int = 1,
+        max_tokens: int = 20000,
+    ) -> FindReferencesResponse:
+        """
+        Find all references to a TypeScript symbol across files.
+        
+        Use this tool when:
+        - Tracking where a function, class, or variable is used
+        - Analyzing symbol dependencies before refactoring
+        - Understanding code impact of changes
+        - Finding all usages of an interface or type
+        
+        Replaces bash commands: grep -r "symbolName", ag "symbolName"
+        
+        Args:
+            symbol: Symbol name to find references for (e.g., "getUserById", "User")
+            file_paths: Specific files to search, or None for project-wide search
+            include_declarations: Include where symbol is declared/defined
+            include_usages: Include where symbol is used/called
+            include_tests: Include references found in test files
+            resolution_depth: Analysis level - "syntactic", "semantic", or "full_type"
+            page: Page number for pagination (default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
+            
+        Example:
+            find_references("User")
+            → FindReferencesResponse with all User interface references
+            
+        Note: Cross-references with get_function_details for detailed analysis
+        """
+        return find_references_impl(
+            symbol=symbol,
+            file_paths=file_paths,
+            include_declarations=include_declarations,
+            include_usages=include_usages,
+            include_tests=include_tests,
+            resolution_depth=resolution_depth,
+            page=page,
+            max_tokens=max_tokens,
+        )
+    
+    @mcp.tool
+    @json_convert
+    def get_function_details(
+        functions: str | list[str],
+        file_paths: str | list[str] | None = None,
+        include_code: bool = True,
+        include_types: bool = True,
+        include_calls: bool = False,
+        resolution_depth: str = "semantic",
+        page: int = 1,
+        max_tokens: int = 20000,
+    ) -> FunctionDetailsResponse:
+        """
+        Get detailed information about TypeScript functions and methods.
+        
+        Use this tool when:
+        - Understanding function signatures and parameters
+        - Analyzing type definitions used in functions
+        - Documenting function behavior and interfaces
+        - Preparing for function refactoring or optimization
+        
+        Replaces bash commands: grep -A 20 "function name", manual code inspection
+        
+        Args:
+            functions: Function names to analyze (single string or list)
+            file_paths: Files to search, or None for project-wide search
+            include_code: Include complete function implementation
+            include_types: Include detailed type definitions used
+            include_calls: Include functions called within this function
+            resolution_depth: Analysis level - "syntactic", "semantic", or "full_type"
+            page: Page number for pagination (default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
+            
+        Example:
+            get_function_details(["getUserById", "createUser"])
+            → FunctionDetailsResponse with signatures and implementations
+            
+        Note: Pairs well with find_references to understand complete function usage
+        """
+        return get_function_details_impl(
+            functions=functions,
+            file_paths=file_paths,
+            include_code=include_code,
+            include_types=include_types,
+            include_calls=include_calls,
+            resolution_depth=resolution_depth,
+            page=page,
+            max_tokens=max_tokens,
+        )
+    
+    @mcp.tool
+    @json_convert
+    def get_call_trace(
+        entry_point: str,
+        file_paths: str | list[str] | None = None,
+        max_depth: int = 10,
+        include_external_calls: bool = False,
+        analyze_conditions: bool = False,
+        resolution_depth: str = "semantic",
+        page: int = 1,
+        max_tokens: int = 20000,
+    ) -> CallTraceResponse:
+        """
+        Trace execution paths and call graphs from a function entry point.
+        
+        Use this tool when:
+        - Understanding complex function call flows
+        - Analyzing potential execution paths through code
+        - Detecting circular dependencies in function calls
+        - Planning performance optimizations
+        
+        Replaces bash commands: manual call graph creation, static analysis tools
+        
+        Args:
+            entry_point: Function name to start tracing from (e.g., "main", "UserService.process")
+            file_paths: Files to analyze, or None for project-wide analysis
+            max_depth: Maximum call depth to trace (prevents infinite recursion)
+            include_external_calls: Include calls to external modules/libraries
+            analyze_conditions: Analyze conditional execution branches
+            resolution_depth: Analysis level - "syntactic", "semantic", or "full_type"
+            page: Page number for pagination (default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
+            
+        Example:
+            get_call_trace("authenticate", max_depth=5)
+            → CallTraceResponse with execution paths from authenticate function
+            
+        Note: Use with get_function_details to understand individual functions in the trace
+        """
+        return get_call_trace_impl(
+            entry_point=entry_point,
+            file_paths=file_paths,
+            max_depth=max_depth,
+            include_external_calls=include_external_calls,
+            analyze_conditions=analyze_conditions,
+            resolution_depth=resolution_depth,
+            page=page,
+            max_tokens=max_tokens,
+        )
 
 
 __all__ = ["register_analysis_tools"]
