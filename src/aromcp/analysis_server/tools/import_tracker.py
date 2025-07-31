@@ -59,6 +59,35 @@ class ModuleResolver:
     
     def __init__(self, project_root: str):
         self.project_root = Path(project_root)
+        self.path_aliases = self._load_path_aliases()
+    
+    def _load_path_aliases(self) -> Dict[str, str]:
+        """Load path aliases from tsconfig.json."""
+        aliases = {}
+        tsconfig_path = self.project_root / "tsconfig.json"
+        
+        if tsconfig_path.exists():
+            try:
+                import json
+                with open(tsconfig_path, 'r') as f:
+                    content = f.read()
+                
+                # Try to handle JSON5/relaxed JSON by removing trailing commas
+                content = re.sub(r',(\s*[}\]])', r'\1', content)
+                
+                tsconfig = json.loads(content)
+                
+                paths = tsconfig.get('compilerOptions', {}).get('paths', {})
+                for alias, targets in paths.items():
+                    if targets and len(targets) > 0:
+                        # Remove trailing /* from both alias and target
+                        clean_alias = alias.rstrip('/*')
+                        clean_target = targets[0].rstrip('/*')
+                        aliases[clean_alias] = clean_target
+            except (json.JSONDecodeError, IOError):
+                pass
+        
+        return aliases
     
     def resolve_path(self, import_path: str, from_file: str) -> Optional[str]:
         """
@@ -72,6 +101,24 @@ class ModuleResolver:
             Resolved absolute file path, or None if not found
         """
         from_dir = Path(from_file).parent
+        
+        # Handle path aliases first (e.g., @/contexts -> ./src/contexts)
+        for alias, target in self.path_aliases.items():
+            if import_path.startswith(alias):
+                # Replace alias with target path
+                relative_path = import_path[len(alias):].lstrip('/')
+                resolved_path = self.project_root / target / relative_path
+                
+                # Try different extensions
+                for ext in ['.ts', '.tsx', '.js', '.jsx']:
+                    full_path = resolved_path.with_suffix(ext)
+                    if full_path.exists():
+                        return str(full_path.resolve())
+                    
+                    # Try index file
+                    index_path = resolved_path / f"index{ext}"
+                    if index_path.exists():
+                        return str(index_path.resolve())
         
         # Handle relative imports
         if import_path.startswith('.'):

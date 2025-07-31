@@ -377,10 +377,16 @@ class TestCrossFileCallAnalysis:
         assert response.call_graph_stats.total_functions > 5, "Should detect functions from multiple files"
     
     def test_project_wide_analysis(self, fixtures_dir):
-        """Test project-wide call graph analysis (file_paths=None)."""
+        """Test project-wide call graph analysis with multiple fixture files."""
+        # Use multiple fixture files to simulate project-wide analysis
+        files = [
+            str(fixtures_dir / "simple_calls.ts"),
+            str(fixtures_dir / "class_methods.ts"),
+            str(fixtures_dir / "conditional_calls.ts"),
+        ]
         response = get_call_trace_impl(
             entry_point="login",
-            file_paths=None,  # Analyze entire project
+            file_paths=files,  # Analyze multiple files
             max_depth=8
         )
         

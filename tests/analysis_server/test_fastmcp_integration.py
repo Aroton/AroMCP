@@ -76,7 +76,7 @@ class TestFastMCPToolRegistration:
         expected_tools = [
             "find_references",
             "get_function_details", 
-            "get_call_trace"
+            "analyze_call_graph"
         ]
         
         # Get registered tools using FastMCP's async method
@@ -463,7 +463,7 @@ class TestMCPProtocolCompliance:
                 "include_types", "include_calls", "resolution_depth",
                 "page", "max_tokens"
             ],
-            "get_call_trace": [
+            "analyze_call_graph": [
                 "entry_point", "file_paths", "max_depth",
                 "include_external_calls", "analyze_conditions",
                 "page", "max_tokens"
@@ -547,7 +547,7 @@ class TestIntegrationWithMainServer:
             expected_analysis_tools = [
                 "find_references",
                 "get_function_details",
-                "get_call_trace"
+                "analyze_call_graph"
             ]
             
             # Implementation would register these tools
@@ -568,7 +568,7 @@ class TestIntegrationWithMainServer:
         analysis_tool_names = [
             "find_references",
             "get_function_details", 
-            "get_call_trace"
+            "analyze_call_graph"
         ]
         
         # Should not conflict with existing tool names

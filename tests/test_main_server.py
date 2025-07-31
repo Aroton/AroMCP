@@ -50,7 +50,7 @@ class TestMainServer:
 
         build_tools = ["check_typescript", "lint_project", "run_test_suite"]
 
-        analysis_tools = ["find_references", "get_function_details", "get_call_trace"]  # TypeScript analysis tools
+        analysis_tools = ["find_references", "get_function_details", "analyze_call_graph"]  # TypeScript analysis tools
 
         standards_tools = [
             "check_updates",
@@ -92,7 +92,7 @@ class TestMainServer:
         workflow_present = any("workflow" in name for name in tool_names)
         build_present = any("typescript" in name or "lint" in name or "test" in name for name in tool_names)
         # Check for TypeScript analysis tools
-        analysis_present = any("references" in name or "function_details" in name or "call_trace" in name for name in tool_names)
+        analysis_present = any("references" in name or "function_details" in name or "call_graph" in name for name in tool_names)
         standards_present = any(
             "check_updates" in name
             or "register" in name

@@ -55,12 +55,28 @@ def find_references_impl(
     """
     import os
     import re
+    from pathlib import Path
+    from ...filesystem_server._security import get_project_root
     
-    # Convert file_paths to list if needed
+    # Convert file_paths to list if needed or discover files from project root
     if isinstance(file_paths, str):
         search_files = [file_paths]
     elif file_paths is None:
+        # Default to project-wide search using MCP_FILE_ROOT
+        project_root = get_project_root(None)
+        project_path = Path(project_root).resolve()
+        
+        # Find all TypeScript/JavaScript files in the project
         search_files = []
+        patterns = ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx']
+        exclude_dirs = {'node_modules', '.git', 'dist', 'build', '.next', 'coverage', '__pycache__'}
+        
+        for pattern in patterns:
+            for file_path in project_path.glob(pattern):
+                # Skip excluded directories
+                if any(excluded in file_path.parts for excluded in exclude_dirs):
+                    continue
+                search_files.append(str(file_path))
     else:
         search_files = file_paths
     
@@ -107,6 +123,7 @@ def find_references_impl(
             ))
     
     # Handle inheritance resolution if requested
+    inheritance_info = None
     if resolve_inheritance and references:
         inheritance_info = _resolve_inheritance_chains(symbol, search_files, references)
     
@@ -160,6 +177,10 @@ def _find_symbol_references(symbol: str, file_path: str, lines: list[str],
         
         # Skip empty lines and comments
         if not line_stripped or line_stripped.startswith('//') or line_stripped.startswith('*'):
+            continue
+            
+        # Skip if symbol appears only inside string literals
+        if _is_symbol_only_in_strings(line, symbol):
             continue
             
         # Pattern for import statements
@@ -372,6 +393,59 @@ def _find_class_method_references(class_name: str, method_name: str, file_path: 
     return references
 
 
+def _is_symbol_only_in_strings(line: str, symbol: str) -> bool:
+    """Check if symbol appears only inside string literals (quotes)."""
+    import re
+    
+    # Find all occurrences of the symbol
+    symbol_positions = []
+    start = 0
+    while True:
+        pos = line.find(symbol, start)
+        if pos == -1:
+            break
+        symbol_positions.append(pos)
+        start = pos + 1
+    
+    if not symbol_positions:
+        return False
+    
+    # Find all string literal ranges (single and double quotes)
+    string_ranges = []
+    
+    # Find single-quoted strings
+    single_quote_pattern = r"'(?:[^'\\]|\\.)*'"
+    for match in re.finditer(single_quote_pattern, line):
+        string_ranges.append((match.start(), match.end()))
+    
+    # Find double-quoted strings  
+    double_quote_pattern = r'"(?:[^"\\]|\\.)*"'
+    for match in re.finditer(double_quote_pattern, line):
+        string_ranges.append((match.start(), match.end()))
+    
+    # Find template literal strings (backticks)
+    template_pattern = r'`(?:[^`\\]|\\.)*`'
+    for match in re.finditer(template_pattern, line):
+        string_ranges.append((match.start(), match.end()))
+    
+    # Check if ALL symbol occurrences are inside string literals
+    for symbol_pos in symbol_positions:
+        symbol_end = symbol_pos + len(symbol)
+        is_inside_string = False
+        
+        for string_start, string_end_pos in string_ranges:
+            if string_start <= symbol_pos and symbol_end <= string_end_pos:
+                is_inside_string = True
+                break
+        
+        # If any symbol occurrence is NOT in a string, return False
+        if not is_inside_string:
+            return False
+    
+    # All symbol occurrences are inside strings
+    return True
+
+
 def _is_test_file(file_path: str) -> bool:
     """Check if a file is a test file based on common patterns."""
     import os
@@ -392,6 +466,7 @@ def _resolve_inheritance_chains(symbol: str, file_paths: list[str],
                                references: list[ReferenceInfo]):
     """Create inheritance chain information for resolve_inheritance=True."""
     import os
+    from ..models.typescript_models import SymbolResolutionResult, AnalysisStats
     
     # Find inheritance relationships by analyzing class structures
     inheritance_chains = []
@@ -424,9 +499,17 @@ def _resolve_inheritance_chains(symbol: str, file_paths: list[str],
             # Ignore read errors for inheritance analysis
             pass
     
-    # Create simple wrapper object with chains attribute for test compatibility
-    class InheritanceInfo:
-        def __init__(self, chains):
-            self.chains = chains
-            
-    return InheritanceInfo(inheritance_chains)
+    # Return proper SymbolResolutionResult for type compatibility
+    return SymbolResolutionResult(
+        success=True,
+        inheritance_chains=inheritance_chains,
+        references=references,
+        analysis_stats=AnalysisStats(
+            total_files_processed=len(file_paths),
+            files_analyzed=len(file_paths),
+            total_symbols_resolved=len(references),
+            analysis_time_ms=1.0,
+            files_with_errors=0,
+            references_found=len(references)
+        )
+    )

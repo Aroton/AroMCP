@@ -421,8 +421,10 @@ class TestGetFunctionDetailsSpecificFailures:
         # The function should handle the max_constraint_depth parameter without error
         assert result.success is True, "Should handle max_constraint_depth parameter without error"
         
-        deep_func = result.functions.get("deepGenericFunction")
-        assert deep_func is not None, "Should find the deep generic function"
+        deep_func_list = result.functions.get("deepGenericFunction")
+        assert deep_func_list is not None, "Should find the deep generic function"
+        deep_func = deep_func_list[0] if deep_func_list else None
+        assert deep_func is not None, "Should have at least one function detail"
         
         # Should resolve constraints up to the specified depth
         if deep_func and deep_func.types:
@@ -481,8 +483,10 @@ class TestGetFunctionDetailsSpecificFailures:
         assert result.success is True, "Should successfully analyze functions with imported types"
         
         # Check processUser function
-        process_user = result.functions.get("processUser")
-        assert process_user is not None, "Should find processUser function"
+        process_user_list = result.functions.get("processUser")
+        assert process_user_list is not None, "Should find processUser function"
+        process_user = process_user_list[0] if process_user_list else None
+        assert process_user is not None, "Should have at least one function detail"
         
         if process_user and process_user.types:
             # THIS SHOULD PASS BUT CURRENTLY FAILS:
@@ -491,14 +495,16 @@ class TestGetFunctionDetailsSpecificFailures:
             assert "BaseEntity" in process_user.types, f"Should find BaseEntity type (imported), found types: {list(process_user.types.keys())}"
         
         # Check validateEntity function
-        validate_entity = result.functions.get("validateEntity")
-        if validate_entity:
-            # Should show the generic constraint properly
-            assert "T extends BaseEntity" in validate_entity.signature, "Should show generic constraint with BaseEntity"
-            
-            if validate_entity.types:
-                # THIS SHOULD PASS BUT CURRENTLY FAILS:
-                assert "BaseEntity" in validate_entity.types, f"Should resolve BaseEntity in generic function, found types: {list(validate_entity.types.keys())}"
+        validate_entity_list = result.functions.get("validateEntity")
+        if validate_entity_list:
+            validate_entity = validate_entity_list[0] if validate_entity_list else None
+            if validate_entity:
+                # Should show the generic constraint properly
+                assert "T extends BaseEntity" in validate_entity.signature, "Should show generic constraint with BaseEntity"
+                
+                if validate_entity.types:
+                    # THIS SHOULD PASS BUT CURRENTLY FAILS:
+                    assert "BaseEntity" in validate_entity.types, f"Should resolve BaseEntity in generic function, found types: {list(validate_entity.types.keys())}"
 
 
 class TestGetCallTraceSpecificFailures:

@@ -810,7 +810,10 @@ class TestGetFunctionDetailsTool:
         
         assert isinstance(result, FunctionDetailsResponse)
         # Should return empty results or appropriate errors
-        assert len(result.functions) == 0 or len(result.errors) > 0
+        # Current implementation returns empty list for non-existent functions
+        assert len(result.functions) == 0 or len(result.errors) > 0 or all(
+            len(func_list) == 0 for func_list in result.functions.values()
+        )
 
     def test_get_function_details_filtering_options(self, temp_project):
         """Test different filtering and inclusion options."""
@@ -882,13 +885,16 @@ class TestGetFunctionDetailsTool:
             assert len(result.functions) == 2
         
         # Generic resolution should have more type information than basic
-        basic_process = basic_result.functions.get("processEntity")
-        generic_process = generic_result.functions.get("processEntity")
+        basic_process_list = basic_result.functions.get("processEntity")
+        generic_process_list = generic_result.functions.get("processEntity")
         
-        if basic_process and generic_process:
-            basic_type_count = len(basic_process.types) if basic_process.types else 0
-            generic_type_count = len(generic_process.types) if generic_process.types else 0
-            assert generic_type_count >= basic_type_count
+        if basic_process_list and generic_process_list:
+            basic_process = basic_process_list[0] if basic_process_list else None
+            generic_process = generic_process_list[0] if generic_process_list else None
+            if basic_process and generic_process:
+                basic_type_count = len(basic_process.types) if basic_process.types else 0
+                generic_type_count = len(generic_process.types) if generic_process.types else 0
+                assert generic_type_count >= basic_type_count
 
     def test_get_function_details_phase3_batch_processing_performance(self, temp_project):
         """Test Phase 3 batch processing performance requirements."""
@@ -1030,15 +1036,19 @@ class TestGetFunctionDetailsTool:
         assert result.success is True
         
         # Should resolve imported types
-        process_user = result.functions.get("processUser")
-        if process_user:
-            assert process_user.types is not None
-            assert "User" in process_user.types
-            assert "BaseEntity" in process_user.types
+        process_user_list = result.functions.get("processUser")
+        if process_user_list:
+            process_user = process_user_list[0] if process_user_list else None
+            if process_user:
+                assert process_user.types is not None
+                assert "User" in process_user.types
+                assert "BaseEntity" in process_user.types
         
-        validate_entity = result.functions.get("validateEntity")
-        if validate_entity:
-            assert "T extends BaseEntity" in validate_entity.signature
+        validate_entity_list = result.functions.get("validateEntity")
+        if validate_entity_list:
+            validate_entity = validate_entity_list[0] if validate_entity_list else None
+            if validate_entity:
+                assert "T extends BaseEntity" in validate_entity.signature
 
     def test_get_function_details_phase3_function_code_analysis(self, temp_project):
         """Test Phase 3 function code analysis with call tracking."""
@@ -1083,22 +1093,26 @@ class TestGetFunctionDetailsTool:
         assert result.success is True
         
         # Test function code inclusion
-        main_func = result.functions.get("mainFunction")
-        if main_func:
-            assert main_func.code is not None
-            assert "const cleaned = helperFunction(input);" in main_func.code
-            assert "console.log('Processing:', cleaned);" in main_func.code
+        main_func_list = result.functions.get("mainFunction")
+        if main_func_list:
+            main_func = main_func_list[0] if main_func_list else None
+            if main_func:
+                assert main_func.code is not None
+                assert "const cleaned = helperFunction(input);" in main_func.code
+                assert "console.log('Processing:', cleaned);" in main_func.code
         
-        # Test call dependency tracking
-        if main_func and main_func.calls:
-            assert "helperFunction" in main_func.calls
-            assert "console.log" in main_func.calls
+                # Test call dependency tracking
+                if main_func.calls:
+                    assert "helperFunction" in main_func.calls
+                    assert "console.log" in main_func.calls
         
         # Test class method call tracking
-        process_method = result.functions.get("DataProcessor.process")
-        if process_method and process_method.calls:
-            assert "this.validate" in process_method.calls
-            assert "this.transform" in process_method.calls
+        process_method_list = result.functions.get("DataProcessor.process")
+        if process_method_list:
+            process_method = process_method_list[0] if process_method_list else None
+            if process_method and process_method.calls:
+                assert "this.validate" in process_method.calls
+                assert "this.transform" in process_method.calls
 
     def test_get_function_details_phase3_generic_constraint_resolution(self, temp_project):
         """Test Phase 3 generic constraint resolution up to 5 levels deep."""
@@ -1132,19 +1146,21 @@ class TestGetFunctionDetailsTool:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        deep_func = result.functions.get("deepGenericFunction")
-        if deep_func:
-            # Should handle 5 levels of generic constraints
-            assert "T extends Level1" in deep_func.signature
-            assert "U extends Level2<T>" in deep_func.signature
-            assert "V extends Level3<T, U>" in deep_func.signature
-            assert "W extends Level4<T, U, V>" in deep_func.signature
-            assert "X extends Level5<T, U, V, W>" in deep_func.signature
-            
-            # Should resolve all constraint types
-            if deep_func.types:
-                for level in ["Level1", "Level2", "Level3", "Level4", "Level5"]:
-                    assert level in deep_func.types
+        deep_func_list = result.functions.get("deepGenericFunction")
+        if deep_func_list:
+            deep_func = deep_func_list[0] if deep_func_list else None
+            if deep_func:
+                # Should handle 5 levels of generic constraints
+                assert "T extends Level1" in deep_func.signature
+                assert "U extends Level2<T>" in deep_func.signature
+                assert "V extends Level3<T, U>" in deep_func.signature
+                assert "W extends Level4<T, U, V>" in deep_func.signature
+                assert "X extends Level5<T, U, V, W>" in deep_func.signature
+                
+                # Should resolve all constraint types
+                if deep_func.types:
+                    for level in ["Level1", "Level2", "Level3", "Level4", "Level5"]:
+                        assert level in deep_func.types
 
 
 class TestGetCallTraceTool:

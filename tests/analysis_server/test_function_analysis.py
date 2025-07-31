@@ -126,29 +126,49 @@ class TestFunctionSignatureExtraction:
         assert len(result.functions) == 5
         
         # Test simple function
-        simple_func = result.functions["simpleFunction"]
+        simple_func_list = result.functions["simpleFunction"]
+        assert simple_func_list is not None
+        assert isinstance(simple_func_list, list)
+        assert len(simple_func_list) >= 1
+        simple_func = simple_func_list[0]
         assert isinstance(simple_func, FunctionDetail)
         assert simple_func.signature == "function simpleFunction(param: string): number"
         assert simple_func.location.endswith("function_declarations.ts:3")
         
         # Test optional parameters
-        with_optionals = result.functions["withOptionals"]
+        with_optionals_list = result.functions["withOptionals"]
+        assert with_optionals_list is not None
+        assert isinstance(with_optionals_list, list)
+        assert len(with_optionals_list) >= 1
+        with_optionals = with_optionals_list[0]
         expected_sig = "function withOptionals(required: string, optional?: number, defaulted: boolean = false): void"
         assert with_optionals.signature == expected_sig
         
         # Test rest parameters
-        with_rest = result.functions["withRest"]
+        with_rest_list = result.functions["withRest"]
+        assert with_rest_list is not None
+        assert isinstance(with_rest_list, list)
+        assert len(with_rest_list) >= 1
+        with_rest = with_rest_list[0]
         assert "...rest: number[]" in with_rest.signature
         assert "): string[]" in with_rest.signature
         
         # Test union types
-        with_unions = result.functions["withUnions"]
+        with_unions_list = result.functions["withUnions"]
+        assert with_unions_list is not None
+        assert isinstance(with_unions_list, list)
+        assert len(with_unions_list) >= 1
+        with_unions = with_unions_list[0]
         assert "string | number | boolean" in with_unions.signature
         assert "'json' | 'xml'" in with_unions.signature
         assert "string | null" in with_unions.signature
         
         # Test complex parameters
-        with_complex = result.functions["withComplexParams"]
+        with_complex_list = result.functions["withComplexParams"]
+        assert with_complex_list is not None
+        assert isinstance(with_complex_list, list)
+        assert len(with_complex_list) >= 1
+        with_complex = with_complex_list[0]
         assert "config: {" in with_complex.signature
         assert "callback: (error: Error | null, result?: any) => void" in with_complex.signature
 
@@ -201,27 +221,52 @@ class TestFunctionSignatureExtraction:
         assert len(result.functions) == 6
         
         # Test simple arrow
-        simple_arrow = result.functions["simpleArrow"]
+        simple_arrow_list = result.functions["simpleArrow"]
+        assert simple_arrow_list is not None
+        assert isinstance(simple_arrow_list, list)
+        assert len(simple_arrow_list) >= 1
+
+        simple_arrow = simple_arrow_list[0]
         assert "const simpleArrow = (x: number): string =>" in simple_arrow.signature
         
         # Test async arrow
-        async_arrow = result.functions["asyncArrow"]
+        async_arrow_list = result.functions["asyncArrow"]
+        assert async_arrow_list is not None
+        assert isinstance(async_arrow_list, list)
+        assert len(async_arrow_list) >= 1
+
+        async_arrow = async_arrow_list[0]
         assert "async" in async_arrow.signature
         assert "Promise<string | null>" in async_arrow.signature
         
         # Test generic arrow
-        generic_arrow = result.functions["genericArrow"]
+        generic_arrow_list = result.functions["genericArrow"]
+        assert generic_arrow_list is not None
+        assert isinstance(generic_arrow_list, list)
+        assert len(generic_arrow_list) >= 1
+
+        generic_arrow = generic_arrow_list[0]
         assert "<T>" in generic_arrow.signature
         assert "(value: T): T[]" in generic_arrow.signature
         
         # Test complex generic arrow
-        complex_arrow = result.functions["complexGenericArrow"]
+        complex_arrow_list = result.functions["complexGenericArrow"]
+        assert complex_arrow_list is not None
+        assert isinstance(complex_arrow_list, list)
+        assert len(complex_arrow_list) >= 1
+
+        complex_arrow = complex_arrow_list[0]
         assert "T extends Record<string, any>" in complex_arrow.signature
         assert "K extends keyof T" in complex_arrow.signature
         assert "): T[K]" in complex_arrow.signature
         
         # Test higher-order function
-        higher_order = result.functions["higherOrder"]
+        higher_order_list = result.functions["higherOrder"]
+        assert higher_order_list is not None
+        assert isinstance(higher_order_list, list)
+        assert len(higher_order_list) >= 1
+
+        higher_order = higher_order_list[0]
         assert "mapper: (input: T) => U" in higher_order.signature
         assert ") => (items: T[]): U[]" in higher_order.signature
 
@@ -250,14 +295,18 @@ class TestFunctionSignatureExtraction:
         assert result.success is True
         
         # Test abstract class method with generics
-        process_logging = result.functions.get("AbstractProcessor.processWithLogging")
+        process_logging_list = result.functions.get("AbstractProcessor.processWithLogging")
+
+        process_logging = process_logging_list[0] if process_logging_list else None
         assert process_logging is not None
         assert "async processWithLogging<U extends T>" in process_logging.signature
         assert "logger?: (message: string, data: any) => void" in process_logging.signature
         assert "): Promise<U>" in process_logging.signature
         
         # Test method with complex options parameter
-        batch_process = result.functions.get("AbstractProcessor.batchProcess")
+        batch_process_list = result.functions.get("AbstractProcessor.batchProcess")
+
+        batch_process = batch_process_list[0] if batch_process_list else None
         assert batch_process is not None
         assert "batchProcess<U extends T>" in batch_process.signature
         assert "options?: {" in batch_process.signature
@@ -265,12 +314,16 @@ class TestFunctionSignatureExtraction:
         assert "onProgress?: (completed: number, total: number) => void" in batch_process.signature
         
         # Test concrete implementation
-        user_process = result.functions.get("UserProcessor.process")
+        user_process_list = result.functions.get("UserProcessor.process")
+
+        user_process = user_process_list[0] if user_process_list else None
         assert user_process is not None
         assert "async process(user: User): Promise<User>" in user_process.signature
         
         # Test method with conditional parameters
-        process_new = result.functions.get("UserProcessor.processNewUser")
+        process_new_list = result.functions.get("UserProcessor.processNewUser")
+
+        process_new = process_new_list[0] if process_new_list else None
         assert process_new is not None
         assert "userData: Omit<User, 'id'>" in process_new.signature
         assert "sendWelcomeEmail: boolean = true" in process_new.signature
@@ -297,7 +350,12 @@ class TestFunctionSignatureExtraction:
         assert result.success is True
         
         # Test complex multi-constraint generic
-        validate_process = result.functions["validateAndProcess"]
+        validate_process_list = result.functions["validateAndProcess"]
+        assert validate_process_list is not None
+        assert isinstance(validate_process_list, list)
+        assert len(validate_process_list) >= 1
+
+        validate_process = validate_process_list[0]
         expected_constraints = [
             "T extends BaseEntity",
             "K extends keyof T", 
@@ -308,19 +366,34 @@ class TestFunctionSignatureExtraction:
         assert "validator: (value: V) => boolean" in validate_process.signature
         
         # Test conditional type function
-        format_value = result.functions["formatValue"]
+        format_value_list = result.functions["formatValue"]
+        assert format_value_list is not None
+        assert isinstance(format_value_list, list)
+        assert len(format_value_list) >= 1
+
+        format_value = format_value_list[0]
         conditional_return = (
             "T extends string ? string : T extends number ? string : never"
         )
         assert conditional_return in format_value.signature
         
         # Test utility type function
-        pick_fields = result.functions["pickFields"]
+        pick_fields_list = result.functions["pickFields"]
+        assert pick_fields_list is not None
+        assert isinstance(pick_fields_list, list)
+        assert len(pick_fields_list) >= 1
+
+        pick_fields = pick_fields_list[0]
         assert "keys: K[]" in pick_fields.signature
         assert "): Pick<T, K>" in pick_fields.signature
         
         # Test infer type function
-        process_array = result.functions["processArrayElements"]
+        process_array_list = result.functions["processArrayElements"]
+        assert process_array_list is not None
+        assert isinstance(process_array_list, list)
+        assert len(process_array_list) >= 1
+
+        process_array = process_array_list[0]
         assert "T extends readonly unknown[]" in process_array.signature
         assert "): ExtractArrayType<T>[]" in process_array.signature
 
@@ -372,7 +445,12 @@ class TestFunctionSignatureExtraction:
         assert result.success is True
         
         # Test the main bug case: extractReturnType function
-        extract_return = result.functions["extractReturnType"]
+        extract_return_list = result.functions["extractReturnType"]
+        assert extract_return_list is not None
+        assert isinstance(extract_return_list, list)
+        assert len(extract_return_list) >= 1
+
+        extract_return = extract_return_list[0]
         assert extract_return is not None
         
         # BUG: Currently this signature gets truncated at the '=>' and returns:
@@ -395,7 +473,12 @@ class TestFunctionSignatureExtraction:
             assert expected_part in actual_signature, f"Missing '{expected_part}' in signature: {actual_signature}"
         
         # Test second bug case: processCallback function
-        process_callback = result.functions["processCallback"]
+        process_callback_list = result.functions["processCallback"]
+        assert process_callback_list is not None
+        assert isinstance(process_callback_list, list)
+        assert len(process_callback_list) >= 1
+
+        process_callback = process_callback_list[0]
         assert process_callback is not None
         
         expected_callback_parts = [
@@ -412,7 +495,12 @@ class TestFunctionSignatureExtraction:
             assert expected_part in callback_signature, f"Missing '{expected_part}' in callback signature: {callback_signature}"
         
         # Test complex constraint case
-        complex_constraint = result.functions["complexConstraint"]
+        complex_constraint_list = result.functions["complexConstraint"]
+        assert complex_constraint_list is not None
+        assert isinstance(complex_constraint_list, list)
+        assert len(complex_constraint_list) >= 1
+
+        complex_constraint = complex_constraint_list[0]
         assert complex_constraint is not None
         
         expected_complex_parts = [
@@ -461,7 +549,13 @@ class TestFunctionSignatureExtraction:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        complex_params = result.functions["complexParameters"]
+        complex_params_list = result.functions["complexParameters"]
+        assert complex_params_list is not None
+        assert isinstance(complex_params_list, list)
+        assert len(complex_params_list) >= 1
+
+        
+        complex_params = complex_params_list[0]
         assert complex_params is not None
         
         # Should extract detailed parameter information
@@ -541,8 +635,11 @@ class TestFunctionSignatureExtraction:
         assert result.success is True
         
         # Test function overloads
-        process_data = result.functions["processData"]
-        assert process_data is not None
+        process_data_list = result.functions["processData"]
+        assert process_data_list is not None
+        assert isinstance(process_data_list, list)
+        assert len(process_data_list) >= 1
+        process_data = process_data_list[0]  # Get first instance
         
         # Should capture all overload signatures
         assert hasattr(process_data, 'overloads')
@@ -554,8 +651,11 @@ class TestFunctionSignatureExtraction:
         assert "string | number | boolean" in implementation_sig
         
         # Test method overloads
-        process_method = result.functions.get("DataProcessor.process")
-        assert process_method is not None
+        process_method_list = result.functions.get("DataProcessor.process")
+        assert process_method_list is not None
+        assert isinstance(process_method_list, list)
+        assert len(process_method_list) >= 1
+        process_method = process_method_list[0]  # Get first instance
         assert hasattr(process_method, 'overloads')
         assert len(process_method.overloads) >= 2
 
@@ -653,12 +753,22 @@ class TestFunctionBodyAnalysis:
         assert result.success is True
         
         # Test simple function code
-        simple_func = result.functions["simpleFunction"]
+        simple_func_list = result.functions["simpleFunction"]
+        assert simple_func_list is not None
+        assert isinstance(simple_func_list, list)
+        assert len(simple_func_list) >= 1
+
+        simple_func = simple_func_list[0]
         assert simple_func.code is not None
         assert "return `Hello, ${name}!`;" in simple_func.code
         
         # Test complex async function code
-        complex_func = result.functions["complexFunction"]
+        complex_func_list = result.functions["complexFunction"]
+        assert complex_func_list is not None
+        assert isinstance(complex_func_list, list)
+        assert len(complex_func_list) >= 1
+
+        complex_func = complex_func_list[0]
         assert complex_func.code is not None
         assert "const results = [];" in complex_func.code
         assert "for (const item of data)" in complex_func.code
@@ -667,14 +777,24 @@ class TestFunctionBodyAnalysis:
         assert "} catch (error) {" in complex_func.code
         
         # Test class method code
-        create_user = result.functions["UserService.createUser"]
+        create_user_list = result.functions["UserService.createUser"]
+        assert create_user_list is not None
+        assert isinstance(create_user_list, list)
+        assert len(create_user_list) >= 1
+
+        create_user = create_user_list[0]
         assert create_user.code is not None
         assert "const id = this.generateId();" in create_user.code
         assert "this.users.set(id, user);" in create_user.code
         assert "await this.notifyUserCreated(user);" in create_user.code
         
         # Test private method code
-        generate_id = result.functions["UserService.generateId"]
+        generate_id_list = result.functions["UserService.generateId"]
+        assert generate_id_list is not None
+        assert isinstance(generate_id_list, list)
+        assert len(generate_id_list) >= 1
+
+        generate_id = generate_id_list[0]
         assert generate_id.code is not None
         assert "Math.random().toString(36).substr(2, 9)" in generate_id.code
 
@@ -749,7 +869,12 @@ class TestFunctionBodyAnalysis:
         assert result.success is True
         
         # Test main function call tracking
-        main_func = result.functions["mainFunction"]
+        main_func_list = result.functions["mainFunction"]
+        assert main_func_list is not None
+        assert isinstance(main_func_list, list)
+        assert len(main_func_list) >= 1
+
+        main_func = main_func_list[0]
         assert main_func.calls is not None
         
         # Should identify local function calls
@@ -763,13 +888,23 @@ class TestFunctionBodyAnalysis:
             assert call in main_func.calls
         
         # Test async function call tracking
-        async_main = result.functions["asyncMain"]
+        async_main_list = result.functions["asyncMain"]
+        assert async_main_list is not None
+        assert isinstance(async_main_list, list)
+        assert len(async_main_list) >= 1
+
+        async_main = async_main_list[0]
         assert async_main.calls is not None
         assert "Promise.all" in async_main.calls
         assert "processItem" in async_main.calls
         
         # Test class method call tracking
-        process_method = result.functions["DataProcessor.process"]
+        process_method_list = result.functions["DataProcessor.process"]
+        assert process_method_list is not None
+        assert isinstance(process_method_list, list)
+        assert len(process_method_list) >= 1
+
+        process_method = process_method_list[0]
         assert process_method.calls is not None
         
         # Should identify method calls on 'this'
@@ -841,7 +976,12 @@ class TestFunctionBodyAnalysis:
         assert result.success is True
         
         # Test outer function with nested functions
-        outer_func = result.functions["outerFunction"]
+        outer_func_list = result.functions["outerFunction"]
+        assert outer_func_list is not None
+        assert isinstance(outer_func_list, list)
+        assert len(outer_func_list) >= 1
+
+        outer_func = outer_func_list[0]
         assert outer_func.code is not None
         
         # Should identify nested function definitions
@@ -855,12 +995,22 @@ class TestFunctionBodyAnalysis:
         assert "innerTransform" in outer_func.calls
         
         # Test closure function
-        with_closures = result.functions["withClosures"]
+        with_closures_list = result.functions["withClosures"]
+        assert with_closures_list is not None
+        assert isinstance(with_closures_list, list)
+        assert len(with_closures_list) >= 1
+
+        with_closures = with_closures_list[0]
         assert with_closures.nested_functions is not None
         assert "multiply" in with_closures.nested_functions
         
         # Test class method with nested function
-        calculate_method = result.functions["Calculator.calculate"]
+        calculate_method_list = result.functions["Calculator.calculate"]
+        assert calculate_method_list is not None
+        assert isinstance(calculate_method_list, list)
+        assert len(calculate_method_list) >= 1
+
+        calculate_method = calculate_method_list[0]
         assert calculate_method.nested_functions is not None
         assert "applyOperation" in calculate_method.nested_functions
 
@@ -934,7 +1084,12 @@ class TestFunctionBodyAnalysis:
         assert result.success is True
         
         # Test conditional flow analysis
-        conditional_func = result.functions["conditionalFlow"]
+        conditional_func_list = result.functions["conditionalFlow"]
+        assert conditional_func_list is not None
+        assert isinstance(conditional_func_list, list)
+        assert len(conditional_func_list) >= 1
+
+        conditional_func = conditional_func_list[0]
         assert conditional_func.calls is not None
         
         # Should identify conditional function calls
@@ -949,7 +1104,12 @@ class TestFunctionBodyAnalysis:
         assert conditional_func.control_flow_info['has_multiple_returns'] is True
         
         # Test loop flow analysis
-        loop_func = result.functions["loopFlow"]
+        loop_func_list = result.functions["loopFlow"]
+        assert loop_func_list is not None
+        assert isinstance(loop_func_list, list)
+        assert len(loop_func_list) >= 1
+
+        loop_func = loop_func_list[0]
         assert "processItem" in loop_func.calls
         assert "console.error" in loop_func.calls
         
@@ -958,7 +1118,12 @@ class TestFunctionBodyAnalysis:
         assert loop_func.control_flow_info['has_break_continue'] is True
         
         # Test switch flow analysis
-        switch_func = result.functions["switchFlow"]
+        switch_func_list = result.functions["switchFlow"]
+        assert switch_func_list is not None
+        assert isinstance(switch_func_list, list)
+        assert len(switch_func_list) >= 1
+
+        switch_func = switch_func_list[0]
         switch_calls = ["createUser", "createAdmin", "createGuest"]
         for call in switch_calls:
             assert call in switch_func.calls
@@ -1025,7 +1190,12 @@ class TestFunctionBodyAnalysis:
         assert result.success is True
         
         # Test variable tracking
-        variable_func = result.functions["variableUsage"]
+        variable_func_list = result.functions["variableUsage"]
+        assert variable_func_list is not None
+        assert isinstance(variable_func_list, list)
+        assert len(variable_func_list) >= 1
+
+        variable_func = variable_func_list[0]
         assert hasattr(variable_func, 'variable_info')
         assert variable_func.variable_info is not None
         
@@ -1047,7 +1217,12 @@ class TestFunctionBodyAnalysis:
                 assert var['declaration_type'] == 'var'
         
         # Test destructuring tracking
-        destructuring_func = result.functions["destructuringUsage"]
+        destructuring_func_list = result.functions["destructuringUsage"]
+        assert destructuring_func_list is not None
+        assert isinstance(destructuring_func_list, list)
+        assert len(destructuring_func_list) >= 1
+
+        destructuring_func = destructuring_func_list[0]
         destructured_vars = destructuring_func.variable_info['declarations']
         destructured_names = [var['name'] for var in destructured_vars]
         assert "name" in destructured_names
@@ -1143,7 +1318,12 @@ class TestFunctionCallTracking:
         assert result.success is True
         
         # Test cross-file call tracking
-        create_user = result.functions["UserService.createUser"]
+        create_user_list = result.functions["UserService.createUser"]
+        assert create_user_list is not None
+        assert isinstance(create_user_list, list)
+        assert len(create_user_list) >= 1
+
+        create_user = create_user_list[0]
         assert create_user.calls is not None
         
         # Should identify imported function calls
@@ -1259,7 +1439,12 @@ class TestFunctionCallTracking:
         assert result.success is True
         
         # Test dynamic method call tracking
-        dynamic_func = result.functions["DataProcessor.processWithDynamic"]
+        dynamic_func_list = result.functions["DataProcessor.processWithDynamic"]
+        assert dynamic_func_list is not None
+        assert isinstance(dynamic_func_list, list)
+        assert len(dynamic_func_list) >= 1
+
+        dynamic_func = dynamic_func_list[0]
         assert dynamic_func.calls is not None
         
         # Should identify dynamic calls
@@ -1271,11 +1456,21 @@ class TestFunctionCallTracking:
         assert dynamic_func.dynamic_call_info is not None
         
         # Test callback tracking
-        callback_func = result.functions["DataProcessor.processWithCallback"]
+        callback_func_list = result.functions["DataProcessor.processWithCallback"]
+        assert callback_func_list is not None
+        assert isinstance(callback_func_list, list)
+        assert len(callback_func_list) >= 1
+
+        callback_func = callback_func_list[0]
         assert "callback" in callback_func.calls
         
         # Test higher-order function tracking
-        higher_order = result.functions["higherOrderUsage"]
+        higher_order_list = result.functions["higherOrderUsage"]
+        assert higher_order_list is not None
+        assert isinstance(higher_order_list, list)
+        assert len(higher_order_list) >= 1
+
+        higher_order = higher_order_list[0]
         assert "operations.forEach" in higher_order.calls
 
     def test_async_call_tracking(self, temp_project):
@@ -1300,7 +1495,12 @@ class TestFunctionCallTracking:
         assert result.success is True
         
         # Test async retry function
-        fetch_retry = result.functions["fetchWithRetry"]
+        fetch_retry_list = result.functions["fetchWithRetry"]
+        assert fetch_retry_list is not None
+        assert isinstance(fetch_retry_list, list)
+        assert len(fetch_retry_list) >= 1
+
+        fetch_retry = fetch_retry_list[0]
         assert fetch_retry.calls is not None
         
         # Should identify async patterns
@@ -1312,11 +1512,21 @@ class TestFunctionCallTracking:
         assert fetch_retry.async_call_info['has_async_calls'] is True
         
         # Test Promise chain tracking
-        process_safely = result.functions["processUserSafely"]
+        process_safely_list = result.functions["processUserSafely"]
+        assert process_safely_list is not None
+        assert isinstance(process_safely_list, list)
+        assert len(process_safely_list) >= 1
+
+        process_safely = process_safely_list[0]
         assert process_safely.async_call_info['returns_promise'] is True
         
         # Test complex async method
-        batch_process = result.functions["AsyncUserService.batchProcessUsers"]
+        batch_process_list = result.functions["AsyncUserService.batchProcessUsers"]
+        assert batch_process_list is not None
+        assert isinstance(batch_process_list, list)
+        assert len(batch_process_list) >= 1
+
+        batch_process = batch_process_list[0]
         async_calls = batch_process.calls
         promise_calls = [call for call in async_calls if 'Promise' in call or 'await' in call]
         assert len(promise_calls) > 0

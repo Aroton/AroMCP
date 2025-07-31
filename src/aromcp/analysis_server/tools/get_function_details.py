@@ -80,7 +80,7 @@ def get_function_details_impl(
     handle_overloads: bool = False,
     analyze_control_flow: bool = False,
     track_variables: bool = False,
-    resolve_imports: bool = False,
+    resolve_imports: bool = None,  # Auto-enable when include_types=True
     track_cross_file_calls: bool = False,
     track_dynamic_calls: bool = False,
     track_async_calls: bool = False,
@@ -117,6 +117,10 @@ def get_function_details_impl(
     """
     start_time = time.perf_counter()
     
+    # Auto-enable import resolution when include_types=True
+    if resolve_imports is None:
+        resolve_imports = include_types
+    
     # Normalize inputs
     if isinstance(functions, str):
         function_list = [functions]
@@ -126,24 +130,51 @@ def get_function_details_impl(
     if isinstance(file_paths, str):
         search_files = [file_paths]
     elif file_paths is None:
-        search_files = _get_typescript_files()
+        # When no specific files provided, use find_references to locate the function first
+        from .find_references import find_references_impl
+        ref_result = find_references_impl(
+            symbol=function_list[0] if function_list else "",
+            file_paths=None,
+            include_declarations=True, 
+            include_usages=True
+        )
+        # Get unique files where the function is found
+        search_files = list(set(ref.file_path for ref in ref_result.references))
+        if not search_files:
+            # If no references found, fall back to searching a limited set of files
+            search_files = _get_typescript_files()[:50]  # Limit to first 50 files
     else:
         search_files = file_paths
     
     # Validate inputs
     errors = []
     
-    # Check for non-existent files
+    # Get project root for path resolution
+    project_root = os.environ.get("MCP_FILE_ROOT", os.getcwd())
+    
+    # Check for non-existent files and resolve relative paths
+    resolved_files = []
     for file_path in search_files:
-        if file_path and not os.path.exists(file_path):
+        if not file_path:
+            continue
+            
+        # Handle relative paths by resolving against project root
+        if not os.path.isabs(file_path):
+            resolved_path = os.path.join(project_root, file_path)
+        else:
+            resolved_path = file_path
+            
+        if not os.path.exists(resolved_path):
             errors.append(AnalysisError(
-                code="NOT_FOUND",
+                code="NOT_FOUND", 
                 message=f"File not found: {file_path}",
                 file=file_path
             ))
+        else:
+            resolved_files.append(resolved_path)
     
-    # Filter out non-existent files
-    valid_files = [f for f in search_files if f and os.path.exists(f)]
+    # Use resolved files
+    valid_files = resolved_files
     
     if not valid_files:
         return FunctionDetailsResponse(
@@ -160,7 +191,7 @@ def get_function_details_impl(
         # Initialize components
         parser = get_shared_parser()
         symbol_resolver = get_symbol_resolver()
-        type_resolver = TypeResolver(parser, symbol_resolver)
+        type_resolver = TypeResolver(parser, symbol_resolver, project_root)
         function_analyzer = FunctionAnalyzer(parser, type_resolver)
         
         # Use batch processor for large function lists or when explicitly requested
@@ -183,6 +214,10 @@ def get_function_details_impl(
             results = {}
             memory_stats = None  # No memory stats for single function processing
             for func_name in function_list:
+                # Initialize list for this function name if not already present
+                if func_name not in results:
+                    results[func_name] = []
+                    
                 for file_path in valid_files:
                     try:
                         result, func_errors = function_analyzer.analyze_function(
@@ -206,19 +241,21 @@ def get_function_details_impl(
                             fallback_on_complexity=fallback_on_complexity
                         )
                         
-                        # Always collect errors from function analysis
-                        errors.extend(func_errors)
+                        # Only collect serious errors, not "function not found" or "unknown type" errors for missing types
+                        serious_errors = [err for err in func_errors if err.code not in ["FUNCTION_NOT_FOUND", "UNKNOWN_TYPE"]]
+                        errors.extend(serious_errors)
                         
                         if result:
-                            results[func_name] = result
-                            break  # Found function, move to next
+                            results[func_name].append(result)
+                            # Don't break - we want to find ALL instances across files
                     except Exception as e:
-                        # Log error but continue with other functions
-                        errors.append(AnalysisError(
-                            code="FUNCTION_ANALYSIS_ERROR",
-                            message=f"Error analyzing '{func_name}' in '{file_path}': {str(e)}",
-                            file=file_path
-                        ))
+                        # Only log actual analysis errors, not missing functions
+                        if "cannot unpack" not in str(e) and "not found" not in str(e).lower():
+                            errors.append(AnalysisError(
+                                code="FUNCTION_ANALYSIS_ERROR", 
+                                message=f"Error analyzing '{func_name}' in '{file_path}': {str(e)}",
+                                file=file_path
+                            ))
         
         # Apply pagination if needed
         from ...utils.pagination import simplify_cursor_pagination
@@ -243,7 +280,8 @@ def get_function_details_impl(
             # Create type resolution metadata
             total_types_resolved = sum(
                 len(func.types) if func.types else 0 
-                for func in results.values()
+                for func_list in results.values()
+                for func in func_list
             )
             
             fallbacks_used = 0
@@ -251,19 +289,22 @@ def get_function_details_impl(
                 # Count functions that likely needed fallback (have generic signatures but resolution_depth was basic)
                 if resolution_depth == "basic":
                     fallbacks_used = sum(
-                        1 for func in results.values() 
+                        1 for func_list in results.values()
+                        for func in func_list
                         if '<' in func.signature and 'extends' in func.signature
                     )
                 elif resolution_depth == "generics":
                     # Count functions with very complex generic signatures that might need fallback
                     fallbacks_used = sum(
-                        1 for func in results.values()
+                        1 for func_list in results.values()
+                        for func in func_list
                         if func.signature.count('<') > 2 or func.signature.count('extends') > 3
                     )
                 elif resolution_depth == "full_inference":
                     # Count functions with conditional types or mapped types that might need fallback
                     fallbacks_used = sum(
-                        1 for func in results.values()
+                        1 for func_list in results.values()
+                        for func in func_list
                         if ('?' in func.signature and ':' in func.signature) or 'keyof' in func.signature
                     )
             
@@ -271,26 +312,27 @@ def get_function_details_impl(
             max_constraint_depth_reached = 1
             
             # Track the actual max constraint depth by analyzing generic constraints in resolved types
-            for func_detail in results.values():
-                if func_detail.types:
-                    for type_name, type_def in func_detail.types.items():
-                        if 'extends' in type_def.definition:
-                            # Count nested generic constraints
-                            constraint_depth = type_def.definition.count('extends')
-                            # Also count nested generic brackets as indicators of depth
-                            if '<' in type_def.definition:
-                                bracket_depth = type_def.definition.count('<')
-                                constraint_depth = max(constraint_depth, bracket_depth)
-                            max_constraint_depth_reached = max(max_constraint_depth_reached, constraint_depth)
-                
-                # Also check function signature for constraint depth
-                if hasattr(func_detail, 'signature'):
-                    if 'extends' in func_detail.signature:
-                        sig_constraint_depth = func_detail.signature.count('extends')
-                        if '<' in func_detail.signature:
-                            bracket_depth = func_detail.signature.count('<')
-                            sig_constraint_depth = max(sig_constraint_depth, bracket_depth)
-                        max_constraint_depth_reached = max(max_constraint_depth_reached, sig_constraint_depth)
+            for func_list in results.values():
+                for func_detail in func_list:
+                    if func_detail.types:
+                        for type_name, type_def in func_detail.types.items():
+                            if 'extends' in type_def.definition:
+                                # Count nested generic constraints
+                                constraint_depth = type_def.definition.count('extends')
+                                # Also count nested generic brackets as indicators of depth
+                                if '<' in type_def.definition:
+                                    bracket_depth = type_def.definition.count('<')
+                                    constraint_depth = max(constraint_depth, bracket_depth)
+                                max_constraint_depth_reached = max(max_constraint_depth_reached, constraint_depth)
+                    
+                    # Also check function signature for constraint depth
+                    if hasattr(func_detail, 'signature'):
+                        if 'extends' in func_detail.signature:
+                            sig_constraint_depth = func_detail.signature.count('extends')
+                            if '<' in func_detail.signature:
+                                bracket_depth = func_detail.signature.count('<')
+                                sig_constraint_depth = max(sig_constraint_depth, bracket_depth)
+                            max_constraint_depth_reached = max(max_constraint_depth_reached, sig_constraint_depth)
             
             # Don't exceed the specified max_constraint_depth parameter
             max_constraint_depth_reached = min(max_constraint_depth_reached, max_constraint_depth)
@@ -306,33 +348,34 @@ def get_function_details_impl(
         if track_instantiations:
             # Track generic type instantiations
             type_instantiations = {}
-            for func_name, func_detail in results.items():
-                # Extract instantiations from function signature
-                signature_instantiations = _extract_generic_instantiations_from_signature(
-                    func_detail.signature, func_detail.location, f"Function {func_name}"
-                )
-                
-                for base_type, instantiation_list in signature_instantiations.items():
-                    if base_type not in type_instantiations:
-                        type_instantiations[base_type] = []
-                    type_instantiations[base_type].extend(instantiation_list)
-                
-                # Also check function's resolved types for generic instantiations
-                if func_detail.types:
-                    for type_name, type_def in func_detail.types.items():
-                        # Check both the type name and the definition for generic instantiations
-                        sources_to_check = [type_name, type_def.definition]
-                        
-                        for source in sources_to_check:
-                            if source and '<' in source:
-                                source_instantiations = _extract_generic_instantiations_from_signature(
-                                    source, type_def.location, f"Type definition for {func_name}"
-                                )
-                                
-                                for base_type, instantiation_list in source_instantiations.items():
-                                    if base_type not in type_instantiations:
-                                        type_instantiations[base_type] = []
-                                    type_instantiations[base_type].extend(instantiation_list)
+            for func_name, func_list in results.items():
+                for func_detail in func_list:
+                    # Extract instantiations from function signature
+                    signature_instantiations = _extract_generic_instantiations_from_signature(
+                        func_detail.signature, func_detail.location, f"Function {func_name}"
+                    )
+                    
+                    for base_type, instantiation_list in signature_instantiations.items():
+                        if base_type not in type_instantiations:
+                            type_instantiations[base_type] = []
+                        type_instantiations[base_type].extend(instantiation_list)
+                    
+                    # Also check function's resolved types for generic instantiations
+                    if func_detail.types:
+                        for type_name, type_def in func_detail.types.items():
+                            # Check both the type name and the definition for generic instantiations
+                            sources_to_check = [type_name, type_def.definition]
+                            
+                            for source in sources_to_check:
+                                if source and '<' in source:
+                                    source_instantiations = _extract_generic_instantiations_from_signature(
+                                        source, type_def.location, f"Type definition for {func_name}"
+                                    )
+                                    
+                                    for base_type, instantiation_list in source_instantiations.items():
+                                        if base_type not in type_instantiations:
+                                            type_instantiations[base_type] = []
+                                        type_instantiations[base_type].extend(instantiation_list)
                             
         if resolve_imports:
             # Create basic import graph
@@ -357,31 +400,32 @@ def get_function_details_impl(
                     
         # Handle type guard analysis
         if analyze_type_guards:
-            for func_name, func_detail in results.items():
-                if func_detail.signature:
-                    # Check if function signature indicates type guard
-                    if ' is ' in func_detail.signature:
-                        # Extract type guard information
-                        # Pattern: "param is SomeType"
-                        import re
-                        guard_match = re.search(r'(\w+)\s+is\s+(\w+)', func_detail.signature)
-                        if guard_match:
-                            param_name, narrow_to_type = guard_match.groups()
-                            
-                            # Try to infer the "from" type from function parameters
-                            from_type = None
-                            if func_detail.parameters:
-                                for param in func_detail.parameters:
-                                    if param.name == param_name:
-                                        from_type = param.type
-                                        break
-                            
-                            func_detail.type_guard_info = TypeGuardInfo(
-                                is_type_guard=True,
-                                narrows_to=narrow_to_type,
-                                from_type=from_type,
-                                guard_expression=f"{param_name} is {narrow_to_type}"
-                            )
+            for func_name, func_list in results.items():
+                for func_detail in func_list:
+                    if func_detail.signature:
+                        # Check if function signature indicates type guard
+                        if ' is ' in func_detail.signature:
+                            # Extract type guard information
+                            # Pattern: "param is SomeType"
+                            import re
+                            guard_match = re.search(r'(\w+)\s+is\s+(\w+)', func_detail.signature)
+                            if guard_match:
+                                param_name, narrow_to_type = guard_match.groups()
+                                
+                                # Try to infer the "from" type from function parameters
+                                from_type = None
+                                if func_detail.parameters:
+                                    for param in func_detail.parameters:
+                                        if param.name == param_name:
+                                            from_type = param.type
+                                            break
+                                
+                                func_detail.type_guard_info = TypeGuardInfo(
+                                    is_type_guard=True,
+                                    narrows_to=narrow_to_type,
+                                    from_type=from_type,
+                                    guard_expression=f"{param_name} is {narrow_to_type}"
+                                )
         
         # Note: For now, we'll ignore page parameter and use cursor-based pagination
         paginated_result = simplify_cursor_pagination(
@@ -393,10 +437,11 @@ def get_function_details_impl(
         )
         
         # Calculate success: consider successful if we found functions, even with type resolution errors
-        is_successful = len(results) > 0 or len(errors) == 0
+        total_functions_found = sum(len(func_list) for func_list in results.values())
+        is_successful = total_functions_found > 0 or len(errors) == 0
         
         # With fallback_on_complexity, type resolution errors shouldn't fail the entire analysis
-        if fallback_on_complexity and len(results) > 0:
+        if fallback_on_complexity and total_functions_found > 0:
             # Filter out pure type resolution errors when fallback is enabled
             critical_errors = [e for e in errors if e.code not in {
                 "UNKNOWN_TYPE", "TYPE_RESOLUTION_ERROR", "CIRCULAR_REFERENCE_DETECTED", 

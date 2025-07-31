@@ -92,7 +92,9 @@ class TestTypeResolutionMissingFeatures:
         
         # Current implementation creates ERROR_ types in function.types but doesn't propagate to response.errors
         # THIS SHOULD FAIL: Errors should be propagated to response.errors
-        function_detail = result.functions.get("testErrorPropagation")
+        function_detail_list = result.functions.get("testErrorPropagation")
+
+        function_detail = function_detail_list[0] if function_detail_list else None
         if function_detail and function_detail.types:
             error_types = [name for name in function_detail.types.keys() if name.startswith("ERROR_")]
             if error_types:
@@ -222,7 +224,13 @@ class TestTypeResolutionMissingFeatures:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        func_detail = result.functions["complexSignature"]
+        func_detail_list = result.functions["complexSignature"]
+        assert func_detail_list is not None
+        assert isinstance(func_detail_list, list)
+        assert len(func_detail_list) >= 1
+
+        
+        func_detail = func_detail_list[0]
         assert func_detail is not None
         
         # THIS SHOULD FAIL: Signature parsing may be truncating complex return types
@@ -262,7 +270,13 @@ class TestTypeResolutionMissingFeatures:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        func_detail = result.functions["testConditional"]
+        func_detail_list = result.functions["testConditional"]
+        assert func_detail_list is not None
+        assert isinstance(func_detail_list, list)
+        assert len(func_detail_list) >= 1
+
+        
+        func_detail = func_detail_list[0]
         assert func_detail is not None
         
         # THIS SHOULD FAIL: Conditional types should be properly resolved
@@ -419,9 +433,9 @@ class TestTypeResolutionMissingFeatures:
             assert "testDepthDifferences" in result.functions
         
         # THIS SHOULD FAIL: Different depths should produce different amounts of type information
-        basic_types = len(basic_result.functions["testDepthDifferences"].types or {})
-        generic_types = len(generic_result.functions["testDepthDifferences"].types or {})
-        full_types = len(full_result.functions["testDepthDifferences"].types or {})
+        basic_types = len(basic_result.functions["testDepthDifferences"][0].types or {})
+        generic_types = len(generic_result.functions["testDepthDifferences"][0].types or {})
+        full_types = len(full_result.functions["testDepthDifferences"][0].types or {})
         
         # Progressive resolution should show increasing detail
         assert generic_types >= basic_types, f"Generic resolution should have >= types than basic: {generic_types} vs {basic_types}"

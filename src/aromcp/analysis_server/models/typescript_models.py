@@ -93,7 +93,7 @@ class FunctionDetail:
 @dataclass
 class FunctionDetailsResponse:
     """Response for get_function_details tool."""
-    functions: dict[str, FunctionDetail]
+    functions: dict[str, list[FunctionDetail]]
     errors: list[AnalysisError]
     success: bool = True  # Phase 3 addition for test compatibility
     # Advanced Phase 3 fields
@@ -238,6 +238,11 @@ class SymbolResolutionResult:
     page_size: int | None = None  
     next_cursor: str | None = None
     has_more: bool = False
+
+    @property
+    def chains(self) -> list[InheritanceChain]:
+        """Alias for inheritance_chains for backward compatibility."""
+        return self.inheritance_chains
 
 
 # Import/Export Tracking Models

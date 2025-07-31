@@ -15,11 +15,11 @@
 
 ### Critical Constraints
 - NEVER use bash pipes or grep - filter in memory with JavaScript
-- NEVER process more than 5 files per batch
+- NEVER process more than 10 files per batch
 - Group files categorically by type/directory for efficient processing
 - ALWAYS create `.aromcp/state/` directory before writing state
 - Maximum 20 batches per run (create continuation prompt if more)
-- Run up to 3 sub-agent batches in PARALLEL for optimal resource usage
+- Run sub-agent batches in SERIAL for optimal deduplication
 
 ### Step 1: Initialize Workflow State
 
@@ -47,25 +47,41 @@
    );
    ```
 
-4. **Create Categorical Batches**:
-   Group files by architectural concern and technology stack for optimal processing efficiency. The categorization should consider:
+4. **Create Semantic Domain Batches**:
+   Group files by semantic domain and directory hierarchy for optimal processing efficiency. Use domain-based keyword extraction with directory hierarchy weighting to identify files that "go together" functionally.
 
-   **Primary Grouping Strategy**:
-   - **Frontend UI Layer**: Components, pages, layouts, client-side rendering logic that deals with user interface
-   - **Frontend Logic Layer**: Client-side services, state management, browser-specific utilities and business logic
-   - **Backend API Layer**: Routes, controllers, middleware, server-side request/response handling
-   - **Backend Business Layer**: Services, business logic, data processing that doesn't directly handle HTTP requests
-   - **Data & Schema Layer**: Database models, schemas, type definitions, interfaces, data structures
-   - **Shared Utilities**: Pure functions, constants, utilities that work in both client and server environments
-   - **Testing & Quality**: Test files, mocks, test utilities, quality assurance code with testing-specific standards
-   - **Configuration & Infrastructure**: Build configs, deployment scripts, environment setup, development tooling
+   **Domain Extraction Strategy**:
+   - Extract semantic keywords from file paths: `subscription`, `auth`, `payment`, `user`, `notification`, `dashboard`, etc.
+   - Weight relationships by directory proximity (shared parent directories indicate stronger relationships)
+   - Group files sharing domain keywords regardless of architectural layer to maintain functional context
 
    **Batching Logic**:
-   - Analyze each file's path, imports, and patterns to determine its architectural layer
-   - Group related files together (max 5 per batch) within the same category
-   - Process categories that share similar standards and patterns together
-   - Ensure frontend files get frontend-focused standards, backend files get backend standards
-   - Handle shared code with universal standards that work across environments
+   1. **Extract Domain Keywords**: For each file, identify semantic keywords from:
+      - Directory path segments (`features/subscription/`, `components/auth/`)
+      - Filename patterns (`SubscriptionCard.tsx`, `useAuth.ts`, `payment-api.ts`)
+      - Common domain terms: `subscription`, `auth`, `payment`, `user`, `notification`, `dashboard`, `billing`, `profile`, `settings`, `admin`
+      - Technical patterns: `api`, `component`, `service`, `util`, `hook`, `store`, `model`, `type`, `test`, `config`
+      - CamelCase/PascalCase breakdowns (`UserProfile` → `user`, `profile`)
+
+   2. **Group by Shared Domains**: 
+      - Files sharing the same domain keywords should be batched together
+      - Prioritize larger domain groups first (more files = stronger domain signal)
+      - Files with multiple shared keywords have stronger relationships
+
+   3. **Apply Directory Proximity**: 
+      - Within each domain group, prioritize files from the same directory
+      - Files in `features/subscription/` are more related than files just containing "subscription"
+      - Maintain max 10 files per batch, splitting large directories across multiple batches
+
+   4. **Handle Remaining Files**: 
+      - Files without clear domain keywords get grouped by directory proximity only
+      - Ensure all files are assigned to exactly one batch
+
+   **Domain Grouping Benefits**:
+   - Files related to "subscription" features are processed together, sharing context about subscription logic
+   - Directory proximity ensures related files in same folder/feature are batched together
+   - Cross-layer grouping allows agents to see full feature context (components + services + types)
+   - Reduces duplication by processing functionally related files as a unit
 
 5. **Initialize State Structure**:
    ```json
@@ -74,8 +90,7 @@
      "command_args": "original command arguments",
      "total_files": 45,
      "batches": [
-       ["src/components/Button.tsx", "src/components/Modal.tsx", "src/components/Form.tsx"],
-       ["src/utils/helpers.ts", "src/lib/api.ts", "src/lib/auth.ts", "src/utils/format.ts"]
+       ["src/components/Button.tsx", "src/components/Modal.tsx", "src/components/Form.tsx", "src/utils/helpers.ts", "src/lib/api.ts", "src/lib/auth.ts", "src/utils/format.ts", "src/types/user.ts", "src/hooks/useAuth.ts", "src/services/api.ts"]
      ],
      "batch_status": {
        "0": "pending",
@@ -86,7 +101,8 @@
          "status": "pending",
          "modified": false,
          "failure_reason": null,
-         "fixes": {"standards_hints": 0, "lint_fixes": 0}
+         "fixes": {"standards_hints": 0, "lint_fixes": 0, "duplicates_consolidated": 0},
+       "deduplication_actions": []
        }
      },
      "summary": {
@@ -94,7 +110,7 @@
        "completed_files": 0,
        "modified_files": 0,
        "failed_files": 0,
-       "total_fixes": {"standards_hints": 0, "lint_fixes": 0}
+       "total_fixes": {"standards_hints": 0, "lint_fixes": 0, "duplicates_consolidated": 0}
      },
      "start_time": "2025-01-15T10:30:00Z"
    }
@@ -106,33 +122,34 @@
    # Save state to .aromcp/state/standards-fix-state.json
    ```
 
-### Step 2: Parallel Batch Processing
+### Step 2: Serial Batch Processing
 
-**Launch Multiple Sub-Agents**:
-1. Calculate parallel capacity: `parallelBatches = min(3, remainingPendingBatches)`
-2. Launch sub-agents simultaneously using Task tool with `standards-fix-batch-processor` agent
-3. Each gets unique batch assignment with this prompt:
+**Launch Sub-Agents Sequentially**:
+1. Process one batch at a time to avoid deduplication conflicts
+2. Launch sub-agents using Task tool with `standards-fix-batch-processor` agent
+3. Each gets batch assignment with this prompt:
 
 ```
 Use the standards-fix-batch-processor agent to process batch [N] of [total]:
 
-Batch files: [file1, file2, file3, file4, file5]
+Batch files: [file1, file2, file3, file4, file5, file6, file7, file8, file9, file10]
 State file: .aromcp/state/standards-fix-state.json
 Batch index: [N]
 
 The agent will:
 1. Mark batch [N] as "in_progress" in shared state
-2. Process each file through the complete fix pipeline
-3. Update file results atomically in state
-4. Mark batch as "completed" when done
-5. Update summary counts
+2. Process each file through the complete fix pipeline WITH deduplication
+3. Use analysis server APIs to consolidate duplicate functions across entire codebase
+4. Remove unused code detected during processing
+5. Update file results atomically in state
+6. Mark batch as "completed" when done
+7. Update summary counts including deduplication actions
 
 Report when batch processing is complete.
 ```
 
 **Monitor and Continue**:
-- Track active sub-agents
-- As each completes, launch next available batch
+- Wait for current batch to complete before starting next batch
 - Continue until all batches processed or 20 batch limit reached
 - If limit reached, provide continuation: `/standards:fix --resume`
 
@@ -206,23 +223,27 @@ The `--resume` flag allows continuation from interruptions:
 - Partial failures: Continue processing remaining batches
 - Timeout scenarios: Save progress, provide resume command
 
-## Categorical Batching Benefits
+## Semantic Domain Batching Benefits
 
-### Efficiency Gains
-- **Related Files Together**: Files in the same category often share similar patterns and standards
-- **Context Optimization**: Processing related files reduces context switching for the agent
-- **Parallel Safety**: Different categories can be processed simultaneously without conflicts
-- **Resource Management**: 3 parallel agents provide optimal balance of speed vs. resource usage
+### Serial Processing Benefits
+- **Comprehensive Deduplication**: Each batch can check entire codebase for duplicates without conflicts
+- **Consistent State**: No race conditions or conflicts between parallel agents
+- **Resource Efficiency**: Larger batches (10 files) reduce context switching overhead
+- **Quality Assurance**: TypeScript compilation validates all changes before proceeding
+- **Reliable Cleanup**: Unused code removal works safely without parallel conflicts
 
-### Architectural Grouping Benefits
-- **Frontend UI Files**: Components, pages, and layouts get UI-focused standards (accessibility, component patterns, styling conventions)
-- **Frontend Logic Files**: Client-side services and state management get browser-specific standards (async patterns, event handling, client-side validation)
-- **Backend API Files**: Routes and controllers get API-focused standards (error handling, request validation, response formatting)  
-- **Backend Business Files**: Services and business logic get server-specific standards (transaction handling, data processing, security patterns)
-- **Data Schema Files**: Models and types get data-focused standards (validation schemas, type safety, database conventions)
-- **Shared Utility Files**: Pure functions get universal standards (immutability, functional patterns, cross-platform compatibility)
-- **Testing Files**: Test code gets testing-specific standards (assertion patterns, mock usage, test organization)
-- **Infrastructure Files**: Configuration and tooling get deployment-focused standards (environment handling, build optimization)
+### Domain Grouping Benefits
+- **Feature Cohesion**: All "subscription" related files (components, services, types, tests) processed together with shared context
+- **Reduced Duplication**: Agent understands relationships between files and avoids reimplementing similar patterns
+- **Directory Awareness**: Files in same directory/feature folder are prioritized for batching together
+- **Semantic Understanding**: Keyword extraction identifies functional relationships beyond just file type
+- **Cross-Architecture Processing**: Related files processed together regardless of whether they're frontend, backend, or shared code
+
+### Examples of Domain Batching
+- **Subscription Domain**: `SubscriptionCard.tsx`, `subscription-api.ts`, `useSubscription.ts`, `subscription.types.ts`
+- **Authentication Domain**: `LoginForm.tsx`, `auth-service.ts`, `useAuth.ts`, `auth.middleware.ts`
+- **Payment Domain**: `PaymentButton.tsx`, `payment-api.ts`, `billing.types.ts`, `stripe-webhook.ts`
+- **User Profile Domain**: `ProfilePage.tsx`, `user-service.ts`, `profile.types.ts`, `useProfile.ts`
 
 ## Integration Points
 

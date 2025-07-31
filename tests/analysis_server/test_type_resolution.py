@@ -109,7 +109,9 @@ class TestProgressiveTypeResolution:
         assert len(result.functions) == 3
         
         # Test createUser function
-        create_user = result.functions.get("createUser")
+        create_user_list = result.functions.get("createUser")
+
+        create_user = create_user_list[0] if create_user_list else None
         assert create_user is not None
         assert isinstance(create_user, FunctionDetail)
         
@@ -131,13 +133,17 @@ class TestProgressiveTypeResolution:
         assert "isActive: boolean" in user_type.definition
         
         # Test updateUserEmail function
-        update_email = result.functions.get("updateUserEmail")
+        update_email_list = result.functions.get("updateUserEmail")
+
+        update_email = update_email_list[0] if update_email_list else None
         assert update_email is not None
         assert "user: User" in update_email.signature
         assert "newEmail: string" in update_email.signature
         
         # Test isUserActive function  
-        is_active = result.functions.get("isUserActive")
+        is_active_list = result.functions.get("isUserActive")
+  
+        is_active = is_active_list[0] if is_active_list else None
         assert is_active is not None
         assert "user: User" in is_active.signature
         assert "): boolean" in is_active.signature
@@ -155,7 +161,9 @@ class TestProgressiveTypeResolution:
         assert result.success is True
         
         # Test optional parameters
-        get_profile = result.functions.get("getUserProfile")
+        get_profile_list = result.functions.get("getUserProfile")
+
+        get_profile = get_profile_list[0] if get_profile_list else None
         assert get_profile is not None
         assert "id: number" in get_profile.signature
         assert "includeInactive?: boolean" in get_profile.signature
@@ -163,7 +171,9 @@ class TestProgressiveTypeResolution:
         assert "): User | null" in get_profile.signature
         
         # Test default parameters
-        create_response = result.functions.get("createApiResponse")
+        create_response_list = result.functions.get("createApiResponse")
+
+        create_response = create_response_list[0] if create_response_list else None
         assert create_response is not None
         assert "success: boolean = true" in create_response.signature
         assert "message: string = 'Success'" in create_response.signature
@@ -182,18 +192,25 @@ class TestProgressiveTypeResolution:
         assert result.success is True
         
         # Test union types
-        process_input = result.functions.get("processUserInput")
+        process_input_list = result.functions.get("processUserInput")
+
+        process_input = process_input_list[0] if process_input_list else None
         assert process_input is not None
         assert "input: string | number | boolean" in process_input.signature
         assert "): string" in process_input.signature
         
         # Test array types
-        get_active = result.functions.get("getActiveUsers")
+        get_active_list = result.functions.get("getActiveUsers")
+
+        get_active = get_active_list[0] if get_active_list else None
         assert get_active is not None
         assert "users: User[]" in get_active.signature
         assert "): User[]" in get_active.signature
         
-        get_ids = result.functions.get("getUserIds")
+        get_ids_list = result.functions.get("getUserIds")
+
+        
+        get_ids = get_ids_list[0] if get_ids_list else None
         assert get_ids is not None
         assert "users: User[]" in get_ids.signature
         assert "): number[]" in get_ids.signature
@@ -212,7 +229,9 @@ class TestProgressiveTypeResolution:
         assert len(result.functions) == 3
         
         # Test basic generic function
-        process_entity = result.functions.get("processEntity")
+        process_entity_list = result.functions.get("processEntity")
+
+        process_entity = process_entity_list[0] if process_entity_list else None
         assert process_entity is not None
         assert "<T extends BaseEntity>" in process_entity.signature
         assert "entity: T" in process_entity.signature
@@ -227,7 +246,9 @@ class TestProgressiveTypeResolution:
         assert "createdAt: Date" in base_entity_type.definition
         
         # Test multiple generic constraints
-        merge_entities = result.functions.get("mergeEntities")
+        merge_entities_list = result.functions.get("mergeEntities")
+
+        merge_entities = merge_entities_list[0] if merge_entities_list else None
         assert merge_entities is not None
         assert "<T extends BaseEntity, U extends Partial<T>>" in merge_entities.signature
         assert "base: T" in merge_entities.signature
@@ -238,7 +259,9 @@ class TestProgressiveTypeResolution:
         assert "Partial" in merge_entities.types
         
         # Test complex generic constraints
-        validate_process = result.functions.get("validateAndProcess")
+        validate_process_list = result.functions.get("validateAndProcess")
+
+        validate_process = validate_process_list[0] if validate_process_list else None
         assert validate_process is not None
         assert "T extends BaseEntity" in validate_process.signature
         assert "K extends keyof T" in validate_process.signature
@@ -256,7 +279,10 @@ class TestProgressiveTypeResolution:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        format_value = result.functions.get("formatValue")
+        format_value_list = result.functions.get("formatValue")
+
+        
+        format_value = format_value_list[0] if format_value_list else None
         assert format_value is not None
         
         # Should resolve conditional return type
@@ -279,20 +305,26 @@ class TestProgressiveTypeResolution:
         assert result.success is True
         
         # Test Partial<T>
-        make_partial = result.functions.get("makePartial")
+        make_partial_list = result.functions.get("makePartial")
+
+        make_partial = make_partial_list[0] if make_partial_list else None
         assert make_partial is not None
         assert "): Partial<T>" in make_partial.signature
         assert "Partial" in make_partial.types
         
         # Test Pick<T, K>
-        pick_fields = result.functions.get("pickFields")
+        pick_fields_list = result.functions.get("pickFields")
+
+        pick_fields = pick_fields_list[0] if pick_fields_list else None
         assert pick_fields is not None
         assert "keys: K[]" in pick_fields.signature
         assert "): Pick<T, K>" in pick_fields.signature
         assert "Pick" in pick_fields.types
         
         # Test Omit<T, K>
-        omit_fields = result.functions.get("omitFields")
+        omit_fields_list = result.functions.get("omitFields")
+
+        omit_fields = omit_fields_list[0] if omit_fields_list else None
         assert omit_fields is not None
         assert "): Omit<T, K>" in omit_fields.signature
         assert "Omit" in omit_fields.types
@@ -310,7 +342,9 @@ class TestProgressiveTypeResolution:
         assert result.success is True
         
         # Test complex conditional types with inference
-        process_data = result.functions.get("processData")
+        process_data_list = result.functions.get("processData")
+
+        process_data = process_data_list[0] if process_data_list else None
         assert process_data is not None
         
         # Should infer complex conditional return type
@@ -323,7 +357,9 @@ class TestProgressiveTypeResolution:
         assert conditional_return in process_data.signature
         
         # Test complex generic function with inferred constraints
-        create_validator = result.functions.get("createValidator")
+        create_validator_list = result.functions.get("createValidator")
+
+        create_validator = create_validator_list[0] if create_validator_list else None
         assert create_validator is not None
         assert "T extends Record<string, any>" in create_validator.signature
         
@@ -331,7 +367,9 @@ class TestProgressiveTypeResolution:
         assert "{ [K in keyof T]: (value: unknown) => value is T[K] }" in create_validator.signature
         
         # Test complex mapped type transformations
-        transform_object = result.functions.get("transformObject")
+        transform_object_list = result.functions.get("transformObject")
+
+        transform_object = transform_object_list[0] if transform_object_list else None
         assert transform_object is not None
         assert "K extends keyof T" in transform_object.signature
         
@@ -351,7 +389,10 @@ class TestProgressiveTypeResolution:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        create_handler = result.functions.get("createEventHandler")
+        create_handler_list = result.functions.get("createEventHandler")
+
+        
+        create_handler = create_handler_list[0] if create_handler_list else None
         assert create_handler is not None
         
         # Should resolve template literal type
@@ -448,9 +489,9 @@ class TestProgressiveTypeResolution:
             assert result.success is True
             assert test_function in result.functions
         
-        basic_func = basic_result.functions[test_function]
-        generic_func = generic_result.functions[test_function]
-        full_func = full_result.functions[test_function]
+        basic_func = basic_result.functions[test_function][0]
+        generic_func = generic_result.functions[test_function][0]
+        full_func = full_result.functions[test_function][0]
         
         # Basic should have least type information
         basic_type_count = len(basic_func.types) if basic_func.types else 0
@@ -514,7 +555,10 @@ class TestProgressiveTypeResolution:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        process_entity = result.functions.get("processEntity")
+        process_entity_list = result.functions.get("processEntity")
+
+        
+        process_entity = process_entity_list[0] if process_entity_list else None
         assert process_entity is not None
         
         # Should include metadata about fallback
@@ -575,7 +619,13 @@ class TestTypeDefinitionExtraction:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        create_user = result.functions["createUser"]
+        create_user_list = result.functions["createUser"]
+        assert create_user_list is not None
+        assert isinstance(create_user_list, list)
+        assert len(create_user_list) >= 1
+
+        
+        create_user = create_user_list[0]
         assert create_user.types is not None
         assert "User" in create_user.types
         
@@ -620,7 +670,13 @@ class TestTypeDefinitionExtraction:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        process_status = result.functions["processStatus"]
+        process_status_list = result.functions["processStatus"]
+        assert process_status_list is not None
+        assert isinstance(process_status_list, list)
+        assert len(process_status_list) >= 1
+
+        
+        process_status = process_status_list[0]
         assert process_status.types is not None
         
         # Should extract Status type alias
@@ -673,7 +729,13 @@ class TestTypeDefinitionExtraction:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        create_user = result.functions["createUser"]
+        create_user_list = result.functions["createUser"]
+        assert create_user_list is not None
+        assert isinstance(create_user_list, list)
+        assert len(create_user_list) >= 1
+
+        
+        create_user = create_user_list[0]
         assert create_user.types is not None
         
         # Should extract User class
@@ -719,7 +781,13 @@ class TestTypeDefinitionExtraction:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        assign_role = result.functions["assignRole"]
+        assign_role_list = result.functions["assignRole"]
+        assert assign_role_list is not None
+        assert isinstance(assign_role_list, list)
+        assert len(assign_role_list) >= 1
+
+        
+        assign_role = assign_role_list[0]
         assert assign_role.types is not None
         
         # Should extract both enums
@@ -778,7 +846,13 @@ class TestTypeDefinitionExtraction:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        update_profile = result.functions["updateUserProfile"]
+        update_profile_list = result.functions["updateUserProfile"]
+        assert update_profile_list is not None
+        assert isinstance(update_profile_list, list)
+        assert len(update_profile_list) >= 1
+
+        
+        update_profile = update_profile_list[0]
         assert update_profile.types is not None
         
         # Should resolve all nested types
@@ -875,7 +949,13 @@ class TestGenericTypeResolution:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        process_deep = result.functions["processDeepGeneric"]
+        process_deep_list = result.functions["processDeepGeneric"]
+        assert process_deep_list is not None
+        assert isinstance(process_deep_list, list)
+        assert len(process_deep_list) >= 1
+
+        
+        process_deep = process_deep_list[0]
         assert process_deep is not None
         
         # Should handle 5 levels of generic constraints
@@ -924,7 +1004,12 @@ class TestGenericTypeResolution:
         assert result.success is True
         
         # Should handle gracefully with depth limit
-        excessive_deep = result.functions["excessivelyDeep"]
+        excessive_deep_list = result.functions["excessivelyDeep"]
+        assert excessive_deep_list is not None
+        assert isinstance(excessive_deep_list, list)
+        assert len(excessive_deep_list) >= 1
+
+        excessive_deep = excessive_deep_list[0]
         assert excessive_deep is not None
         
         # Should include warning about depth limit
@@ -1017,14 +1102,18 @@ class TestGenericTypeResolution:
         assert result.success is True
         
         # Test generic method with different generic parameter
-        save_method = result.functions.get("Repository.save")
+        save_method_list = result.functions.get("Repository.save")
+
+        save_method = save_method_list[0] if save_method_list else None
         assert save_method is not None
         assert "<U extends T>" in save_method.signature
         assert "item: U" in save_method.signature
         assert "): Promise<U>" in save_method.signature
         
         # Test method with keyof constraint
-        update_field = result.functions.get("Repository.updateField")
+        update_field_list = result.functions.get("Repository.updateField")
+
+        update_field = update_field_list[0] if update_field_list else None
         assert update_field is not None
         assert "K extends keyof T" in update_field.signature
         assert "key: K" in update_field.signature
@@ -1094,7 +1183,12 @@ class TestTypeInferenceAccuracy:
         assert result.success is True
         
         # Should resolve imported types correctly
-        process_user = result.functions["processUser"]
+        process_user_list = result.functions["processUser"]
+        assert process_user_list is not None
+        assert isinstance(process_user_list, list)
+        assert len(process_user_list) >= 1
+
+        process_user = process_user_list[0]
         assert process_user is not None
         assert "T extends User" in process_user.signature
         assert "T & { processed: true }" in process_user.signature
@@ -1156,7 +1250,12 @@ class TestTypeInferenceAccuracy:
         assert result.success is True
         
         # Should identify type guard functions
-        is_user = result.functions["isUser"]
+        is_user_list = result.functions["isUser"]
+        assert is_user_list is not None
+        assert isinstance(is_user_list, list)
+        assert len(is_user_list) >= 1
+
+        is_user = is_user_list[0]
         assert is_user is not None
         assert "person is User" in is_user.signature
         
@@ -1183,7 +1282,13 @@ class TestTypeInferenceAccuracy:
         assert isinstance(result, FunctionDetailsResponse)
         assert result.success is True
         
-        process_retry = result.functions["processWithRetry"]
+        process_retry_list = result.functions["processWithRetry"]
+        assert process_retry_list is not None
+        assert isinstance(process_retry_list, list)
+        assert len(process_retry_list) >= 1
+
+        
+        process_retry = process_retry_list[0]
         assert process_retry is not None
         
         # Should resolve complex conditional return type
@@ -1237,12 +1342,22 @@ class TestTypeInferenceAccuracy:
         assert result.success is True
         
         # Should handle recursive TreeNode type
-        traverse_tree = result.functions["traverseTree"]
+        traverse_tree_list = result.functions["traverseTree"]
+        assert traverse_tree_list is not None
+        assert isinstance(traverse_tree_list, list)
+        assert len(traverse_tree_list) >= 1
+
+        traverse_tree = traverse_tree_list[0]
         assert traverse_tree is not None
         assert "TreeNode<T>" in traverse_tree.signature
         
         # Should resolve recursive mapped type
-        make_readonly = result.functions["makeDeepReadonly"]
+        make_readonly_list = result.functions["makeDeepReadonly"]
+        assert make_readonly_list is not None
+        assert isinstance(make_readonly_list, list)
+        assert len(make_readonly_list) >= 1
+
+        make_readonly = make_readonly_list[0]
         assert make_readonly is not None
         assert "DeepReadonly<T>" in make_readonly.signature
         

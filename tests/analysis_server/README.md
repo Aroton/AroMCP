@@ -16,7 +16,7 @@ This directory contains comprehensive failing tests for Phase 1 of the TypeScrip
 2. **`test_typescript_tools.py`** - Tool implementation tests
    - `find_references` - Symbol reference discovery
    - `get_function_details` - Function signature and type analysis
-   - `get_call_trace` - Execution flow tracing
+   - `analyze_call_graph` - Static call graph analysis
    - Tool integration and consistency
 
 3. **`test_performance_requirements.py`** - Performance and memory tests
@@ -83,7 +83,7 @@ class ResolutionDepth:
 ```python
 def find_references_impl(symbol: str, file_paths: str | list[str], ...) -> FindReferencesResponse
 def get_function_details_impl(functions: str | list[str], ...) -> FunctionDetailsResponse
-def get_call_trace_impl(entry_point: str, ...) -> CallTraceResponse
+def get_call_trace_impl(entry_point: str, ...) -> CallTraceResponse  # Implementation function name unchanged
 ```
 
 ## Running Tests

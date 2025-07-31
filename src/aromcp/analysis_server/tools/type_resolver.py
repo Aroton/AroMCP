@@ -7,6 +7,7 @@ Phase 3 implementation for comprehensive type analysis:
 - Level 3 (full_type): Deep type inference and analysis
 """
 
+import os
 import re
 import time
 from typing import Any
@@ -14,6 +15,7 @@ from dataclasses import dataclass, field
 
 from .typescript_parser import TypeScriptParser, ResolutionDepth
 from .symbol_resolver import SymbolResolver
+from .import_tracker import ModuleResolver
 from ..models.typescript_models import (
     TypeDefinition,
     AnalysisError,
@@ -37,17 +39,24 @@ class TypeResolver:
     - Full Type: Deep inference with TypeScript compiler integration (comprehensive)
     """
     
-    def __init__(self, parser: TypeScriptParser, symbol_resolver: SymbolResolver):
+    def __init__(self, parser: TypeScriptParser, symbol_resolver: SymbolResolver, project_root: str = None):
         """
         Initialize type resolver with parser and symbol resolver.
         
         Args:
             parser: TypeScript parser instance
             symbol_resolver: Symbol resolver for cross-file analysis
+            project_root: Project root for resolving imports
         """
         self.parser = parser
         self.symbol_resolver = symbol_resolver
         self.type_cache = {}
+        self.project_root = project_root
+        if project_root:
+            self.module_resolver = ModuleResolver(project_root)
+        else:
+            import os
+            self.module_resolver = ModuleResolver(os.environ.get("MCP_FILE_ROOT", "."))
         self.resolution_depth_limit = 5
         
         # Built-in TypeScript types
@@ -392,6 +401,11 @@ class TypeResolver:
                             )
                     return interface_def
                 
+                # Try to find the type in imported files
+                imported_type_def = self._find_type_in_imports(type_name, file_path)
+                if imported_type_def:
+                    return imported_type_def
+                
                 return TypeDefinition(
                     kind="unknown",
                     definition=f"Unknown type: {type_name}",
@@ -436,20 +450,12 @@ class TypeResolver:
             if enum_def:
                 return enum_def
             
-            # Check if this might be an imported type
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+            # Try to find the type in imported files
+            imported_type_def = self._find_type_in_imports(base_type_name, file_path)
+            if imported_type_def:
+                return imported_type_def
             
-            # Simple check for import statements
-            import_pattern = rf'import\s*\{{[^}}]*\b{re.escape(base_type_name)}\b[^}}]*\}}\s*from'
-            if re.search(import_pattern, content):
-                return TypeDefinition(
-                    kind="imported",
-                    definition=f"Imported type: {type_name}",
-                    location=f"{file_path}:imported"
-                )
-            
-            # Type not found in this file
+            # Type not found anywhere
             return TypeDefinition(
                 kind="unknown",
                 definition=f"Unknown type: {type_name}",
@@ -463,6 +469,120 @@ class TypeResolver:
                 location=f"{file_path}:error"
             )
     
+    def _find_type_in_imports(self, type_name: str, file_path: str) -> TypeDefinition | None:
+        """Find a type definition in imported files."""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Look for import statements that include this type
+            import_patterns = [
+                # Named imports: import { Type } from 'module'
+                rf'import\s*\{{\s*[^}}]*\b{re.escape(type_name)}\b[^}}]*\}}\s*from\s*[\'"]([^\'"]+)[\'"]',
+                # Type imports: import type { Type } from 'module'
+                rf'import\s+type\s*\{{\s*[^}}]*\b{re.escape(type_name)}\b[^}}]*\}}\s*from\s*[\'"]([^\'"]+)[\'"]',
+                # Default imports (less common for types): import Type from 'module'
+                rf'import\s+{re.escape(type_name)}\s+from\s*[\'"]([^\'"]+)[\'"]'
+            ]
+            
+            for pattern in import_patterns:
+                matches = re.finditer(pattern, content, re.MULTILINE)
+                for match in matches:
+                    import_path = match.group(1)
+                    
+                    # Resolve the import path to actual file
+                    resolved_path = self.module_resolver.resolve_path(import_path, file_path)
+                    if resolved_path and os.path.exists(resolved_path):
+                        # Look for the type definition in the imported file
+                        imported_type_def = self._extract_type_from_file(type_name, resolved_path)
+                        if imported_type_def:
+                            return imported_type_def
+            
+            return None
+            
+        except Exception:
+            return None
+    
+    def _extract_type_from_file(self, type_name: str, file_path: str) -> TypeDefinition | None:
+        """Extract a specific type definition from a file."""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Look for interface definition
+            interface_match = self._extract_interface_definition(type_name, content, file_path)
+            if interface_match:
+                return interface_match
+            
+            # Look for type alias definition  
+            type_alias_match = self._extract_type_alias_definition(type_name, content, file_path)
+            if type_alias_match:
+                return type_alias_match
+                
+            # Look for enum definition
+            enum_match = self._extract_enum_definition(type_name, content, file_path)
+            if enum_match:
+                return enum_match
+                
+            return None
+            
+        except Exception:
+            return None
+    
+    def _extract_interface_definition(self, interface_name: str, content: str, file_path: str) -> TypeDefinition | None:
+        """Extract interface definition from file content."""
+        pattern = rf'(?:export\s+)?interface\s+{re.escape(interface_name)}\s*(?:<[^{{}}]*>)?\s*(?:extends\s+[^{{}}]*?)?\s*\{{([^{{}}]*(?:\{{[^{{}}]*\}}[^{{}}]*)*)\}}'
+        match = re.search(pattern, content, re.MULTILINE | re.DOTALL)
+        
+        if match:
+            # Extract the full interface definition including the interface keyword
+            start = match.start()
+            # Find the complete interface block
+            full_match = re.search(rf'(?:export\s+)?interface\s+{re.escape(interface_name)}[^{{}}]*\{{[^{{}}]*(?:\{{[^{{}}]*\}}[^{{}}]*)*\}}', content[start:], re.MULTILINE | re.DOTALL)
+            if full_match:
+                definition = full_match.group(0).strip()
+                # Find line number
+                line_num = content[:start].count('\n') + 1
+                
+                return TypeDefinition(
+                    kind="interface",
+                    definition=definition,
+                    location=f"{file_path}:{line_num}"
+                )
+        return None
+    
+    def _extract_type_alias_definition(self, type_name: str, content: str, file_path: str) -> TypeDefinition | None:
+        """Extract type alias definition from file content."""
+        pattern = rf'(?:export\s+)?type\s+{re.escape(type_name)}\s*(?:<[^=]*>)?\s*=\s*([^;]+);?'
+        match = re.search(pattern, content, re.MULTILINE | re.DOTALL)
+        
+        if match:
+            definition = match.group(0).strip()
+            line_num = content[:match.start()].count('\n') + 1
+            
+            return TypeDefinition(
+                kind="type",
+                definition=definition,
+                location=f"{file_path}:{line_num}"
+            )
+        return None
+    
+    def _extract_enum_definition(self, enum_name: str, content: str, file_path: str) -> TypeDefinition | None:
+        """Extract enum definition from file content."""
+        pattern = rf'(?:export\s+)?enum\s+{re.escape(enum_name)}\s*\{{([^{{}}]*)\}}'
+        match = re.search(pattern, content, re.MULTILINE | re.DOTALL)
+        
+        if match:
+            definition = match.group(0).strip()
+            line_num = content[:match.start()].count('\n') + 1
+            
+            return TypeDefinition(
+                kind="enum",
+                definition=definition,
+                location=f"{file_path}:{line_num}"
+            )
+        return None
+
     def _find_interface_definition(self, interface_name: str, tree: Any, file_path: str) -> TypeDefinition | None:
         """Find interface definition using regex-based parsing."""
         try:

@@ -1,5 +1,5 @@
 """
-Trace execution paths and call graphs for TypeScript functions.
+Analyze static call graphs and function dependencies for TypeScript functions.
 
 Phase 4: Full implementation with call graph construction, cycle detection,
 and conditional execution path analysis.
@@ -24,7 +24,7 @@ from .conditional_analyzer import ConditionalAnalyzer
 
 def get_call_trace_impl(
     entry_point: str,
-    file_paths: str | list[str] | None = None,
+    file_paths: str | list[str],
     max_depth: int = 10,
     include_external_calls: bool = False,
     analyze_conditions: bool = False,
@@ -35,43 +35,53 @@ def get_call_trace_impl(
     max_tokens: int = 20000,
 ) -> CallTraceResponse:
     """
-    Trace execution paths from a function entry point.
+    Analyze static call graph and function dependencies from an entry point.
 
     Phase 4: Full implementation with call graph construction, cycle detection,
     and conditional execution path analysis.
     
     Args:
-        entry_point: Function name to start tracing from
-        file_paths: Files to analyze (None for project-wide analysis)
-        max_depth: Maximum call depth to trace
+        entry_point: Function name to start analysis from
+        file_paths: Files to analyze (required to avoid ambiguity)
+        max_depth: Maximum call depth to analyze
         include_external_calls: Include calls to external modules
         analyze_conditions: Analyze conditional execution paths
         resolution_depth: Analysis depth (syntactic, semantic, full_type)
-        caller_direction: Trace who calls this function (reverse direction)
-        callee_direction: Trace what this function calls (forward direction)
+        caller_direction: Analyze who calls this function (reverse direction)
+        callee_direction: Analyze what this function calls (forward direction)
         page: Page number for pagination
         max_tokens: Maximum tokens per page
         
     Returns:
-        CallTraceResponse with execution paths and statistics
+        CallTraceResponse with static call graph and statistics
     """
-    # Normalize inputs
+    # Normalize inputs - file_paths is now required
     if isinstance(file_paths, str):
         search_files = [file_paths]
-    elif file_paths is None:
-        search_files = _get_typescript_files()
     else:
         search_files = file_paths
     
     # Validate inputs
     errors = []
     
-    # Check for non-existent files
+    # Get project root for path resolution
+    project_root = os.environ.get("MCP_FILE_ROOT", os.getcwd())
+    
+    # Check for non-existent files and resolve relative paths
     existing_files = []
     for file_path in search_files:
-        if file_path and os.path.exists(file_path):
-            existing_files.append(file_path)
-        elif file_path:
+        if not file_path:
+            continue
+            
+        # Handle relative paths by resolving against project root
+        if not os.path.isabs(file_path):
+            resolved_path = os.path.join(project_root, file_path)
+        else:
+            resolved_path = file_path
+            
+        if os.path.exists(resolved_path):
+            existing_files.append(resolved_path)
+        else:
             errors.append(AnalysisError(
                 code="NOT_FOUND",
                 message=f"File not found: {file_path}",
@@ -183,23 +193,22 @@ def get_call_trace_impl(
 
 
 def _get_typescript_files() -> list[str]:
-    """Get all TypeScript files in the current directory and subdirectories."""
+    """Get all TypeScript files in the project using MCP_FILE_ROOT."""
+    typescript_files = []
+    
+    # Get project root from environment
+    project_root = os.environ.get("MCP_FILE_ROOT", os.getcwd())
+    
     try:
-        # Search for TypeScript files
-        patterns = ['**/*.ts', '**/*.tsx']
-        files = []
-        
-        for pattern in patterns:
-            files.extend(glob.glob(pattern, recursive=True))
+        for root, dirs, files in os.walk(project_root):
+            # Skip common directories
+            dirs[:] = [d for d in dirs if d not in {'.git', 'node_modules', 'dist', 'build'}]
             
-        # Filter out node_modules and other build directories
-        filtered_files = []
-        for file in files:
-            if not any(exclude in file for exclude in ['node_modules', 'dist', 'build', '.git']):
-                filtered_files.append(file)
-                
-        return filtered_files[:50]  # Limit for performance
-        
+            for file in files:
+                if file.endswith(('.ts', '.tsx')):
+                    typescript_files.append(os.path.join(root, file))
+                    
+        return typescript_files[:50]  # Limit for performance
     except Exception:
         return []
 

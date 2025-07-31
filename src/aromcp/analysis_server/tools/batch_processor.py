@@ -77,7 +77,7 @@ class BatchProcessor:
                      handle_overloads: bool = False,
                      analyze_control_flow: bool = False,
                      track_variables: bool = False,
-                     **kwargs) -> tuple[dict[str, FunctionDetail], BatchProcessingStats, MemoryUsageStats]:
+                     **kwargs) -> tuple[dict[str, list[FunctionDetail]], BatchProcessingStats, MemoryUsageStats]:
         """
         Process multiple functions efficiently with shared context.
         
@@ -114,6 +114,10 @@ class BatchProcessor:
             for i, func_name in enumerate(functions):
                 func_start_time = time.perf_counter()
                 
+                # Initialize list for this function name if not already present
+                if func_name not in results:
+                    results[func_name] = []
+                
                 # Monitor memory usage
                 current_memory = self._get_memory_usage_mb()
                 if current_memory > stats.memory_peak_mb:
@@ -136,7 +140,7 @@ class BatchProcessor:
                 
                 # Process function
                 try:
-                    result = self._process_single_function(
+                    function_results = self._process_all_function_instances(
                         func_name, file_paths,
                         analyze_nested_functions=analyze_nested_functions,
                         handle_overloads=handle_overloads,
@@ -144,9 +148,9 @@ class BatchProcessor:
                         track_variables=track_variables,
                         **kwargs
                     )
-                    if result:
-                        results[func_name] = result
-                        stats.total_processed += 1
+                    if function_results:
+                        results[func_name].extend(function_results)
+                        stats.total_processed += len(function_results)
                         
                 except Exception as e:
                     errors.append(AnalysisError(
@@ -194,10 +198,10 @@ class BatchProcessor:
         
         return results, stats, memory_stats
     
-    def _process_single_function(self, func_name: str, file_paths: list[str], 
-                                **kwargs) -> FunctionDetail | None:
+    def _process_all_function_instances(self, func_name: str, file_paths: list[str], 
+                                       **kwargs) -> list[FunctionDetail]:
         """
-        Process a single function with optimized file searching.
+        Process all instances of a function across multiple files.
         
         Args:
             func_name: Function name to analyze
@@ -205,9 +209,11 @@ class BatchProcessor:
             **kwargs: Analysis options
             
         Returns:
-            FunctionDetail if found, None otherwise
+            List of FunctionDetail instances found across all files
         """
-        # Try to find function in cached/parsed files first
+        function_instances = []
+        
+        # Search all files for function instances  
         for file_path in file_paths:
             try:
                 # Use shared type context if available
@@ -222,12 +228,12 @@ class BatchProcessor:
                 self.type_resolver.type_cache = old_cache
                 
                 if result:
-                    return result
+                    function_instances.append(result)
                     
             except Exception:
                 continue
         
-        return None
+        return function_instances
     
     def _build_shared_type_context(self, file_paths: list[str]) -> None:
         """

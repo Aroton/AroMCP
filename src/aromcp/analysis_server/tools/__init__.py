@@ -119,9 +119,9 @@ def register_analysis_tools(mcp):
     
     @mcp.tool
     @json_convert
-    def get_call_trace(
+    def analyze_call_graph(
         entry_point: str,
-        file_paths: str | list[str] | None = None,
+        file_paths: str | list[str],
         max_depth: int = 10,
         include_external_calls: bool = False,
         analyze_conditions: bool = False,
@@ -130,20 +130,20 @@ def register_analysis_tools(mcp):
         max_tokens: int = 20000,
     ) -> CallTraceResponse:
         """
-        Trace execution paths and call graphs from a function entry point.
+        Analyze static call graph and function dependencies from an entry point.
         
         Use this tool when:
-        - Understanding complex function call flows
-        - Analyzing potential execution paths through code
+        - Mapping function dependencies before refactoring
+        - Understanding which functions a method can potentially call
         - Detecting circular dependencies in function calls
-        - Planning performance optimizations
+        - Planning code organization and module boundaries
         
-        Replaces bash commands: manual call graph creation, static analysis tools
+        Replaces bash commands: manual dependency mapping, grep -r for function calls
         
         Args:
-            entry_point: Function name to start tracing from (e.g., "main", "UserService.process")
-            file_paths: Files to analyze, or None for project-wide analysis
-            max_depth: Maximum call depth to trace (prevents infinite recursion)
+            entry_point: Function name to analyze dependencies for (e.g., "main", "UserService.process")
+            file_paths: Files to analyze (required to avoid ambiguity with multiple definitions)
+            max_depth: Maximum call depth to analyze (prevents infinite recursion)
             include_external_calls: Include calls to external modules/libraries
             analyze_conditions: Analyze conditional execution branches
             resolution_depth: Analysis level - "syntactic", "semantic", or "full_type"
@@ -151,10 +151,10 @@ def register_analysis_tools(mcp):
             max_tokens: Maximum tokens per page (default: 20000)
             
         Example:
-            get_call_trace("authenticate", max_depth=5)
-            → CallTraceResponse with execution paths from authenticate function
+            analyze_call_graph("authenticate", "src/auth/auth.ts", max_depth=5)
+            → CallTraceResponse with static call graph from authenticate function
             
-        Note: Use with get_function_details to understand individual functions in the trace
+        Note: Shows potential calls, not runtime execution. Use with get_function_details for implementation details.
         """
         return get_call_trace_impl(
             entry_point=entry_point,
