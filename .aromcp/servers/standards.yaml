@@ -1,0 +1,96 @@
+# Standards Server Configuration
+name: AroMCP Standards Server
+version: 0.1.0
+description: Coding guidelines and ESLint rule management
+
+# Server metadata
+metadata:
+  category: standards_management
+  stability: stable
+  maintainer: AroMCP Team
+
+# Tool definitions
+tools:
+  - name: register_standard
+    description: Register a new coding standard
+    category: standard_management
+    
+  - name: add_rule
+    description: Add ESLint rules with context awareness
+    category: rule_management
+    
+  - name: add_hint
+    description: Add coding hints and best practices
+    category: hint_management
+    
+  - name: hints_for_file
+    description: Get relevant hints for a specific file
+    category: hint_retrieval
+    
+  - name: update_rule
+    description: Modify existing rules
+    category: rule_management
+    
+  - name: delete_standard
+    description: Remove a coding standard
+    category: standard_management
+    
+  - name: delete_rule
+    description: Remove an ESLint rule
+    category: rule_management
+    
+  - name: delete_hint
+    description: Remove a coding hint
+    category: hint_management
+    
+  - name: check_updates
+    description: Check for standard updates
+    category: maintenance
+
+# Configuration options
+config:
+  # Storage settings
+  storage:
+    # Storage backend
+    backend: file  # file or memory
+    
+    # File storage path
+    storage_path: .aromcp/standards
+    
+    # Auto-save interval (seconds)
+    auto_save_interval: 60
+    
+  # Rule management
+  rules:
+    # Enable context detection
+    context_aware: true
+    
+    # Auto-group related rules
+    auto_group: true
+    
+    # Compression settings
+    compression:
+      enabled: true
+      min_rules: 10
+      
+  # Hint management
+  hints:
+    # Maximum hints per file
+    max_per_file: 20
+    
+    # Relevance threshold (0-1)
+    relevance_threshold: 0.7
+    
+    # Cache hints
+    cache_enabled: true
+
+# Session management
+session:
+  # Session timeout (seconds)
+  timeout: 3600
+  
+  # Maximum concurrent sessions
+  max_sessions: 10
+  
+  # Session persistence
+  persist_sessions: true

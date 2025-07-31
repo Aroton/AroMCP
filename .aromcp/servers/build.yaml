@@ -1,0 +1,70 @@
+# Build Server Configuration
+name: AroMCP Build Server
+version: 0.1.0
+description: Compilation, linting, and testing tools for code quality
+
+# Server metadata
+metadata:
+  category: build_tools
+  stability: stable
+  maintainer: AroMCP Team
+
+# Tool definitions
+tools:
+  - name: lint_project
+    description: Run ESLint and get formatted results
+    category: code_quality
+    
+  - name: check_typescript
+    description: Check TypeScript compilation errors
+    category: type_checking
+    
+  - name: run_test_suite
+    description: Execute test suites with result parsing
+    category: testing
+    
+  - name: run_tests
+    description: Simplified test execution with defaults
+    category: testing
+    alias_for: run_test_suite
+    
+  - name: quality_check
+    description: Run all quality checks (lint + TypeScript + tests)
+    category: composite
+
+# Configuration options
+config:
+  # Linting settings
+  lint:
+    default_config: .eslintrc
+    severity_filter: ["error", "warning"]
+    max_issues: 1000
+    
+  # TypeScript settings
+  typescript:
+    default_config: tsconfig.json
+    check_libs: false
+    strict_mode: true
+    
+  # Test settings
+  test:
+    timeout: 300000  # 5 minutes
+    coverage_threshold: 80
+    parallel: true
+
+# Build tool detection
+detection:
+  # Package managers to check
+  package_managers:
+    - npm
+    - yarn
+    - pnpm
+    - pip
+    - cargo
+    
+  # Build files to look for
+  build_files:
+    - package.json
+    - pyproject.toml
+    - Cargo.toml
+    - Makefile

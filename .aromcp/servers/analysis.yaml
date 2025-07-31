@@ -1,0 +1,82 @@
+# Analysis Server Configuration
+name: AroMCP Analysis Server
+version: 0.1.0
+description: Code quality and dependency analysis tools
+
+# Server metadata
+metadata:
+  category: code_analysis
+  stability: stable
+  maintainer: AroMCP Team
+
+# Tool definitions
+tools:
+  - name: find_dead_code
+    description: Identify unused functions, classes, and variables
+    category: code_quality
+    
+  - name: find_import_cycles
+    description: Detect circular import dependencies
+    category: dependency_analysis
+    
+  - name: extract_api_endpoints
+    description: Document API routes and endpoints
+    category: documentation
+
+# Configuration options
+config:
+  # Dead code detection
+  dead_code:
+    # Languages to analyze
+    languages:
+      - python
+      - javascript
+      - typescript
+    
+    # Ignore patterns
+    ignore_patterns:
+      - "*_test.py"
+      - "test_*.py"
+      - "*.spec.js"
+      - "*.test.ts"
+    
+    # Consider exports as used
+    respect_exports: true
+    
+  # Import cycle detection
+  import_cycles:
+    # Maximum depth to search
+    max_depth: 10
+    
+    # Ignore test files
+    ignore_tests: true
+    
+    # Show detailed paths
+    detailed_output: true
+    
+  # API endpoint extraction
+  api_endpoints:
+    # Frameworks to detect
+    frameworks:
+      - express
+      - fastapi
+      - flask
+      - django
+      
+    # Output format
+    output_format: markdown
+    
+    # Include request/response schemas
+    include_schemas: true
+
+# Analysis settings
+analysis:
+  # Maximum file size to analyze
+  max_file_size: 5242880  # 5MB
+  
+  # Parallel processing
+  parallel: true
+  
+  # Cache results
+  enable_cache: true
+  cache_ttl: 3600  # 1 hour

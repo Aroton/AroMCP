@@ -1,0 +1,63 @@
+# FileSystem Server Configuration
+name: AroMCP FileSystem Server
+version: 0.1.0
+description: File operations and code analysis tools for AI-driven development
+
+# Server metadata
+metadata:
+  category: file_management
+  stability: stable
+  maintainer: AroMCP Team
+
+# Tool definitions
+tools:
+  - name: list_files
+    description: List files matching glob patterns
+    category: file_operations
+    
+  - name: read_files
+    description: Read multiple files with pagination support
+    category: file_operations
+    
+  - name: write_files
+    description: Write multiple files with automatic directory creation
+    category: file_operations
+    
+  - name: extract_method_signatures
+    description: Extract function/method signatures from code
+    category: code_analysis
+    
+  - name: find_who_imports
+    description: Find which files import a given module
+    category: dependency_analysis
+
+# Configuration options
+config:
+  # Maximum file size to read (in bytes)
+  max_file_size: 10485760  # 10MB
+  
+  # Default encoding for file operations
+  default_encoding: utf-8
+  
+  # Enable glob pattern expansion
+  enable_glob_expansion: true
+  
+  # Pagination settings
+  default_page_size: 20000  # tokens
+  max_page_size: 50000     # tokens
+
+# Security settings
+security:
+  # Prevent directory traversal
+  prevent_traversal: true
+  
+  # Allowed file extensions (empty = all allowed)
+  allowed_extensions: []
+  
+  # Blocked file patterns
+  blocked_patterns:
+    - "*.pyc"
+    - "__pycache__/*"
+    - ".git/*"
+    - "*.so"
+    - "*.dll"

@@ -1,0 +1,36 @@
+name: "test:simple"
+description: "Test basic sequential execution"
+version: "1.0.0"
+
+default_state:
+  state:
+    counter: 5  # Initialize with the desired value
+    message: ""
+
+state_schema:
+  state:
+    counter: "number"
+    message: "string"
+  computed:
+    doubled:
+      from: "state.counter"
+      transform: "input * 2"
+
+inputs:
+  name:
+    type: "string"
+    description: "User name"
+    required: true
+
+steps:
+    
+  - id: "show_counter"
+    type: "user_message"
+    message: "Counter is {{ this.counter }}, doubled is {{ this.doubled }}"
+    
+  - id: "run_echo"
+    type: "shell_command"
+    command: "echo 'Hello from workflow'"
+    state_update:
+      path: "this.message"
+      value: "stdout"

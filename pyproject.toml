@@ -1,0 +1,136 @@
+[project]
+name = "aromcp"
+version = "0.1.0"
+description = "AroMCP - A suite of MCP servers for AI-driven development workflows (DEPRECATED - Use individual servers)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+keywords = [
+    "mcp",
+    "development-tools",
+    "code-analysis",
+    "linting",
+    "testing",
+    "file-management",
+    "build-tools",
+    "ai-development"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=25.1.0",
+    "pytest>=8.4.1",
+    "ruff>=0.12.1",
+    "pytest-asyncio>=1.0.0",
+]
+# Legacy - for backward compatibility only
+all-servers = [
+    "fastmcp>=2.10.5",
+    "chardet>=5.0.0",
+    "pyyaml>=6.0.0",
+    "pythonmonkey>=1.1.1",
+    "psutil>=5.9.0",
+    "jsonschema>=4.0.0",
+    "tree-sitter>=0.20.0",
+    "tree-sitter-typescript>=0.20.0",
+    "tree-sitter-javascript>=0.20.0",
+    "networkx>=3.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "S", "B", "A", "C4", "T20"]
+ignore = ["S101"]  # Allow assert statements
+
+[tool.black]
+line-length = 120
+target-version = ['py312']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "benchmark: marks tests as benchmarks",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "pytest-asyncio>=1.0.0",
+    "ruff>=0.12.1",
+]
+
+[tool.aromcp]
+# Tool categories for AI agent discovery
+categories = [
+    "code_exploration",
+    "code_quality",
+    "code_modification",
+    "dependency_analysis",
+    "build_and_test",
+    "documentation",
+    "standards_management"
+]
+
+[tool.aromcp.primary_tools]
+# Simplified tools recommended for AI agents
+file_operations = ["list_files", "read_files", "write_files"]
+code_analysis = ["find_references", "get_function_details", "analyze_call_graph"]
+quality_checks = ["lint_project", "check_typescript", "run_tests"]
+build_tools = ["execute_command", "detect_build_tools", "check_dependencies"]
+typescript_analysis = ["find_references", "get_function_details", "analyze_call_graph"]
+standards = ["hints_for_file", "register_standard", "add_rule"]
+
+[tool.aromcp.workflows]
+# Common workflows for AI agents
+pre_commit = ["lint_project", "check_typescript", "run_tests"]
+explore_project = ["list_files", "read_files", "detect_build_tools"]
+refactor_safe = ["find_references", "read_files", "write_files", "lint_project"]
+analyze_code = ["find_references", "get_function_details", "analyze_call_graph"]
+
+# Individual server configurations
+[tool.aromcp.servers.filesystem]
+name = "AroMCP FileSystem Server"
+version = "0.1.0"
+description = "File operations with advanced pattern matching and pagination"
+entry_point = "servers/filesystem/main.py"
+tools = ["list_files", "read_files", "write_files"]
+
+[tool.aromcp.servers.build]
+name = "AroMCP Build Server"
+version = "0.1.0"
+description = "Compilation, linting, and testing tools"
+entry_point = "servers/build/main.py"
+tools = ["lint_project", "check_typescript", "run_test_suite", "run_tests"]
+
+[tool.aromcp.servers.analysis]
+name = "AroMCP Analysis Server"
+version = "0.1.0"
+description = "TypeScript code analysis and symbol resolution"
+entry_point = "servers/analysis/main.py"
+tools = ["find_references", "get_function_details", "analyze_call_graph"]
+
+[tool.aromcp.servers.standards]
+name = "AroMCP Standards Server"
+version = "0.1.0"
+description = "Coding guidelines and ESLint rule management"
+entry_point = "servers/standards/main.py"
+tools = ["register_standard", "add_rule", "add_hint", "hints_for_file", "update_rule", "delete_standard", "delete_rule", "delete_hint", "check_updates"]
+
+[tool.aromcp.servers.workflow]
+name = "AroMCP Workflow Server"
+version = "0.1.0"
+description = "Workflow execution and state management"
+entry_point = "servers/workflow/main.py"
+tools = ["workflow_start", "workflow_step", "workflow_status", "workflow_stop", "workflow_list", "state_get", "state_update", "state_transform", "state_clear"]

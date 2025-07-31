@@ -1,0 +1,279 @@
+name: "test:sub-agents"
+description: "Test workflow demonstrating sub-agent parallel execution with complex computed fields"
+version: "1.0.0"
+
+inputs:
+  git_output:
+    type: "string"
+    description: "Raw git output with file paths (newline separated)"
+    required: false
+    default: "src/test.ts\nsrc/another.js\nREADME.md\nnode_modules/test.js\n.git/config\ndist/build.js"
+  
+  file_list:
+    type: "array"
+    description: "Direct list of files to process (alternative to git_output)"
+    required: false
+    default: []
+
+default_state:
+  inputs:
+    git_output: ""
+    file_list: []
+  state:
+    processing_results: {}
+    processed_count: 0
+
+# Complex computed state fields similar to code-standards:enforce
+state_schema:
+  inputs:
+    git_output: "string"
+    file_list: "array"
+  state:
+    processing_results: "object"
+    processed_count: "number"
+  computed:
+    # First: Parse git output into individual files
+    changed_files:
+      from: "inputs.git_output"
+      transform: "input.split('\\n').filter(line => line.trim() !== '')"
+    
+    # Second: Filter for code files only, excluding certain directories
+    code_files:
+      from: "computed.changed_files"
+      transform: |
+        input.filter(file => {
+          const codeExts = ['.py', '.pyi', '.ts', '.tsx', '.js', '.jsx', '.java', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.cs', '.rb'];
+          const excludeDirs = ['node_modules', 'cache', '.git', 'dist', 'build', 'target', 'bin', 'obj', 'out', '.venv', 'venv', 'env', 'vendor'];
+          const parts = file.split('/');
+          const hasExcluded = parts.some(part => excludeDirs.includes(part));
+          const isCode = codeExts.some(ext => file.endsWith(ext));
+          return !hasExcluded && isCode;
+        })
+    
+    # Third: Fallback to direct file list if no git output
+    final_files:
+      from: ["computed.code_files", "inputs.file_list"]
+      transform: "input[0].length > 0 ? input[0] : input[1]"
+    
+    # Statistics
+    total_files:
+      from: "computed.final_files"
+      transform: "input.length"
+    
+    has_files:
+      from: "computed.final_files"
+      transform: "input.length > 0"
+    
+    typescript_files:
+      from: "computed.final_files"
+      transform: "input.filter(f => f.endsWith('.ts') || f.endsWith('.tsx'))"
+    
+    javascript_files:
+      from: "computed.final_files"
+      transform: "input.filter(f => f.endsWith('.js') || f.endsWith('.jsx'))"
+    
+    # Processing status
+    all_processed:
+      from: ["state.processing_results", "computed.final_files"]
+      transform: "Object.keys(input[0] || {}).length === input[1].length"
+    
+    failed_files:
+      from: "state.processing_results"
+      transform: "Object.entries(input || {}).filter(([_, result]) => !result.success).map(([file, _]) => file)"
+
+steps:
+  # Step 1: Initialize with git output or file list
+  # Note: Inputs are provided when workflow starts, no need for separate initialization steps
+
+  # Step 2: Show what files were found
+  - id: "files_found_message"
+    type: "user_message"
+    message: |
+      Found {{ this.total_files }} files to process:
+      - Changed files: {{ this.changed_files.length }}
+      - Code files: {{ this.code_files.length }}
+      - TypeScript files: {{ this.typescript_files.length }}
+      - JavaScript files: {{ this.javascript_files.length }}
+      - Final list: {{ this.final_files.slice(0, 5).join(', ') }}{{ this.final_files.length > 5 ? '...' : '' }}
+
+  # Step 3: Check if we have files to process
+  - id: "check_has_files"
+    type: "conditional"
+    condition: "{{ this.has_files }}"
+    then_steps:
+      - id: "start_processing_message"
+        type: "user_message"
+        message: "Starting parallel processing of {{ this.total_files }} files..."
+    else_steps:
+      - id: "no_files_message"
+        type: "user_message"
+        message: "No files found to process. Workflow complete."
+
+  # Step 4: Process files in parallel using this.final_files (only if we have files)
+  - id: "parallel_processing_conditional"
+    type: "conditional"
+    condition: "{{ this.has_files }}"
+    then_steps:
+      - id: "process_files_parallel"
+        type: "parallel_foreach"
+        items: "{{ this.final_files }}"
+        max_parallel: 3
+        sub_agent_task: "process_file"
+
+  # Step 5: Completion message
+  - id: "completion_message"
+    type: "user_message"
+    message: |
+      ✅ Processing complete!
+      - Total files: {{ this.total_files }}
+      - Processed: {{ this.processed_count }}
+      - Failed: {{ this.failed_files.length }}
+
+sub_agent_tasks:
+  process_file:
+    description: "Process a single file through comprehensive code standards enforcement"
+    inputs:
+      file_path:
+        type: "string"
+        description: "Path to the file to process"
+        required: true
+      
+      max_attempts:
+        type: "number"
+        description: "Maximum fix attempts"
+        required: false
+        default: 5
+
+    default_state:
+      state:
+        attempt_number: 0
+        success: false
+        last_error: ""
+        step_results:
+          hints: null
+          lint: null
+          typescript: null
+
+    state_schema:
+      state:
+        attempt_number: "number"
+        success: "boolean"
+        last_error: "string"
+        step_results: "object"
+      computed:
+        is_typescript_file:
+          from: "{{ file_path }}"
+          transform: "input.endsWith('.ts') || input.endsWith('.tsx')"
+
+        hints_completed:
+          from: "this.step_results"
+          transform: "input.hints !== null && input.hints.success === true"
+
+        lint_completed:
+          from: "this.step_results"
+          transform: "input.lint !== null && input.lint.success === true"
+
+        typescript_completed:
+          from: ["this.step_results", "this.is_typescript_file"]
+          transform: "!input[1] || (input[0].typescript !== null && input[0].typescript.success === true)"
+
+        all_steps_completed:
+          from: ["this.hints_completed", "this.lint_completed", "this.typescript_completed"]
+          transform: "input[0] && input[1] && input[2]"
+
+        can_continue:
+          from: ["loop.iteration", "{{ max_attempts }}", "this.all_steps_completed"]
+          transform: "input[0] < input[1] && !input[2]"
+
+    steps:
+      # Main processing loop matching original prompt template logic
+      - id: "standards_enforcement_loop"
+        type: "while_loop"
+        condition: "{{ this.can_continue }}"
+        max_iterations: 5
+        body:
+          # Attempt counter will be managed by the while loop iteration
+
+          - id: "attempt_message"
+            type: "user_message"
+            message: "Starting attempt {{ loop.iteration }} for {{ file_path }}"
+
+          # Step 1: Get hints for the file
+          - id: "get_hints_step"
+            type: "conditional"
+            condition: "{{ !this.hints_completed }}"
+            then_steps:
+              - id: "get_hints"
+                type: "mcp_call"
+                tool: "hints_for_files"
+                parameters:
+                  file_paths: ["{{ file_path }}"]
+                state_update:
+                  path: "state.step_results.hints"
+                  value: "{{ success ? {\"success\": true, \"completed_at\": state.attempt_number} : {\"success\": false, \"error\": \"Failed to get hints\", \"attempt\": state.attempt_number} }}"
+
+          # Step 2: Run linting
+          - id: "lint_step"
+            type: "conditional"
+            condition: "{{ this.hints_completed && !this.lint_completed }}"
+            then_steps:
+              - id: "run_lint"
+                type: "mcp_call"
+                tool: "lint_project"
+                parameters:
+                  target_files: ["{{ file_path }}"]
+                  use_eslint_standards: true
+                state_update:
+                  path: "state.step_results.lint"
+                  value: "{{ success && (!errors || errors.length === 0) ? {\"success\": true, \"completed_at\": state.attempt_number} : {\"success\": false, \"errors\": (errors ? errors.length : 0), \"attempt\": state.attempt_number} }}"
+
+          # Step 3: TypeScript check (if applicable)
+          - id: "typescript_step"
+            type: "conditional"
+            condition: "{{ this.is_typescript_file && this.lint_completed && !this.typescript_completed }}"
+            then_steps:
+              - id: "run_typescript"
+                type: "mcp_call"
+                tool: "check_typescript"
+                parameters:
+                  file_paths: ["{{ file_path }}"]
+                state_update:
+                  path: "state.step_results.typescript"
+                  value: "{{ success && (!errors || errors.length === 0) ? {\"success\": true, \"completed_at\": loop.iteration} : {\"success\": false, \"errors\": (errors ? errors.length : 0), \"attempt\": loop.iteration} }}"
+
+          # Auto-complete TypeScript for non-TS files
+          - id: "skip_typescript_for_non_ts"
+            type: "conditional"
+            condition: "{{ !this.is_typescript_file && this.lint_completed }}"
+            then_steps:
+              - id: "auto_complete_typescript"
+                type: "mcp_call"
+                tool: "echo"
+                parameters:
+                  message: "Skipping TypeScript check for non-TS file"
+                state_update:
+                  path: "state.step_results.typescript"
+                  value: "{\"success\": true, \"skipped\": true, \"reason\": \"Not a TypeScript/JavaScript file\"}"
+
+      # Final result processing
+      - id: "final_result_processing"
+        type: "conditional"
+        condition: "{{ this.all_steps_completed }}"
+        then_steps:
+          - id: "mark_final_success"
+            type: "mcp_call"
+            tool: "echo"
+            parameters:
+                message: "All standards checks completed successfully"
+            state_update:
+              path: "state.success"
+              value: "true"
+        else_steps:
+          - id: "mark_final_failure"
+            type: "mcp_call"
+            tool: "echo"
+            parameters:
+                message: "Failed to complete all standards checks"
+            state_update:
+              path: "state.last_error"
+              value: "Failed to complete all standards checks after {{ loop.iteration }} attempts"

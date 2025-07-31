@@ -1,0 +1,125 @@
+name: "test:agent-communication"
+description: "Test workflow demonstrating bi-directional agent communication"
+version: "1.0.0"
+
+inputs:
+  project_path:
+    type: "string"
+    description: "Path to the project to analyze"
+    required: true
+
+default_state:
+  state:
+    lint_issues: []
+    analysis_complete: false
+    fixes_applied: false
+
+state_schema:
+  inputs:
+    project_path: "string"
+  state:
+    lint_issues: "array"
+    analysis_complete: "boolean"
+    fixes_applied: "boolean"
+    agent_analysis: "object"
+    suggested_fixes: "array"
+  computed:
+    has_issues:
+      from: "this.lint_issues"
+      transform: "input.length > 0"
+    issue_count:
+      from: "this.lint_issues"
+      transform: "input.length"
+    fix_count:
+      from: "this.suggested_fixes"
+      transform: "input ? input.length : 0"
+
+steps:
+  # Step 1: Run linting on server
+  - id: "run_lint"
+    type: "mcp_call"
+    tool: "lint_project"
+    parameters:
+      project_path: "{{ inputs.project_path }}"
+    store_result: "this.lint_issues"
+    execution_context: "server"
+
+  # Step 2: If issues found, ask agent to analyze
+  - id: "check_issues"
+    type: "conditional"
+    condition: "{{ this.has_issues }}"
+    then_steps:
+      # Send analysis request to agent
+      - id: "request_analysis"
+        type: "agent_prompt"
+        prompt: |
+          Please analyze these lint issues and suggest fixes:
+          {{ this.lint_issues }}
+          
+          Provide a structured response with:
+          1. A summary of the issues
+          2. Suggested fixes for each issue
+          3. Priority ranking (high/medium/low)
+        context:
+          project_path: "{{ inputs.project_path }}"
+          issue_count: "{{ this.lint_issues.length }}"
+        expected_response:
+          type: "object"
+          required: ["summary", "fixes", "priorities"]
+          properties:
+            summary:
+              type: "string"
+            fixes:
+              type: "array"
+            priorities:
+              type: "object"
+        execution_context: "client"
+
+      # Receive and process agent response
+      - id: "process_analysis"
+        type: "agent_response"
+        response_schema:
+          type: "object"
+          required: ["summary", "fixes", "priorities"]
+        state_updates:
+          - path: "this.agent_analysis"
+            value: "response"
+          - path: "this.suggested_fixes"
+            value: "response.fixes"
+        store_response: "this.analysis_complete"
+        error_handling:
+          strategy: "retry"
+          max_retries: 2
+        execution_context: "client"
+
+      # Apply fixes if agent provided them
+      - id: "apply_fixes"
+        type: "conditional"
+        condition: "{{ this.fix_count > 0 }}"
+        then_steps:
+          - id: "apply_fixes_prompt"
+            type: "agent_prompt"
+            prompt: |
+              Apply the following fixes to the codebase:
+              {{ this.suggested_fixes }}
+            execution_context: "client"
+          
+          - id: "confirm_fixes"
+            type: "agent_response"
+            response_schema:
+              type: "object"
+              required: ["success", "files_modified"]
+            state_updates:
+              - path: "this.fixes_applied"
+                value: "response.success"
+            execution_context: "client"
+
+  # Step 3: Final summary
+  - id: "final_summary"
+    type: "user_message"
+    message: |
+      Analysis complete!
+      - Issues found: {{ this.has_issues }}
+      - Fixes suggested: {{ this.fix_count }}
+      - Fixes applied: {{ this.fixes_applied }}
+    execution_context: "server"
