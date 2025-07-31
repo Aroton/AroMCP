@@ -90,7 +90,8 @@ AroMCP includes enhanced Claude Code commands for standards management. Install 
 ```
 
 **What gets installed:**
-- **Standards Commands** - `standards:create`, `standards:generate`, `standards:update`
+- **Standards Commands** - `standards:create`, `standards:generate`, `standards:update`, `standards:fix`
+- **Specialized Agents** - Batch processing agents for parallel workflow execution
 - **Templates** - Coding standards templates and patterns
 - **Safe Installation** - Automatically backs up existing configurations
 
@@ -104,6 +105,11 @@ claude standards:generate
 
 # Update existing standards with new content
 claude standards:update
+
+# Apply standards to changed files with parallel processing
+claude standards:fix
+claude standards:fix branch main  # Fix changes against specific branch
+claude standards:fix --resume     # Resume interrupted workflow
 ```
 
 The install script:
@@ -248,6 +254,7 @@ AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development
 1. **`hints_for_file(filepath, session_id?)`** - Get project standards and coding rules (MANDATORY before edits)
 2. **`lint_project(use_standards=True)`** - Check code style using generated rules (ALWAYS use generated rules)
 3. **`check_typescript()`** - Validate TypeScript compilation
+4. **`standards:fix`** - Automated parallel standards application with architectural intelligence
 
 ### Required Workflow Order
 ```python
@@ -261,6 +268,18 @@ lint_results = lint_project(use_standards=True)
 
 # 4. Check TypeScript errors (REQUIRED)
 ts_errors = check_typescript()
+```
+
+### Automated Standards Application
+```bash
+# Apply standards to all changed files with intelligent batching
+claude standards:fix
+
+# The command uses architectural analysis to:
+# - Group related files (Frontend UI, Backend API, Data Schema, etc.)
+# - Process up to 5 files per batch with specialized agents
+# - Run 3 parallel agents for optimal performance
+# - Apply context-appropriate standards for each architectural layer
 ```
 
 ### Multiple File Operations
@@ -280,7 +299,8 @@ check_typescript(files=["src/auth/*.ts"])  # TypeScript validation
 ### Scale to Your Task
 - **Quick fix** (1 file): Standards → Edit → Done (validate only if needed)
 - **Small feature** (2-5 files): Load all standards first → Edit → Validate changed files
-- **Major refactor**: Consider parallel processing, validate comprehensively, run full build
+- **Major refactor**: Use `standards:fix` for automated parallel processing with architectural intelligence
+- **Large codebases**: `standards:fix` with resume capability handles extensive changes efficiently
 
 ### Other Useful Tools
 Discover available tools via MCP, but these are commonly helpful:
@@ -289,6 +309,7 @@ Discover available tools via MCP, but these are commonly helpful:
 - **`lint_project()`** - Run ESLint with standards
 - **`check_typescript()`** - Validate TypeScript compilation  
 - **`run_test_suite()`** - Execute tests with detailed results
+- **`standards:fix`** - Automated standards application with architectural intelligence and parallel processing
 
 ### Best Practices
 ✅ Always check standards before editing (the one hard rule)
@@ -296,6 +317,8 @@ Discover available tools via MCP, but these are commonly helpful:
 ✅ Follow the required order: Standards → Edit → Lint → TypeScript
 ✅ Use consistent `session_id` within operations for token efficiency
 ✅ Focus validation on changed files
+✅ Use `standards:fix` for complex refactoring with multiple files
+✅ Leverage architectural batching for efficient parallel processing
 
 ❌ Don't skip `hints_for_file()` - ever
 ❌ Don't skip linting after edits - always validate
@@ -304,7 +327,7 @@ Discover available tools via MCP, but these are commonly helpful:
 ❌ Don't validate unchanged files unless debugging
 
 ### The Bottom Line
-Check standards before editing. Everything else adapts to what you're doing. Simple tasks need simple workflows.
+Check standards before editing. For large changes, use `standards:fix` for automated intelligent processing. Everything else adapts to what you're doing. Simple tasks need simple workflows.
 ```
 
 **[Complete Integration Guide →](documentation/claude_code.md)**
@@ -351,6 +374,8 @@ src/aromcp/
 
 ### Key Design Principles
 - **Orchestrated Intelligence**: MCP coordinates analysis, AI generates content
+- **Architectural Intelligence**: Smart file categorization by purpose and runtime environment
+- **Parallel Processing**: Up to 3 concurrent agents with architectural batching (max 5 files per batch)
 - **Atomic Operations**: Each action is independent and recoverable
 - **Project-Agnostic**: Dynamic analysis works with any project structure
 - **Token Efficient**: Batch operations minimize context usage

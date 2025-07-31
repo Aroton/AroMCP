@@ -54,6 +54,7 @@ print_status "Installing AroMCP files..."
 # Ensure target directories exist
 mkdir -p "$CLAUDE_DIR/commands"
 mkdir -p "$CLAUDE_DIR/templates"
+mkdir -p "$CLAUDE_DIR/agents"
 
 # Install AroMCP command files
 if [[ -d "./shared-claude/commands" ]]; then
@@ -99,12 +100,36 @@ else
     print_status "No templates directory found in ./shared-claude"
 fi
 
+# Install AroMCP agent files
+if [[ -d "./shared-claude/agents" ]]; then
+    print_status "Installing AroMCP agents..."
+    INSTALLED_AGENTS=0
+
+    # Copy all agent files if any exist
+    for agent_file in ./shared-claude/agents/*.md; do
+        if [[ -f "$agent_file" ]]; then
+            filename=$(basename "$agent_file")
+            cp "$agent_file" "$CLAUDE_DIR/agents/"
+            echo -e "${GREEN}[SUCCESS]${NC} Installed agent: $filename"
+            INSTALLED_AGENTS=$((INSTALLED_AGENTS + 1))
+        fi
+    done
+
+    if [[ $INSTALLED_AGENTS -gt 0 ]]; then
+        print_success "Installed $INSTALLED_AGENTS AroMCP agent files"
+    else
+        print_status "No agent files found to install"
+    fi
+else
+    print_status "No agents directory found in ./shared-claude"
+fi
+
 # Install any other AroMCP-specific files/directories (non-commands/templates)
 # Only install if they don't conflict with existing files
 for item in ./shared-claude/*; do
     if [[ -d "$item" ]]; then
         dirname=$(basename "$item")
-        if [[ "$dirname" != "commands" ]] && [[ "$dirname" != "templates" ]]; then
+        if [[ "$dirname" != "commands" ]] && [[ "$dirname" != "templates" ]] && [[ "$dirname" != "agents" ]]; then
             if [[ ! -d "$CLAUDE_DIR/$dirname" ]]; then
                 print_status "Installing additional directory: $dirname"
                 cp -r "$item" "$CLAUDE_DIR/"
@@ -148,6 +173,11 @@ fi
 if [[ -d "$CLAUDE_DIR/templates" ]]; then
     FINAL_TEMPLATE_COUNT=$(find "$CLAUDE_DIR/templates" -name "*.md" | wc -l)
     echo "  📄 Templates installed: $FINAL_TEMPLATE_COUNT"
+fi
+
+if [[ -d "$CLAUDE_DIR/agents" ]]; then
+    FINAL_AGENT_COUNT=$(find "$CLAUDE_DIR/agents" -name "*.md" | wc -l)
+    echo "  🤖 Agents installed: $FINAL_AGENT_COUNT"
 fi
 
 echo
