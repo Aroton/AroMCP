@@ -146,7 +146,7 @@ class ExecutionContext:
 
     def get_nested_loop_variables(self) -> dict[str, Any]:
         """Get loop variables from all nested loops, with innermost taking precedence.
-        
+
         Returns:
             Dictionary containing loop variables from all active loops
         """
@@ -193,24 +193,20 @@ class ExecutionContext:
     def get_scoped_variables(self) -> dict[str, dict[str, Any]]:
         """
         Get all variables organized by scope for template evaluation.
-        
+
         Returns:
             Dictionary with scopes: global, local (current frame), loop (nested loops)
         """
-        scoped_vars = {
-            "global": dict(self.global_variables),
-            "local": {},
-            "loop": {}
-        }
-        
+        scoped_vars = {"global": dict(self.global_variables), "local": {}, "loop": {}}
+
         # Add current frame's local variables
         current_frame = self.current_frame()
         if current_frame:
             scoped_vars["local"] = dict(current_frame.local_variables)
-        
+
         # Add nested loop variables (innermost takes precedence)
         scoped_vars["loop"] = self.get_nested_loop_variables()
-        
+
         return scoped_vars
 
     def get_variable(self, name: str) -> Any:
@@ -303,7 +299,6 @@ class ExecutionContext:
     def is_complete(self) -> bool:
         """Check if the entire execution is complete."""
         return len(self.execution_stack) == 0 and self.all_sub_agent_tasks_complete()
-
 
 
 class ExecutionContextManager:

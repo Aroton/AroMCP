@@ -5,8 +5,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from aromcp.build_server.tools.lint_project import lint_project_impl
 from aromcp.build_server.models.build_models import LintProjectResponse
+from aromcp.build_server.tools.lint_project import lint_project_impl
 
 
 class TestLintProject:
@@ -53,10 +53,10 @@ class TestLintProject:
                     assert len(result.issues) == 1
                     # Handle both dataclass and dict issues
                     issue = result.issues[0]
-                    if hasattr(issue, 'rule'):
+                    if hasattr(issue, "rule"):
                         assert issue.rule == "no-console"
                     else:
-                        assert issue['rule'] == "no-console"
+                        assert issue["rule"] == "no-console"
                 else:
                     assert "issues" in result
                     assert len(result["issues"]) == 1
@@ -120,10 +120,10 @@ class TestLintProject:
                     assert not result.check_again  # No fixable issues
                     # Handle both dataclass and dict issues
                     issue = result.issues[0]
-                    if hasattr(issue, 'rule'):
+                    if hasattr(issue, "rule"):
                         assert issue.rule == "no-console"
                     else:
-                        assert issue['rule'] == "no-console"
+                        assert issue["rule"] == "no-console"
                 else:
                     assert "issues" in result
                     assert len(result["issues"]) == 1  # Only shows first file's issues
@@ -286,12 +286,12 @@ class TestLintProject:
                     assert result.fixable_issues == 1  # Should include fixable count
                     # Handle both dataclass and dict issues
                     issue = result.issues[0]
-                    if hasattr(issue, 'rule'):
+                    if hasattr(issue, "rule"):
                         assert issue.rule == "no-console"
                         assert issue.fixable
                     else:
-                        assert issue['rule'] == "no-console"
-                        assert issue['fixable']
+                        assert issue["rule"] == "no-console"
+                        assert issue["fixable"]
                 else:
                     assert "issues" in result
                     assert len(result["issues"]) == 1

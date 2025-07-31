@@ -9,9 +9,9 @@ import copy
 import threading
 from typing import Any
 
+from ..workflow.context import ExecutionContext
 from .models import ComputedFieldError, InvalidPathError, StateSchema, WorkflowState
 from .transformer import CascadingUpdateCalculator, DependencyResolver, TransformationEngine
-from ..workflow.context import ExecutionContext
 
 
 class StateManager:
@@ -62,8 +62,7 @@ class StateManager:
 
     def _setup_transformations(self) -> None:
         """Initialize transformation and dependency resolution components"""
-        from .models import CircularDependencyError
-        
+
         schema_dict = {"computed": self._schema.computed, "inputs": self._schema.inputs, "state": self._schema.state}
 
         self._dependency_resolver = DependencyResolver(schema_dict)
@@ -189,7 +188,7 @@ class StateManager:
     def read(self, workflow_id: str, paths: list[str] | None = None) -> dict[str, Any]:
         """
         Read workflow state with nested structure
-        
+
         Automatically computes all computed fields when state is accessed.
 
         Args:
@@ -210,73 +209,75 @@ class StateManager:
                 raise KeyError(f"Workflow '{workflow_id}' not found")
 
             state = self._states[workflow_id]
-            
+
             # Ensure all computed fields are up to date
             self._ensure_computed_fields_current(state)
-            
+
             # Return nested structure with backward compatibility
             return {
                 "inputs": dict(state.inputs),
-                "computed": dict(state.computed), 
+                "computed": dict(state.computed),
                 "state": dict(state.state),
-                "raw": dict(state.inputs)  # Backward compatibility alias
+                "raw": dict(state.inputs),  # Backward compatibility alias
             }
 
     def get_state(self, workflow_id: str | None = None) -> dict[str, Any]:
         """
         Get the current state for a workflow or return default empty state.
-        
+
         This method is used by test mocks and provides backward compatibility.
-        
+
         Args:
             workflow_id: Optional workflow identifier. If None, returns empty state.
-            
+
         Returns:
             Current workflow state or empty dict if workflow doesn't exist
         """
         if workflow_id is None:
             return {}
-            
+
         lock = self._get_workflow_lock(workflow_id)
-        
+
         with lock:
             if workflow_id not in self._states:
                 return {}
-                
+
             state = self._states[workflow_id]
-            
+
             # Return simple flattened state for compatibility
             result = {}
             result.update(state.state)
             result.update(state.inputs)
             result.update(state.computed)
-            
+
             return result
 
     def get_workflow_state(self, workflow_id: str) -> dict[str, Any]:
         """
         Get the current state for a workflow including workflow status.
-        
+
         Args:
             workflow_id: The workflow ID to get state for.
-            
+
         Returns:
             Current state dict with status field or empty dict if workflow doesn't exist
         """
         state = self.get_state(workflow_id)
-        
+
         # Add status field from workflow instance if available
         # This is a bit of a hack, but necessary for test compatibility
         # In a real implementation, this would be passed from the executor
-        if hasattr(self, '_workflow_statuses'):
-            state['status'] = self._workflow_statuses.get(workflow_id, 'unknown')
+        if hasattr(self, "_workflow_statuses"):
+            state["status"] = self._workflow_statuses.get(workflow_id, "unknown")
         else:
             # Default status based on state content
-            state['status'] = 'completed' if state else 'unknown'
-            
+            state["status"] = "completed" if state else "unknown"
+
         return state
 
-    def update(self, workflow_id: str, updates: list[dict[str, Any]], context: ExecutionContext | None = None) -> dict[str, Any]:
+    def update(
+        self, workflow_id: str, updates: list[dict[str, Any]], context: ExecutionContext | None = None
+    ) -> dict[str, Any]:
         """
         Apply atomic updates to workflow state
 
@@ -332,7 +333,7 @@ class StateManager:
                             self._apply_single_update(state, path, value, operation)
                     else:
                         self._apply_single_update(state, path, value, operation)
-                    
+
                     changed_paths.append(path)
 
                 # Trigger cascading transformations if schema is defined
@@ -351,7 +352,7 @@ class StateManager:
                                 field_name = path.split(".", 1)[1]
                                 normalized_paths.extend([field_name, f"this.{field_name}"])
                             elif path.startswith("inputs."):
-                                # For input paths, add the simple field name  
+                                # For input paths, add the simple field name
                                 field_name = path.split(".", 1)[1]
                                 normalized_paths.append(field_name)
                     self._update_computed_fields(state, normalized_paths)
@@ -380,7 +381,7 @@ class StateManager:
         # Path must have tier prefix
         if "." not in path:
             raise InvalidPathError(f"Path must have tier prefix: {path}")
-            
+
         tier, field_path = path.split(".", 1)
 
         # Handle backward compatibility: map "raw" to "inputs"
@@ -459,8 +460,9 @@ class StateManager:
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
-    def _apply_scoped_update(self, state: WorkflowState, path: str, value: Any, 
-                           operation: str, context: ExecutionContext | None = None) -> None:
+    def _apply_scoped_update(
+        self, state: WorkflowState, path: str, value: Any, operation: str, context: ExecutionContext | None = None
+    ) -> None:
         """
         Apply a scoped update operation to the appropriate storage location
 
@@ -473,9 +475,9 @@ class StateManager:
         """
         if "." not in path:
             raise InvalidPathError(f"Invalid scoped path: {path}")
-        
+
         scope, field_path = path.split(".", 1)
-        
+
         if scope == "this":
             # Route to workflow state
             self._apply_nested_update(state.state, field_path, value, operation)
@@ -490,8 +492,7 @@ class StateManager:
         else:
             raise InvalidPathError(f"Unknown scope: {scope}")
 
-    def _apply_nested_update(self, target_dict: dict[str, Any], field_path: str, 
-                           value: Any, operation: str) -> None:
+    def _apply_nested_update(self, target_dict: dict[str, Any], field_path: str, value: Any, operation: str) -> None:
         """
         Apply update operation to nested dictionary structure
 
@@ -548,19 +549,19 @@ class StateManager:
     def _ensure_computed_fields_current(self, state: WorkflowState) -> None:
         """
         Ensure all computed fields are up to date
-        
+
         This method computes all defined computed fields regardless of what changed.
         Should be called when reading state to ensure computed fields are current.
-        
+
         Args:
             state: WorkflowState to update computed fields for
         """
         if not self._cascade_calculator:
             return
-            
+
         # Get all computed field names
         computed_fields = list(self._cascade_calculator.dependencies.keys())
-        
+
         # Compute each field
         for field_name in computed_fields:
             try:
@@ -608,12 +609,12 @@ class StateManager:
         # This provides access to 'this' context in expressions like "this.firstName + ' ' + this.lastName"
         # IMPORTANT: Get fresh context each time to include recently computed fields
         context = self.get_flattened_view(state)
-        
+
         # Remove the current field from context to avoid stale data
         # When computing displayName, we don't want the old displayName value in the context
         if field_name in context:
             del context[field_name]
-        
+
         # For backward compatibility, also gather individual input values
         inputs = []
         for dep_path in dependencies:
@@ -623,13 +624,14 @@ class StateManager:
         # Execute transformation with appropriate input
         # Check if expression uses 'input' as a standalone variable (not as substring)
         import re
-        uses_input_variable = bool(re.search(r'\binput\b', transform))
-        
+
+        uses_input_variable = bool(re.search(r"\binput\b", transform))
+
         if uses_input_variable:
-            # Transform uses 'input' variable 
+            # Transform uses 'input' variable
             # Check if expression uses input directly (like "input.filter") vs array access (like "input[0]")
-            uses_input_directly = bool(re.search(r'\binput\.[a-zA-Z]', transform))
-            
+            uses_input_directly = bool(re.search(r"\binput\.[a-zA-Z]", transform))
+
             # For single dependency with direct input usage, pass value directly
             # For array access or multiple dependencies, pass the array
             if len(inputs) == 1 and uses_input_directly:
@@ -718,25 +720,26 @@ class StateManager:
             # Default to fallback behavior
             fallback = field_info.get("fallback", None)
             state.computed[field_name] = fallback
-    
-    def initialize_state(self, inputs: dict[str, Any] = None, default_state: dict[str, Any] = None, 
-                        state_schema: dict[str, Any] = None, workflow_id: str = "default") -> None:
+
+    def initialize_state(
+        self,
+        inputs: dict[str, Any] = None,
+        default_state: dict[str, Any] = None,
+        state_schema: dict[str, Any] = None,
+        workflow_id: str = "default",
+    ) -> None:
         """Initialize workflow state with initial values and schema."""
         lock = self._get_workflow_lock(workflow_id)
-        
+
         with lock:
             # Create new state with provided initial values
             if inputs is None:
                 inputs = {}
             if default_state is None:
                 default_state = {}
-                
-            state = WorkflowState(
-                inputs=inputs,
-                state=default_state,
-                computed={}
-            )
-            
+
+            state = WorkflowState(inputs=inputs, state=default_state, computed={})
+
             # Update schema if provided
             if state_schema:
                 if isinstance(state_schema, dict):
@@ -749,25 +752,25 @@ class StateManager:
                                 "from": field_config["dependencies"],
                                 "transform": field_config["expression"],
                                 "on_error": field_config.get("on_error", "use_fallback"),
-                                "fallback": field_config.get("fallback", None)
+                                "fallback": field_config.get("fallback", None),
                             }
                         else:
                             computed_schema[field_name] = field_config
-                    
+
                     self._schema = StateSchema(
                         inputs=state_schema.get("inputs", {}),
                         state=state_schema.get("state", {}),
-                        computed=computed_schema
+                        computed=computed_schema,
                     )
                 elif isinstance(state_schema, StateSchema):
                     self._schema = state_schema
-                
+
                 # Reinitialize transformations with new schema
                 if self._schema.computed:
                     self._setup_transformations()
-            
+
             self._states[workflow_id] = state
-            
+
             # Process computed fields if any
             if self._schema.computed and self._cascade_calculator:
                 try:
@@ -775,21 +778,21 @@ class StateManager:
                     # This ensures proper cascading even when all fields are new
                     all_computed_fields = list(self._cascade_calculator.dependencies.keys())
                     self._process_computed_fields(state, all_computed_fields)
-                except Exception as e:
+                except Exception:
                     # Log error but continue - computed fields are not critical for initialization
                     pass
-    
+
     def get_flattened_state(self, workflow_id: str = "default") -> dict[str, Any]:
         """Get flattened state view (alias for get_flattened_view)."""
         state = self._get_or_create_state(workflow_id)
         # Ensure all computed fields are up to date
         self._ensure_computed_fields_current(state)
         return self.get_flattened_view(state)
-    
+
     def update_state(self, updates: list[dict[str, Any]], workflow_id: str = "default") -> dict[str, Any]:
         """Update state using the standard update interface expected by tests."""
         return self.update(workflow_id, updates)
-    
+
     def _process_computed_fields(self, state: WorkflowState, field_names: list[str]) -> None:
         """Process computed fields in the given order."""
         for field_name in field_names:
@@ -799,14 +802,14 @@ class StateManager:
                 # Handle errors based on field configuration
                 field_info = self._cascade_calculator.dependencies[field_name]
                 self._handle_computation_error(state, field_name, field_info, e)
-    
+
     def _recalculate_computed_fields(self, workflow_id: str = "default") -> None:
         """Recalculate all computed fields for a workflow."""
         state = self._get_or_create_state(workflow_id)
         if self._cascade_calculator:
             computed_fields = list(self._cascade_calculator.dependencies.keys())
             self._process_computed_fields(state, computed_fields)
-    
+
     def _calculate_computed_field(self, field_name: str, workflow_id: str = "default") -> Any:
         """Calculate a specific computed field."""
         state = self._get_or_create_state(workflow_id)

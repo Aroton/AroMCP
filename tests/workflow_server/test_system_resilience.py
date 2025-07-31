@@ -15,29 +15,34 @@ Focus: Resource exhaustion handling, circuit breakers, high availability, horizo
 Pillar: Performance & Reliability
 """
 
-import pytest
-import time
-import threading
-import psutil
 import tempfile
-import os
-from unittest.mock import Mock, patch, MagicMock, call
-from typing import Dict, Any, List
-import asyncio
-import queue
-import sqlite3
+import threading
+import time
+
+import pytest
 
 from aromcp.workflow_server.monitoring.test_adapters import (
-    MetricsCollectorTestAdapter as MetricsCollector,
-    HAManagerTestAdapter as HAManager,
-    ScalingManagerTestAdapter as ScalingManager,
     ConnectionManagerTestAdapter as ConnectionManager,
-    ProductionIntegrationTestAdapter as ProductionIntegration
 )
-from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowInstance
-from aromcp.workflow_server.state.manager import StateManager
+from aromcp.workflow_server.monitoring.test_adapters import (
+    HAManagerTestAdapter as HAManager,
+)
+from aromcp.workflow_server.monitoring.test_adapters import (
+    MetricsCollectorTestAdapter as MetricsCollector,
+)
+from aromcp.workflow_server.monitoring.test_adapters import (
+    ProductionIntegrationTestAdapter as ProductionIntegration,
+)
+from aromcp.workflow_server.monitoring.test_adapters import (
+    ScalingManagerTestAdapter as ScalingManager,
+)
+from aromcp.workflow_server.workflow.resource_manager import (
+    CircuitBreakerOpenError,
+    OperationFailureError,
+    ResourceExhaustionError,
+    WorkflowResourceManager,
+)
 from aromcp.workflow_server.workflow.workflow_state import WorkflowState
-from aromcp.workflow_server.workflow.resource_manager import WorkflowResourceManager, ResourceExhaustionError, CircuitBreakerOpenError, OperationFailureError
 
 
 class TestSystemResilience:
@@ -61,7 +66,7 @@ class TestSystemResilience:
     @pytest.fixture
     def connection_manager(self):
         """Create connection manager with test database."""
-        temp_db = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
+        temp_db = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
         temp_db.close()
         return ConnectionManager(database_url=f"sqlite:///{temp_db.name}", pool_size=5)
 
@@ -96,21 +101,13 @@ class TestSystemResilience:
         for workflow in workflow_resources:
             try:
                 allocation_result = resource_manager.allocate_resources(
-                    workflow_id=workflow["id"],
-                    memory_mb=workflow["memory_mb"],
-                    cpu_percent=workflow["cpu_percent"]
+                    workflow_id=workflow["id"], memory_mb=workflow["memory_mb"], cpu_percent=workflow["cpu_percent"]
                 )
-                allocation_results.append({
-                    "workflow_id": workflow["id"],
-                    "allocated": True,
-                    "result": allocation_result
-                })
+                allocation_results.append(
+                    {"workflow_id": workflow["id"], "allocated": True, "result": allocation_result}
+                )
             except ResourceExhaustionError as e:
-                allocation_results.append({
-                    "workflow_id": workflow["id"],
-                    "allocated": False,
-                    "error": str(e)
-                })
+                allocation_results.append({"workflow_id": workflow["id"], "allocated": False, "error": str(e)})
 
         # Verify resource exhaustion handling
         successful_allocations = [r for r in allocation_results if r["allocated"]]
@@ -152,21 +149,21 @@ class TestSystemResilience:
             state={
                 "inputs": {"config": "production"},
                 "state": {"processed_files": 15, "errors": 2},
-                "computed": {"completion_rate": 0.4}
+                "computed": {"completion_rate": 0.4},
             },
             execution_context={
                 "start_time": time.time() - 120,  # Started 2 minutes ago
                 "checkpoint_data": {
                     "last_checkpoint": time.time() - 30,
                     "completed_steps": ["step1", "step2", "step3"],
-                    "pending_steps": ["step4", "step5", "step6", "step7", "step8"]
-                }
-            }
+                    "pending_steps": ["step4", "step5", "step6", "step7", "step8"],
+                },
+            },
         )
 
         # Simulate system failure and recovery
         resource_manager.enable_failure_recovery(True)
-        
+
         # Store workflow state before failure
         resource_manager.store_recovery_checkpoint(pre_failure_state)
 
@@ -179,11 +176,11 @@ class TestSystemResilience:
         # Verify recovery
         assert len(recovered_workflows) == 1
         recovered_workflow = recovered_workflows[0]
-        
+
         assert recovered_workflow.workflow_id == "wf_recovery_test"
         assert recovered_workflow.status == "recovering"
         assert recovered_workflow.current_step_index == 3  # Resume from checkpoint
-        
+
         # Verify state preservation
         assert recovered_workflow.state["state"]["processed_files"] == 15
         assert recovered_workflow.state["state"]["errors"] == 2
@@ -207,7 +204,7 @@ class TestSystemResilience:
         circuit_breaker_configs = [
             {"operation": "database_query", "failure_threshold": 5, "timeout": 10, "recovery_time": 30},
             {"operation": "external_api_call", "failure_threshold": 3, "timeout": 5, "recovery_time": 20},
-            {"operation": "file_system_operation", "failure_threshold": 10, "timeout": 15, "recovery_time": 15}
+            {"operation": "file_system_operation", "failure_threshold": 10, "timeout": 15, "recovery_time": 15},
         ]
 
         for config in circuit_breaker_configs:
@@ -215,14 +212,14 @@ class TestSystemResilience:
                 operation_type=config["operation"],
                 failure_threshold=config["failure_threshold"],
                 timeout_seconds=config["timeout"],
-                recovery_time_seconds=config["recovery_time"]
+                recovery_time_seconds=config["recovery_time"],
             )
 
         # Simulate failures to trigger circuit breakers
         failure_scenarios = [
             # Database failures
             *[{"operation": "database_query", "should_fail": True} for _ in range(6)],  # Exceed threshold
-            # API failures  
+            # API failures
             *[{"operation": "external_api_call", "should_fail": True} for _ in range(4)],  # Exceed threshold
             # File system operations (below threshold)
             *[{"operation": "file_system_operation", "should_fail": True} for _ in range(3)],  # Under threshold
@@ -236,14 +233,14 @@ class TestSystemResilience:
                 result = resource_manager.execute_protected_operation(
                     operation_type=scenario["operation"],
                     operation_params={"test": True},
-                    simulate_failure=scenario["should_fail"]
+                    simulate_failure=scenario["should_fail"],
                 )
                 # Should not reach here if circuit breaker is open
                 circuit_breaker_states[scenario["operation"]] = "closed"
             except CircuitBreakerOpenError:
                 circuit_breaker_states[scenario["operation"]] = "open"
             except OperationFailureError:
-                # Operation failed but circuit breaker still closed  
+                # Operation failed but circuit breaker still closed
                 circuit_breaker_states[scenario["operation"]] = "closed"
 
         # Verify circuit breaker activation
@@ -253,11 +250,11 @@ class TestSystemResilience:
 
         # Test circuit breaker recovery
         time.sleep(0.5)  # Wait for recovery (shortened for testing)
-        
+
         # Attempt operations after recovery window
         recovery_attempts = [
             {"operation": "database_query", "should_fail": False},  # Healthy operation
-            {"operation": "external_api_call", "should_fail": False}  # Healthy operation
+            {"operation": "external_api_call", "should_fail": False},  # Healthy operation
         ]
 
         recovery_results = {}
@@ -266,7 +263,7 @@ class TestSystemResilience:
                 result = resource_manager.execute_protected_operation(
                     operation_type=attempt["operation"],
                     operation_params={"test": True},
-                    simulate_failure=attempt["should_fail"]
+                    simulate_failure=attempt["should_fail"],
                 )
                 recovery_results[attempt["operation"]] = "recovered"
             except CircuitBreakerOpenError:
@@ -284,10 +281,10 @@ class TestSystemResilience:
         # Configure multiple execution instances
         execution_instances = [
             {"id": "instance_1", "capacity": 100, "current_load": 20, "health": "healthy"},
-            {"id": "instance_2", "capacity": 100, "current_load": 60, "health": "healthy"}, 
+            {"id": "instance_2", "capacity": 100, "current_load": 60, "health": "healthy"},
             {"id": "instance_3", "capacity": 100, "current_load": 15, "health": "healthy"},
             {"id": "instance_4", "capacity": 100, "current_load": 90, "health": "degraded"},
-            {"id": "instance_5", "capacity": 100, "current_load": 5, "health": "healthy"}
+            {"id": "instance_5", "capacity": 100, "current_load": 5, "health": "healthy"},
         ]
 
         for instance in execution_instances:
@@ -295,7 +292,7 @@ class TestSystemResilience:
                 instance_id=instance["id"],
                 capacity=instance["capacity"],
                 current_load=instance["current_load"],
-                health_status=instance["health"]
+                health_status=instance["health"],
             )
 
         # Simulate incoming workflows with different resource requirements
@@ -305,7 +302,7 @@ class TestSystemResilience:
             {"id": "wf_heavy", "resource_requirement": 40, "priority": "high"},
             {"id": "wf_batch_1", "resource_requirement": 15, "priority": "low"},
             {"id": "wf_batch_2", "resource_requirement": 20, "priority": "medium"},
-            {"id": "wf_critical", "resource_requirement": 30, "priority": "critical"}
+            {"id": "wf_critical", "resource_requirement": 30, "priority": "critical"},
         ]
 
         # Distribute workflows using load balancing
@@ -314,7 +311,7 @@ class TestSystemResilience:
             assignment = scaling_manager.assign_workflow_to_instance(
                 workflow_id=workflow["id"],
                 resource_requirement=workflow["resource_requirement"],
-                priority=workflow["priority"]
+                priority=workflow["priority"],
             )
             distribution_results.append(assignment)
 
@@ -338,7 +335,7 @@ class TestSystemResilience:
         # Critical priority workflow should get best available instance
         critical_assignment = next(r for r in distribution_results if r["workflow_id"] == "wf_critical")
         critical_instance_id = critical_assignment["assigned_instance"]
-        
+
         # Should be assigned to instance with good health and available capacity
         assigned_instance = next(i for i in execution_instances if i["id"] == critical_instance_id)
         assert assigned_instance["health"] == "healthy"
@@ -359,22 +356,19 @@ class TestSystemResilience:
         cluster_nodes = [
             {"id": "node_1", "role": "primary", "health": "healthy", "load": 45},
             {"id": "node_2", "role": "secondary", "health": "healthy", "load": 30},
-            {"id": "node_3", "role": "secondary", "health": "healthy", "load": 25}
+            {"id": "node_3", "role": "secondary", "health": "healthy", "load": 25},
         ]
 
         for node in cluster_nodes:
             ha_manager.register_cluster_node(
-                node_id=node["id"],
-                role=node["role"],
-                health_status=node["health"],
-                current_load=node["load"]
+                node_id=node["id"], role=node["role"], health_status=node["health"], current_load=node["load"]
             )
 
         # Simulate active workflows on primary node
         active_workflows = [
             {"id": "wf_ha_1", "node": "node_1", "status": "running", "progress": 0.3},
             {"id": "wf_ha_2", "node": "node_1", "status": "running", "progress": 0.7},
-            {"id": "wf_ha_3", "node": "node_1", "status": "paused", "progress": 0.5}
+            {"id": "wf_ha_3", "node": "node_1", "status": "paused", "progress": 0.5},
         ]
 
         for workflow in active_workflows:
@@ -382,7 +376,7 @@ class TestSystemResilience:
                 workflow_id=workflow["id"],
                 current_node=workflow["node"],
                 status=workflow["status"],
-                progress=workflow["progress"]
+                progress=workflow["progress"],
             )
 
         # Simulate primary node failure
@@ -409,7 +403,7 @@ class TestSystemResilience:
             migrated_wf = workflow_migrations[original_wf["id"]]
             assert migrated_wf["progress"] == original_wf["progress"]
             assert migrated_wf["original_status"] == original_wf["status"]
-            
+
             # Migrated workflows should be in "recovering" state initially
             assert migrated_wf["current_status"] == "recovering"
 
@@ -437,7 +431,7 @@ class TestSystemResilience:
         # Start with baseline instances
         initial_instances = [
             {"id": "base_1", "capacity": 100, "load": 30},
-            {"id": "base_2", "capacity": 100, "load": 25}
+            {"id": "base_2", "capacity": 100, "load": 25},
         ]
 
         for instance in initial_instances:
@@ -446,8 +440,8 @@ class TestSystemResilience:
 
         # Simulate increasing load over time
         load_scenarios = [
-            {"time": 0, "new_workflows": 5, "avg_workflow_load": 15},    # Total: 5*15 = 75
-            {"time": 10, "new_workflows": 8, "avg_workflow_load": 20},   # Total: 8*20 = 160  
+            {"time": 0, "new_workflows": 5, "avg_workflow_load": 15},  # Total: 5*15 = 75
+            {"time": 10, "new_workflows": 8, "avg_workflow_load": 20},  # Total: 8*20 = 160
             {"time": 20, "new_workflows": 12, "avg_workflow_load": 18},  # Total: 12*18 = 216
             {"time": 30, "new_workflows": 15, "avg_workflow_load": 22},  # Total: 15*22 = 330 - triggers scaling
             {"time": 40, "new_workflows": 20, "avg_workflow_load": 25},  # Total: 20*25 = 500 - more scaling
@@ -467,16 +461,16 @@ class TestSystemResilience:
 
             if scaling_decision["action"] == "scale_up":
                 # Execute scaling up
-                scale_result = scaling_manager.scale_up(
-                    instances_to_add=scaling_decision["instances_needed"]
+                scale_result = scaling_manager.scale_up(instances_to_add=scaling_decision["instances_needed"])
+                scaling_events.append(
+                    {
+                        "time": scenario["time"],
+                        "action": "scale_up",
+                        "instances_added": scale_result["instances_added"],
+                        "total_instances": scale_result["total_instances"],
+                    }
                 )
-                scaling_events.append({
-                    "time": scenario["time"],
-                    "action": "scale_up",
-                    "instances_added": scale_result["instances_added"],
-                    "total_instances": scale_result["total_instances"]
-                })
-                
+
                 # Distribute load across new instances
                 scaling_manager.redistribute_load()
 
@@ -498,10 +492,8 @@ class TestSystemResilience:
         scale_down_decision = scaling_manager.evaluate_scaling_need()
 
         if scale_down_decision["action"] == "scale_down":
-            scale_result = scaling_manager.scale_down(
-                instances_to_remove=scale_down_decision["instances_excess"]
-            )
-            
+            scale_result = scaling_manager.scale_down(instances_to_remove=scale_down_decision["instances_excess"])
+
             # Verify scale-down preserves minimum instances
             assert scale_result["total_instances"] >= scaling_manager.min_instances
             assert scale_result["instances_removed"] > 0
@@ -514,39 +506,43 @@ class TestSystemResilience:
         # Test concurrent database operations
         connection_usage_log = []
         operation_results = []
-        
+
         def database_operation(operation_id, duration=0.1):
             """Simulate database operation requiring connection."""
             try:
                 connection = connection_manager.get_connection()
-                connection_usage_log.append({
-                    "operation_id": operation_id,
-                    "timestamp": time.time(),
-                    "action": "acquired",
-                    "connection_id": id(connection),
-                    "pool_size": connection_manager.get_pool_size(),
-                    "active_connections": connection_manager.get_active_connection_count()
-                })
-                
+                connection_usage_log.append(
+                    {
+                        "operation_id": operation_id,
+                        "timestamp": time.time(),
+                        "action": "acquired",
+                        "connection_id": id(connection),
+                        "pool_size": connection_manager.get_pool_size(),
+                        "active_connections": connection_manager.get_active_connection_count(),
+                    }
+                )
+
                 # Simulate database work
                 cursor = connection.cursor()
                 cursor.execute("SELECT 1")
                 result = cursor.fetchone()
                 time.sleep(duration)
-                
+
                 # Return connection to pool
                 connection_manager.return_connection(connection)
-                connection_usage_log.append({
-                    "operation_id": operation_id,
-                    "timestamp": time.time(),
-                    "action": "returned",
-                    "connection_id": id(connection),
-                    "pool_size": connection_manager.get_pool_size(),
-                    "active_connections": connection_manager.get_active_connection_count()
-                })
-                
+                connection_usage_log.append(
+                    {
+                        "operation_id": operation_id,
+                        "timestamp": time.time(),
+                        "action": "returned",
+                        "connection_id": id(connection),
+                        "pool_size": connection_manager.get_pool_size(),
+                        "active_connections": connection_manager.get_active_connection_count(),
+                    }
+                )
+
                 operation_results.append({"operation_id": operation_id, "success": True, "result": result})
-                
+
             except Exception as e:
                 operation_results.append({"operation_id": operation_id, "success": False, "error": str(e)})
 
@@ -557,7 +553,7 @@ class TestSystemResilience:
             threads.append(thread)
 
         start_time = time.time()
-        
+
         # Start all operations concurrently
         for thread in threads:
             thread.start()
@@ -602,7 +598,7 @@ class TestSystemResilience:
             {"name": "prometheus", "endpoint": "http://prometheus:9090", "scrape_interval": 15},
             {"name": "grafana", "endpoint": "http://grafana:3000", "dashboard_id": "workflow_metrics"},
             {"name": "datadog", "api_key": "mock_key", "tags": ["env:production", "service:workflow"]},
-            {"name": "newrelic", "license_key": "mock_license", "app_name": "workflow_server"}
+            {"name": "newrelic", "license_key": "mock_license", "app_name": "workflow_server"},
         ]
 
         for system in monitoring_systems:
@@ -616,9 +612,8 @@ class TestSystemResilience:
                 "memory_usage_percent": 78,
                 "disk_usage_percent": 45,
                 "network_io_mbps": 12.5,
-                "uptime_seconds": 86400  # 24 hours
+                "uptime_seconds": 86400,  # 24 hours
             },
-            
             # Workflow performance metrics
             "workflow_performance": {
                 "active_workflows": 23,
@@ -626,24 +621,22 @@ class TestSystemResilience:
                 "failed_workflows_24h": 8,
                 "average_workflow_duration": 34.2,
                 "p95_workflow_duration": 67.8,
-                "workflow_success_rate": 0.945
+                "workflow_success_rate": 0.945,
             },
-            
             # Resource utilization metrics
             "resource_utilization": {
                 "thread_pool_usage": 0.72,
                 "connection_pool_usage": 0.68,
                 "memory_pool_usage": 0.81,
-                "cache_hit_rate": 0.89
+                "cache_hit_rate": 0.89,
             },
-            
             # Business metrics
             "business_metrics": {
                 "workflows_per_minute": 2.4,
                 "step_execution_rate": 15.3,
                 "user_interactions_per_hour": 45,
-                "error_rate_per_thousand": 5.5
-            }
+                "error_rate_per_thousand": 5.5,
+            },
         }
 
         # Push metrics to all configured systems
@@ -651,7 +644,7 @@ class TestSystemResilience:
 
         # Verify metrics publishing
         assert len(integration_results) == 4  # One result per monitoring system
-        
+
         for system_name, result in integration_results.items():
             assert result["status"] == "success"
             assert result["metrics_sent"] > 0
@@ -662,14 +655,12 @@ class TestSystemResilience:
             {"metric": "cpu_usage_percent", "threshold": 80, "severity": "warning"},
             {"metric": "memory_usage_percent", "threshold": 85, "severity": "critical"},
             {"metric": "workflow_success_rate", "threshold": 0.9, "operator": "<", "severity": "critical"},
-            {"metric": "error_rate_per_thousand", "threshold": 10, "operator": ">", "severity": "warning"}
+            {"metric": "error_rate_per_thousand", "threshold": 10, "operator": ">", "severity": "warning"},
         ]
 
         alerts_triggered = []
         for condition in alert_conditions:
-            alert_result = production_integration.evaluate_alert_condition(
-                condition, production_metrics
-            )
+            alert_result = production_integration.evaluate_alert_condition(condition, production_metrics)
             if alert_result["triggered"]:
                 alerts_triggered.append(alert_result)
 
@@ -680,10 +671,7 @@ class TestSystemResilience:
         assert len(alerts_triggered) == 0  # No alerts should trigger with current metrics
 
         # Test dashboard data export
-        dashboard_data = production_integration.generate_dashboard_data(
-            time_range="1h",
-            granularity="5m"
-        )
+        dashboard_data = production_integration.generate_dashboard_data(time_range="1h", granularity="5m")
 
         # Verify dashboard data structure
         assert "time_series" in dashboard_data
@@ -699,7 +687,7 @@ class TestSystemResilience:
         custom_queries = [
             "avg(workflow_duration) by (workflow_type)",
             "rate(workflow_failures[5m])",
-            "histogram_quantile(0.95, workflow_step_duration_bucket)"
+            "histogram_quantile(0.95, workflow_step_duration_bucket)",
         ]
 
         query_results = {}
@@ -726,14 +714,14 @@ class TestSystemResilienceIntegration:
         resource_manager = MetricsCollector(max_memory_mb=800, max_cpu_percent=75)
         ha_manager = HAManager(cluster_size=3, failover_timeout=15)
         scaling_manager = ScalingManager(min_instances=2, max_instances=8)
-        
+
         # Simulate production environment under stress
         initial_system_state = {
             "memory_usage": 60,  # 60% memory usage
-            "cpu_usage": 45,     # 45% CPU usage
+            "cpu_usage": 45,  # 45% CPU usage
             "active_workflows": 12,
             "healthy_nodes": 3,
-            "instance_count": 3
+            "instance_count": 3,
         }
 
         # Configure circuit breakers
@@ -765,8 +753,7 @@ class TestSystemResilienceIntegration:
             # Resource management response
             if current_state["memory_usage"] > 80:
                 resource_response = resource_manager.handle_resource_pressure(
-                    memory_usage=current_state["memory_usage"],
-                    cpu_usage=current_state["cpu_usage"]
+                    memory_usage=current_state["memory_usage"], cpu_usage=current_state["cpu_usage"]
                 )
                 responses.append({"component": "resource_manager", "action": resource_response})
 
@@ -786,26 +773,28 @@ class TestSystemResilienceIntegration:
             if current_state["memory_usage"] > 85 or current_state["cpu_usage"] > 70:
                 scaling_response = scaling_manager.handle_capacity_shortage(
                     current_instances=current_state["instance_count"],
-                    resource_pressure={"memory": current_state["memory_usage"], "cpu": current_state["cpu_usage"]}
+                    resource_pressure={"memory": current_state["memory_usage"], "cpu": current_state["cpu_usage"]},
                 )
                 responses.append({"component": "scaling_manager", "action": scaling_response})
-                
+
                 if scaling_response.get("scaled_up"):
                     current_state["instance_count"] += scaling_response["instances_added"]
                     # Scaling reduces per-instance resource usage
-                    current_state["memory_usage"] *= 0.8  
+                    current_state["memory_usage"] *= 0.8
                     current_state["cpu_usage"] *= 0.8
 
-            system_responses.append({
-                "time": event["time"],
-                "event": event["event"],
-                "system_state": current_state.copy(),
-                "responses": responses
-            })
+            system_responses.append(
+                {
+                    "time": event["time"],
+                    "event": event["event"],
+                    "system_state": current_state.copy(),
+                    "responses": responses,
+                }
+            )
 
         # Verify cascading failure prevention
         final_state = system_responses[-1]["system_state"]
-        
+
         # System should remain operational despite multiple failures
         assert final_state["memory_usage"] < 95  # Didn't reach complete exhaustion
         assert final_state["instance_count"] > initial_system_state["instance_count"]  # Scaled up to handle load
@@ -839,11 +828,11 @@ class TestSystemResilienceIntegration:
         """
         # Production SLA requirements
         sla_requirements = {
-            "uptime_percentage": 99.9,      # 99.9% uptime
-            "max_response_time_ms": 5000,   # 5 second max response
-            "error_rate_threshold": 0.01,   # 1% error rate max
-            "recovery_time_max_seconds": 30, # 30 second max recovery
-            "data_consistency": True         # No data loss during failures
+            "uptime_percentage": 99.9,  # 99.9% uptime
+            "max_response_time_ms": 5000,  # 5 second max response
+            "error_rate_threshold": 0.01,  # 1% error rate max
+            "recovery_time_max_seconds": 30,  # 30 second max recovery
+            "data_consistency": True,  # No data loss during failures
         }
 
         # Initialize production-grade resilience system
@@ -854,12 +843,12 @@ class TestSystemResilienceIntegration:
             base_load_workflows_per_hour=100,
             peak_load_multiplier=3.0,
             failure_injection_rate=0.05,  # 5% failure injection rate
-            failure_types=["node_failure", "network_partition", "resource_exhaustion", "database_timeout"]
+            failure_types=["node_failure", "network_partition", "resource_exhaustion", "database_timeout"],
         )
 
         # Verify SLA compliance
         sla_compliance = simulation_results["sla_compliance"]
-        
+
         assert sla_compliance["uptime_percentage"] >= sla_requirements["uptime_percentage"]
         assert sla_compliance["max_response_time_ms"] <= sla_requirements["max_response_time_ms"]
         assert sla_compliance["error_rate"] <= sla_requirements["error_rate_threshold"]
@@ -869,7 +858,9 @@ class TestSystemResilienceIntegration:
         # Verify resilience mechanisms effectiveness
         resilience_metrics = simulation_results["resilience_metrics"]
         assert resilience_metrics["failures_detected"] > 0
-        assert resilience_metrics["successful_recoveries"] >= resilience_metrics["failures_detected"] * 0.95  # 95% recovery rate
+        assert (
+            resilience_metrics["successful_recoveries"] >= resilience_metrics["failures_detected"] * 0.95
+        )  # 95% recovery rate
         assert resilience_metrics["cascading_failures_prevented"] >= 0
 
         # Verify production readiness score

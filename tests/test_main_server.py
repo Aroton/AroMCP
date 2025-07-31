@@ -26,7 +26,7 @@ class TestMainServer:
         tool_names = list(tools)
 
         # Expected tool names from each module (based on actual registrations)
-        filesystem_tools = ["list_files", "read_files", "write_files", "extract_method_signatures", "find_who_imports"]
+        filesystem_tools = ["list_files", "read_files", "write_files"]
 
         workflow_state_tools = [
             "workflow_state_read",
@@ -92,7 +92,9 @@ class TestMainServer:
         workflow_present = any("workflow" in name for name in tool_names)
         build_present = any("typescript" in name or "lint" in name or "test" in name for name in tool_names)
         # Check for TypeScript analysis tools
-        analysis_present = any("references" in name or "function_details" in name or "call_graph" in name for name in tool_names)
+        analysis_present = any(
+            "references" in name or "function_details" in name or "call_graph" in name for name in tool_names
+        )
         standards_present = any(
             "check_updates" in name
             or "register" in name

@@ -2,7 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -269,7 +269,7 @@ def create_workflow_file(workflows_dir: Path, workflow_name: str, content: str):
     return workflow_file
 
 
-def assert_tool_response_format(response: Dict[str, Any], success: bool = True):
+def assert_tool_response_format(response: dict[str, Any], success: bool = True):
     """Assert that a tool response follows the expected format."""
     if success:
         assert "data" in response, f"Success response missing 'data' field: {response}"
@@ -280,14 +280,14 @@ def assert_tool_response_format(response: Dict[str, Any], success: bool = True):
         assert "message" in response["error"], f"Error missing 'message' field: {response['error']}"
 
 
-def assert_workflow_state_structure(state: Dict[str, Any]):
+def assert_workflow_state_structure(state: dict[str, Any]):
     """Assert that workflow state follows the expected three-tier structure."""
     assert "state" in state, f"State missing 'state' tier: {state.keys()}"
     assert "computed" in state, f"State missing 'computed' tier: {state.keys()}"
     # The 'inputs' tier is optional and may not be present in all workflows
 
 
-def assert_step_response_format(step_response: Dict[str, Any]):
+def assert_step_response_format(step_response: dict[str, Any]):
     """Assert that a step response follows the expected batched format."""
     if step_response is None:
         return  # Workflow complete
@@ -306,7 +306,7 @@ def assert_step_response_format(step_response: Dict[str, Any]):
             assert "id" in step, f"Step missing 'id': {step}"
             assert "type" in step, f"Step missing 'type': {step}"
             assert "definition" in step, f"Step missing 'definition': {step}"
-        
+
         # Check for server completed steps
         if "server_completed_steps" in step_response:
             assert isinstance(step_response["server_completed_steps"], list)

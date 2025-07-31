@@ -4,9 +4,8 @@ This module tests the enhanced expression evaluator that supports scoped variabl
 syntax like {{ this.variable }}, {{ global.variable }}, {{ loop.item }}, and {{ inputs.parameter }}.
 """
 
-import pytest
 
-from aromcp.workflow_server.workflow.expressions import ExpressionError, ExpressionEvaluator
+from aromcp.workflow_server.workflow.expressions import ExpressionEvaluator
 
 
 class TestScopedVariableResolution:
@@ -16,12 +15,7 @@ class TestScopedVariableResolution:
         """Test basic 'this' scope variable resolution (AC 7.1)."""
         evaluator = ExpressionEvaluator()
         context = {"legacy_var": "old_value"}
-        scoped_context = {
-            "this": {
-                "variable": "this_value",
-                "config": {"setting": "enabled"}
-            }
-        }
+        scoped_context = {"this": {"variable": "this_value", "config": {"setting": "enabled"}}}
 
         # Test basic this scope
         result = evaluator.evaluate("this.variable", context, scoped_context)
@@ -36,11 +30,7 @@ class TestScopedVariableResolution:
         evaluator = ExpressionEvaluator()
         context = {}
         scoped_context = {
-            "global": {
-                "app_name": "MyApp",
-                "version": "1.0.0",
-                "settings": {"debug": True, "max_retries": 3}
-            }
+            "global": {"app_name": "MyApp", "version": "1.0.0", "settings": {"debug": True, "max_retries": 3}}
         }
 
         # Test basic global scope
@@ -59,11 +49,7 @@ class TestScopedVariableResolution:
         evaluator = ExpressionEvaluator()
         context = {}
         scoped_context = {
-            "loop": {
-                "item": "current_file.js",
-                "index": 2,
-                "metadata": {"size": 1024, "modified": "2024-01-01"}
-            }
+            "loop": {"item": "current_file.js", "index": 2, "metadata": {"size": 1024, "modified": "2024-01-01"}}
         }
 
         # Test basic loop scope
@@ -85,7 +71,7 @@ class TestScopedVariableResolution:
             "inputs": {
                 "file_path": "/path/to/file.js",
                 "options": {"verbose": True, "dry_run": False},
-                "filters": ["*.ts", "*.js"]
+                "filters": ["*.ts", "*.js"],
             }
         }
 
@@ -108,7 +94,7 @@ class TestScopedVariableResolution:
             "this": {"current_step": "validation"},
             "global": {"max_files": 100},
             "loop": {"item": "file1.ts", "index": 0},
-            "inputs": {"target_dir": "/src"}
+            "inputs": {"target_dir": "/src"},
         }
 
         # Test each scope works independently
@@ -129,14 +115,7 @@ class TestNestedPathNavigation:
             "this": {
                 "config": {
                     "database": {
-                        "connection": {
-                            "host": "localhost",
-                            "port": 5432,
-                            "ssl": {
-                                "enabled": True,
-                                "verify": False
-                            }
-                        }
+                        "connection": {"host": "localhost", "port": 5432, "ssl": {"enabled": True, "verify": False}}
                     }
                 }
             }
@@ -161,7 +140,7 @@ class TestNestedPathNavigation:
                 "items": [
                     {"name": "file1.js", "size": 100},
                     {"name": "file2.ts", "size": 200},
-                    {"name": "file3.jsx", "size": 150}
+                    {"name": "file3.jsx", "size": 150},
                 ]
             }
         }
@@ -184,16 +163,8 @@ class TestNestedPathNavigation:
         scoped_context = {
             "global": {
                 "projects": [
-                    {
-                        "name": "project1",
-                        "files": ["index.js", "utils.ts"],
-                        "config": {"env": "dev"}
-                    },
-                    {
-                        "name": "project2", 
-                        "files": ["main.py", "test.py"],
-                        "config": {"env": "prod"}
-                    }
+                    {"name": "project1", "files": ["index.js", "utils.ts"], "config": {"env": "dev"}},
+                    {"name": "project2", "files": ["main.py", "test.py"], "config": {"env": "prod"}},
                 ]
             }
         }
@@ -215,12 +186,7 @@ class TestLegacyCompatibility:
     def test_legacy_variables_still_work(self):
         """Test that legacy context variables still work without scoped_context."""
         evaluator = ExpressionEvaluator()
-        context = {
-            "user_name": "Alice",
-            "file_count": 5,
-            "is_ready": True,
-            "nested": {"prop": "value"}
-        }
+        context = {"user_name": "Alice", "file_count": 5, "is_ready": True, "nested": {"prop": "value"}}
 
         # Test legacy variables work without scoped_context
         assert evaluator.evaluate("user_name", context) == "Alice"
@@ -240,13 +206,8 @@ class TestLegacyCompatibility:
     def test_fallback_to_legacy_for_unscoped_vars(self):
         """Test fallback to legacy context for variables that don't match scope syntax."""
         evaluator = ExpressionEvaluator()
-        context = {
-            "regular_var": "regular_value",
-            "invalid": {"name": "invalid_value"}  # Not a valid scope prefix
-        }
-        scoped_context = {
-            "this": {"scoped_var": "scoped_value"}
-        }
+        context = {"regular_var": "regular_value", "invalid": {"name": "invalid_value"}}  # Not a valid scope prefix
+        scoped_context = {"this": {"scoped_var": "scoped_value"}}
 
         # Regular variables should use legacy context
         result = evaluator.evaluate("regular_var", context, scoped_context)
@@ -263,12 +224,8 @@ class TestLegacyCompatibility:
     def test_priority_scoped_over_legacy(self):
         """Test that scoped variables take priority when both exist."""
         evaluator = ExpressionEvaluator()
-        context = {
-            "this.variable": "legacy_value"  # Literal key with dot
-        }
-        scoped_context = {
-            "this": {"variable": "scoped_value"}
-        }
+        context = {"this.variable": "legacy_value"}  # Literal key with dot
+        scoped_context = {"this": {"variable": "scoped_value"}}
 
         # Scoped syntax should use scoped_context, not legacy literal key
         result = evaluator.evaluate("this.variable", context, scoped_context)
@@ -285,7 +242,7 @@ class TestScopeExpressions:
         scoped_context = {
             "this": {"count": 5, "enabled": True},
             "global": {"max_items": 10},
-            "inputs": {"threshold": 3}
+            "inputs": {"threshold": 3},
         }
 
         # Test comparison with scoped variables
@@ -301,10 +258,7 @@ class TestScopeExpressions:
         """Test scoped variables in arithmetic expressions."""
         evaluator = ExpressionEvaluator()
         context = {}
-        scoped_context = {
-            "loop": {"index": 2, "batch_size": 10},
-            "global": {"multiplier": 3}
-        }
+        scoped_context = {"loop": {"index": 2, "batch_size": 10}, "global": {"multiplier": 3}}
 
         # Test arithmetic with scoped variables
         result = evaluator.evaluate("loop.index * global.multiplier", context, scoped_context)
@@ -317,10 +271,7 @@ class TestScopeExpressions:
         """Test scoped variables in string operations."""
         evaluator = ExpressionEvaluator()
         context = {}
-        scoped_context = {
-            "inputs": {"prefix": "file_", "suffix": ".js"},
-            "loop": {"name": "test"}
-        }
+        scoped_context = {"inputs": {"prefix": "file_", "suffix": ".js"}, "loop": {"name": "test"}}
 
         # Test string concatenation
         result = evaluator.evaluate("inputs.prefix + loop.name + inputs.suffix", context, scoped_context)
@@ -330,10 +281,7 @@ class TestScopeExpressions:
         """Test scoped variables in ternary expressions."""
         evaluator = ExpressionEvaluator()
         context = {}
-        scoped_context = {
-            "this": {"mode": "dev", "verbose": True},
-            "global": {"log_level": "debug"}
-        }
+        scoped_context = {"this": {"mode": "dev", "verbose": True}, "global": {"log_level": "debug"}}
 
         # Test ternary with scoped variables
         result = evaluator.evaluate("this.mode == 'dev' ? global.log_level : 'info'", context, scoped_context)
@@ -350,9 +298,7 @@ class TestErrorHandling:
         """Test behavior with undefined scoped variables."""
         evaluator = ExpressionEvaluator()
         context = {}
-        scoped_context = {
-            "this": {"existing": "value"}
-        }
+        scoped_context = {"this": {"existing": "value"}}
 
         # Undefined scope should return None
         result = evaluator.evaluate("missing.variable", context, scoped_context)
@@ -366,9 +312,7 @@ class TestErrorHandling:
         """Test variables with invalid scope names fall back to legacy."""
         evaluator = ExpressionEvaluator()
         context = {"invalid": {"scope": "legacy_value"}}
-        scoped_context = {
-            "this": {"variable": "scoped_value"}
-        }
+        scoped_context = {"this": {"variable": "scoped_value"}}
 
         # Invalid scope should fall back to legacy
         result = evaluator.evaluate("invalid.scope", context, scoped_context)
@@ -382,10 +326,7 @@ class TestErrorHandling:
         """Test behavior when scope data is None."""
         evaluator = ExpressionEvaluator()
         context = {}
-        scoped_context = {
-            "this": None,
-            "global": {"valid": "value"}
-        }
+        scoped_context = {"this": None, "global": {"valid": "value"}}
 
         # None scope should return None
         result = evaluator.evaluate("this.anything", context, scoped_context)
@@ -399,9 +340,7 @@ class TestErrorHandling:
         """Test behavior with special property names."""
         evaluator = ExpressionEvaluator()
         context = {}
-        scoped_context = {
-            "this": {"_": "underscore_value", "normal": "normal_value"}
-        }
+        scoped_context = {"this": {"_": "underscore_value", "normal": "normal_value"}}
 
         # Special property names should work
         result = evaluator.evaluate("this._", context, scoped_context)
@@ -418,14 +357,8 @@ class TestMixedScopedUnscoped:
     def test_mixed_in_same_expression(self):
         """Test mixing scoped and unscoped variables in same expression."""
         evaluator = ExpressionEvaluator()
-        context = {
-            "legacy_count": 3,
-            "legacy_flag": True
-        }
-        scoped_context = {
-            "this": {"new_count": 7},
-            "inputs": {"multiplier": 2}
-        }
+        context = {"legacy_count": 3, "legacy_flag": True}
+        scoped_context = {"this": {"new_count": 7}, "inputs": {"multiplier": 2}}
 
         # Mix legacy and scoped variables
         result = evaluator.evaluate("legacy_count + this.new_count", context, scoped_context)
@@ -442,12 +375,7 @@ class TestMixedScopedUnscoped:
         """Test property access on scoped variables using AST property access."""
         evaluator = ExpressionEvaluator()
         context = {}
-        scoped_context = {
-            "this": {
-                "user": {"name": "Alice", "age": 30},
-                "items": ["a", "b", "c"]
-            }
-        }
+        scoped_context = {"this": {"user": {"name": "Alice", "age": 30}, "items": ["a", "b", "c"]}}
 
         # Test property access on scoped variables (this uses AST property_access, not identifier parsing)
         # Note: this.user resolves to the user object, then .name is property access
@@ -467,12 +395,8 @@ class TestArrayScopeHandling:
         context = {}
         scoped_context = {
             "loop": {
-                "items": [
-                    {"id": 1, "name": "first"},
-                    {"id": 2, "name": "second"},
-                    {"id": 3, "name": "third"}
-                ],
-                "current_index": 1
+                "items": [{"id": 1, "name": "first"}, {"id": 2, "name": "second"}, {"id": 3, "name": "third"}],
+                "current_index": 1,
             }
         }
 
@@ -491,12 +415,7 @@ class TestArrayScopeHandling:
         """Test scoped array access with computed indices."""
         evaluator = ExpressionEvaluator()
         context = {"offset": 1}
-        scoped_context = {
-            "this": {
-                "data": ["zero", "one", "two", "three"],
-                "index": 2
-            }
-        }
+        scoped_context = {"this": {"data": ["zero", "one", "two", "three"], "index": 2}}
 
         # Test basic scoped array access
         result = evaluator.evaluate("this.data[0]", context, scoped_context)
@@ -515,24 +434,10 @@ class TestComplexScopedExpressions:
         evaluator = ExpressionEvaluator()
         context = {}  # No legacy context needed
         scoped_context = {
-            "this": {
-                "step_name": "validate_files",
-                "completed_count": 5,
-                "error_count": 0
-            },
-            "global": {
-                "max_errors": 3,
-                "total_files": 10,
-                "debug_mode": True
-            },
-            "loop": {
-                "item": "file.ts",
-                "index": 4
-            },
-            "inputs": {
-                "target_extensions": [".ts", ".js"],
-                "skip_validation": False
-            }
+            "this": {"step_name": "validate_files", "completed_count": 5, "error_count": 0},
+            "global": {"max_errors": 3, "total_files": 10, "debug_mode": True},
+            "loop": {"item": "file.ts", "index": 4},
+            "inputs": {"target_extensions": [".ts", ".js"], "skip_validation": False},
         }
 
         # Test realistic workflow conditions
@@ -546,14 +451,8 @@ class TestComplexScopedExpressions:
         evaluator = ExpressionEvaluator()
         context = {}
         scoped_context = {
-            "inputs": {
-                "file_path": "/src/components/Button.tsx",
-                "component_name": "Button"
-            },
-            "this": {
-                "output_dir": "/dist",
-                "build_mode": "production"
-            }
+            "inputs": {"file_path": "/src/components/Button.tsx", "component_name": "Button"},
+            "this": {"output_dir": "/dist", "build_mode": "production"},
         }
 
         # Test string building (simulating template replacement)

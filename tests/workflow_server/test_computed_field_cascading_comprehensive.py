@@ -8,16 +8,13 @@ Focus: Workflow-level computed field cascading, complex dependency graphs, edge 
 Pillar: State Management
 """
 
-import pytest
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, Any, List
 
-from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
-from aromcp.workflow_server.workflow.loader import WorkflowLoader
 from aromcp.workflow_server.workflow.context import context_manager
-from aromcp.workflow_server.state.manager import StateManager
+from aromcp.workflow_server.workflow.loader import WorkflowLoader
+from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
 
 
 class TestComputedFieldCascadingComprehensive:
@@ -41,11 +38,11 @@ class TestComputedFieldCascadingComprehensive:
         """Helper to create a workflow file for testing."""
         if not self.temp_dir:
             self.temp_dir = tempfile.TemporaryDirectory()
-        
+
         temp_path = Path(self.temp_dir.name)
         workflows_dir = temp_path / ".aromcp" / "workflows"
         workflows_dir.mkdir(parents=True, exist_ok=True)
-        
+
         workflow_file = workflows_dir / f"{workflow_name}.yaml"
         workflow_file.write_text(workflow_content)
         return temp_path
@@ -55,7 +52,7 @@ class TestComputedFieldCascadingComprehensive:
         Test AC-SM-016: Cascading updates for dependent computed fields.
         Focus: Multi-level computed field dependencies update correctly in workflows.
         """
-        workflow_content = """
+        workflow_content = r"""
 name: "test-cascading-computed-fields"
 description: "Test cascading updates through multiple computed field levels"
 version: "1.0.0"
@@ -189,21 +186,21 @@ steps:
             cascaded_correctly: parseFloat(state.final_summary.match(/\$(\d+\.\d+)/)[1]) < parseFloat(state.initial_summary.match(/\$(\d+\.\d+)/)[1])
           }
 """
-        
+
         project_path = self._create_workflow_file("test-cascading-computed-fields", workflow_content)
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-cascading-computed-fields")
-        
+
         # Start workflow with base price
         result = self.executor.start(workflow_def, inputs={"base_price": 100})
         workflow_id = result["workflow_id"]
-        
+
         # Process server-side steps by calling get_next_step
         while True:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -212,14 +209,14 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-        
+
         state = final_status["state"]["state"]
         computed = final_status["state"]["computed"]
-        
+
         # Verify cascading worked correctly through all levels
         assert computed["discount_rate"] == 0.20, "VIP (15%) + summer (5%) = 20%"
         assert computed["promo_discount"] == 0.20, "SAVE20 promo = 20%"
@@ -228,7 +225,7 @@ steps:
         assert computed["subtotal"] == 600.0, "$60 * 10 items = $600"
         assert computed["tax_amount"] == 48.0, "$600 * 0.08 = $48"
         assert computed["total_amount"] == 648.0, "$600 + $48 = $648"
-        
+
         # Verify summaries captured the cascading changes
         # Note: The verification step had JavaScript parsing issues, but the core cascading functionality works
         # as evidenced by all the computed field assertions above passing correctly
@@ -271,22 +268,22 @@ steps:
       - path: "state.result"
         value: "computed.computed_a"
 """
-        
+
         project_path = self._create_workflow_file("test-circular-dependencies", workflow_content)
         loader = WorkflowLoader(project_root=str(project_path))
-        
+
         # Attempt to start workflow - should fail due to circular dependency
         try:
             workflow_def = loader.load("test-circular-dependencies")
             result = self.executor.start(workflow_def)
             workflow_id = result["workflow_id"]
-            
+
             # Process server-side steps by calling get_next_step
             while True:
                 next_step = self.executor.get_next_step(workflow_id)
                 if next_step is None:
                     break
-            
+
             # If we get here, the circular dependency wasn't detected
             assert False, "Should have detected circular dependency"
         except Exception as e:
@@ -439,21 +436,21 @@ steps:
               computed.final_result !== state.after_x_update.final_result
           }
 """
-        
+
         project_path = self._create_workflow_file("test-dependency-update-order", workflow_content)
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-dependency-update-order")
-        
+
         # Start workflow
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Process server-side steps by calling get_next_step
         while True:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -462,22 +459,22 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-        
+
         state = final_status["state"]["state"]
-        
+
         # Verify computed fields are working by checking final computed state
         computed = final_status["state"]["computed"]
-        
+
         # After x is changed from 1 to 10, verify expected calculations
         assert computed["sum_xy"] == 12, "10 + 2 = 12"  # x changed to 10
-        assert computed["sum_yz"] == 5, "2 + 3 = 5"     # y and z unchanged
+        assert computed["sum_yz"] == 5, "2 + 3 = 5"  # y and z unchanged
         assert computed["sum_xz"] == 13, "10 + 3 = 13"  # x changed to 10
         assert computed["product_sums"] == 780, "12 * 5 * 13 = 780"  # Updated product
-        
+
         # The important test is that fields cascade correctly - this validates the core functionality
 
 
@@ -499,11 +496,11 @@ class TestComputedFieldWorkflowIntegration:
         """Helper to create a workflow file."""
         if not self.temp_dir:
             self.temp_dir = tempfile.TemporaryDirectory()
-        
+
         temp_path = Path(self.temp_dir.name)
         workflows_dir = temp_path / ".aromcp" / "workflows"
         workflows_dir.mkdir(parents=True, exist_ok=True)
-        
+
         workflow_file = workflows_dir / f"{workflow_name}.yaml"
         workflow_file.write_text(workflow_content)
         return temp_path
@@ -597,21 +594,21 @@ steps:
             )
           }
 """
-        
+
         project_path = self._create_workflow_file("test-computed-fields-in-loops", workflow_content)
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-computed-fields-in-loops")
-        
+
         # Start workflow
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Process server-side steps by calling get_next_step
         while True:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -620,25 +617,25 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed"
-        
+
         state = final_status["state"]["state"]
-        
+
         # Verify the core computed field functionality works by checking final computed state
         computed = final_status["state"]["computed"]
-        
+
         # The items should have been updated: [3, 5, 2] quantities added
         items = state["items"]
         assert items[0]["quantity"] == 3, "Apple quantity should be 3"
-        assert items[1]["quantity"] == 5, "Banana quantity should be 5" 
+        assert items[1]["quantity"] == 5, "Banana quantity should be 5"
         assert items[2]["quantity"] == 2, "Orange quantity should be 2"
-        
+
         # Verify computed fields cascade correctly after the loop updates
         assert computed["total_items"] == 10, "3 + 5 + 2 = 10 total items"
         assert computed["total_value"] == 12.25, "(3*1.50) + (5*0.75) + (2*2.00) = 12.25"
         assert computed["average_item_price"] == 1.225, "12.25 / 10 = 1.225"
         assert computed["order_status"] == "Regular Order", "12.25 is between 10 and 50"
-        
+
         # This validates the core AC-SM-016 requirement: cascading computed field updates work correctly

@@ -4,16 +4,12 @@ from typing import Any
 
 from ...utils.json_parameter_middleware import json_convert
 from ..models.filesystem_models import (
-    ExtractMethodSignaturesResponse,
-    FindWhoImportsResponse,
     ListFilesResponse,
     ReadFilesResponse,
     WriteFilesResponse,
 )
 
 # from .._security import get_project_root  # Not used in registration
-from .extract_method_signatures import extract_method_signatures_impl
-from .find_who_imports import find_who_imports_impl
 from .list_files import list_files_impl
 from .read_files import read_files_impl
 from .write_files import write_files_impl
@@ -67,11 +63,11 @@ def register_filesystem_tools(mcp):
             # First request - ALWAYS start with cursor=None
             list_files(["**/*.py"], cursor=None, max_tokens=5000)
             → {"files": [...25 files...], "total": 150, "next_cursor": "src/utils.py", "has_more": true}
-            
+
             # Second request - use EXACT next_cursor from previous response
-            list_files(["**/*.py"], cursor="src/utils.py", max_tokens=5000)  
+            list_files(["**/*.py"], cursor="src/utils.py", max_tokens=5000)
             → {"files": [...25 more files...], "total": 150, "next_cursor": "tests/test_views.py", "has_more": true}
-            
+
             # Continue until has_more is false
             list_files(["**/*.py"], cursor="tests/test_views.py", max_tokens=5000)
             → {"files": [...final files...], "total": 150, "next_cursor": null, "has_more": false}
@@ -82,7 +78,7 @@ def register_filesystem_tools(mcp):
         - next_cursor: Cursor for next page (null if no more pages)
         - has_more: Boolean indicating if more pages exist
 
-        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination. 
+        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination.
         Simply use the cursor values provided in responses.
 
         Note: Returns relative paths from project root. For reading file contents, use read_files.
@@ -119,11 +115,11 @@ def register_filesystem_tools(mcp):
             # First request - ALWAYS start with cursor=None
             read_files(["**/*.py"], cursor=None, max_tokens=5000)
             → {"items": [...15 file contents...], "total": 100, "next_cursor": "src/utils.py", "has_more": true}
-            
+
             # Second request - use EXACT next_cursor from previous response
             read_files(["**/*.py"], cursor="src/utils.py", max_tokens=5000)
             → {"items": [...15 more file contents...], "total": 100, "next_cursor": "tests/test_app.py", "has_more": true}
-            
+
             # Continue until has_more is false
             read_files(["**/*.py"], cursor="tests/test_app.py", max_tokens=5000)
             → {"items": [...final file contents...], "total": 100, "next_cursor": null, "has_more": false}
@@ -134,7 +130,7 @@ def register_filesystem_tools(mcp):
         - next_cursor: Cursor for next page (null if no more pages)
         - has_more: Boolean indicating if more pages exist
 
-        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination. 
+        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination.
         Simply use the cursor values provided in responses.
 
         Note: For listing files by pattern, use list_files. Supports pagination for large file contents.
@@ -195,164 +191,10 @@ def register_filesystem_tools(mcp):
             success=result["success"],
         )
 
-    @mcp.tool
-    @json_convert
-    def extract_method_signatures(
-        file_paths: str | list[str],
-        include_docstrings: bool = True,
-        include_decorators: bool = True,
-        expand_patterns: bool = True,
-        cursor: str | None = None,
-        max_tokens: int = 20000,
-    ) -> dict[str, Any]:
-        """Parse code files to extract function/method signatures programmatically.
-
-        This tool uses server-side cursor pagination. The server handles all pagination automatically.
-        To retrieve all signatures:
-        1. First call: Always use cursor=None
-        2. If response has_more=true, make another call with cursor=next_cursor from response
-        3. Repeat until has_more=false
-
-        Use this tool when:
-        - Analyzing code structure and API surfaces
-        - Documenting function signatures across multiple files
-        - Understanding available methods and their parameters
-        - Creating code documentation automatically
-        - Auditing API consistency across a codebase
-
-        Replaces bash commands: grep -E "def |class ", ctags, cscope
-
-        Args:
-            file_paths: Path to code file(s) or glob pattern(s) - can be string or list
-            include_docstrings: Whether to include function docstrings (default: True)
-            include_decorators: Whether to include function decorators (default: True)
-            expand_patterns: Whether to expand glob patterns in file_paths (default: True)
-            cursor: Pagination cursor from previous response. MUST be None for first request, then use exact next_cursor value from previous response. Never generate your own cursor values.
-            max_tokens: Maximum tokens per response
-
-        Example:
-            extract_method_signatures(\"**/*.py\")
-            → [{\"name\": \"calculate_total\", \"params\": [\"items\", \"tax_rate\"],
-                \"file_path\": \"src/utils.py\", \"line\": 42,
-                \"decorators\": [\"@lru_cache\"], \"returns\": \"float\",
-                \"docstring\": \"Calculate total with tax\"}]
-
-        Cursor Pagination Examples:
-            # First request - ALWAYS start with cursor=None
-            extract_method_signatures([\"**/*.py\"], cursor=None, max_tokens=5000)
-            → {\"signatures\": [...30 signatures...], \"total\": 250, \"next_cursor\": \"src/utils.py\", \"has_more\": true}
-            
-            # Second request - use EXACT next_cursor from previous response
-            extract_method_signatures([\"**/*.py\"], cursor=\"src/utils.py\", max_tokens=5000)
-            → {\"signatures\": [...30 more signatures...], \"total\": 250, \"next_cursor\": \"tests/test_app.py\", \"has_more\": true}
-            
-            # Continue until has_more is false
-            extract_method_signatures([\"**/*.py\"], cursor=\"tests/test_app.py\", max_tokens=5000)
-            → {\"signatures\": [...final signatures...], \"total\": 250, \"next_cursor\": null, \"has_more\": false}
-
-        Response always includes:
-        - signatures: Array of method signature objects for this page
-        - total: Total number of signatures across all pages
-        - next_cursor: Cursor for next page (null if no more pages)
-        - has_more: Boolean indicating if more pages exist
-
-        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination. 
-        Simply use the cursor values provided in responses.
-
-        Note: For import analysis use find_who_imports. For API endpoints use extract_api_endpoints.
-        Supports Python (.py) files with full AST parsing.
-        """
-        from ..models.filesystem_models import MethodSignature
-
-        result = extract_method_signatures_impl(file_paths, include_docstrings, include_decorators, expand_patterns, cursor, max_tokens)
-
-        # Convert dict signatures to MethodSignature dataclasses
-        signatures = []
-        for sig in result["signatures"]:
-            signatures.append(
-                MethodSignature(
-                    name=sig["name"],
-                    file_path=sig["file_path"],
-                    line=sig["line"],
-                    signature=sig["signature"],
-                    params=sig.get("params", []),
-                    returns=sig.get("returns"),
-                    decorators=sig.get("decorators", []),
-                    docstring=sig.get("docstring"),
-                    class_name=sig.get("class_name"),
-                    is_method=sig.get("is_method", False),
-                    is_async=sig.get("is_async", False),
-                )
-            )
-
-        return ExtractMethodSignaturesResponse(
-            signatures=signatures,
-            total_signatures=result["total_signatures"],
-            files_processed=result["files_processed"],
-            patterns_used=result["patterns_used"],
-        )
-
-    @mcp.tool
-    @json_convert
-    def find_who_imports(file_path: str, cursor: str | None = None, max_tokens: int = 20000) -> FindWhoImportsResponse:
-        """Find all files that import/depend on the specified file.
-
-        This tool uses server-side cursor pagination. The server handles all pagination automatically.
-        To retrieve all dependents:
-        1. First call: Always use cursor=None
-        2. If response has_more=true, make another call with cursor=next_cursor from response
-        3. Repeat until has_more=false
-
-        Use this tool when:
-        - Planning to move or rename files (see impact)
-        - Refactoring exports (find all consumers)
-        - Deleting code (ensure it's safe)
-        - Understanding dependency chains
-
-        Replaces bash commands: grep, rg, ag
-
-        Args:
-            file_path: File to find importers for
-            cursor: Pagination cursor from previous response. MUST be None for first request, then use exact next_cursor value from previous response. Never generate your own cursor values.
-            max_tokens: Maximum tokens per response
-
-        Example:
-            find_who_imports("src/utils/helper.py")
-            → {"dependents": [{"file": "src/main.py", "imports": ["helper_func"]}], "safe_to_delete": false}
-
-        Cursor Pagination Examples:
-            # First request - ALWAYS start with cursor=None
-            find_who_imports("src/common/utils.py", cursor=None, max_tokens=5000)
-            → {"dependents": [...20 dependencies...], "total": 85, "next_cursor": "src/components/Button.js", "has_more": true}
-            
-            # Second request - use EXACT next_cursor from previous response
-            find_who_imports("src/common/utils.py", cursor="src/components/Button.js", max_tokens=5000)
-            → {"dependents": [...20 more dependencies...], "total": 85, "next_cursor": "tests/test_utils.py", "has_more": true}
-            
-            # Continue until has_more is false
-            find_who_imports("src/common/utils.py", cursor="tests/test_utils.py", max_tokens=5000)
-            → {"dependents": [...final dependencies...], "total": 85, "next_cursor": null, "has_more": false}
-
-        Response always includes:
-        - dependents: Array of import dependency objects for this page
-        - total: Total number of dependent files across all pages
-        - next_cursor: Cursor for next page (null if no more pages)
-        - has_more: Boolean indicating if more pages exist
-
-        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination. 
-        Simply use the cursor values provided in responses.
-
-        Note: This is reverse dependency analysis - finds who imports FROM this file.
-        """
-        # The implementation now returns FindWhoImportsResponse directly
-        return find_who_imports_impl(file_path, cursor, max_tokens)
-
 
 __all__ = [
     "list_files_impl",
     "read_files_impl",
     "write_files_impl",
-    "extract_method_signatures_impl",
-    "find_who_imports_impl",
     "register_filesystem_tools",
 ]

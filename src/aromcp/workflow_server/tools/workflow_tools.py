@@ -8,9 +8,9 @@ from ...utils.json_parameter_middleware import json_convert
 from ..models.workflow_models import WorkflowStartResponse
 from ..state.concurrent import ConcurrentStateManager
 from ..state.shared import get_shared_state_manager
-from ..workflow.queue_executor import QueueBasedWorkflowExecutor
 from ..workflow.loader import WorkflowLoader
 from ..workflow.models import WorkflowExecutionError, WorkflowNotFoundError
+from ..workflow.queue_executor import QueueBasedWorkflowExecutor
 
 # Global instances for workflow management
 _workflow_loader = None
@@ -47,10 +47,6 @@ def get_concurrent_state_manager() -> ConcurrentStateManager:
         state_manager = get_shared_state_manager()
         _concurrent_state_manager = ConcurrentStateManager(state_manager)
     return _concurrent_state_manager
-
-
-
-
 
 
 def register_workflow_tools(mcp):
@@ -191,7 +187,6 @@ def register_workflow_tools(mcp):
         except Exception as e:
             return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to list workflows: {e}"}}
 
-
     @mcp.tool
     @json_convert
     def workflow_get_status(workflow_id: str) -> dict[str, Any]:
@@ -265,10 +260,10 @@ def register_workflow_tools(mcp):
             if isinstance(updates, str):
                 # This shouldn't happen with @json_convert, but just in case
                 updates = json.loads(updates)
-            
+
             # Type assertion for type checker
             parsed_updates: list[dict[str, Any]] = updates  # type: ignore[assignment]
-            
+
             updated_state = executor.update_workflow_state(workflow_id, parsed_updates)
 
             return {"data": {"state": updated_state}}
@@ -326,10 +321,10 @@ def register_workflow_tools(mcp):
         Example:
             workflow_get_next_step("wf_abc123")
             → {"step": {"type": "mcp_call", "definition": {...}}}
-            
+
             workflow_get_next_step("wf_abc123", "checkFile.item1")
             → {"step": {"type": "mcp_call", "definition": {...}}}
-            
+
         Note:
             If you get an error about "items must be an array", ensure your workflow state
             contains properly evaluated arrays instead of template strings. Use workflow_update_state
@@ -337,7 +332,7 @@ def register_workflow_tools(mcp):
         """
         try:
             executor = get_workflow_executor()
-            
+
             if task_id:
                 # Sub-agent execution - pass workflow_id to help with context lookup
                 next_step = executor.get_next_sub_agent_step(workflow_id, task_id)
@@ -454,5 +449,3 @@ def register_workflow_tools(mcp):
 
         except Exception as e:
             return {"error": {"code": "OPERATION_FAILED", "message": f"Failed to resume workflow: {e}"}}
-
-

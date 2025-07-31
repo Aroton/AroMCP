@@ -3,22 +3,20 @@ Comprehensive queue execution testing for workflow execution engine.
 
 Covers missing acceptance criteria:
 - AC-WEE-002: Queue-based execution model maintains order
-- AC-WEE-007: Blocking steps pause execution for client interaction  
+- AC-WEE-007: Blocking steps pause execution for client interaction
 - AC-WEE-008: Immediate processing for server-side steps
 
 Focus: Production workflow queue behaviors (batch, blocking, immediate, expand, wait)
 Pillar: Workflow Execution Engine
 """
 
-import pytest
-import asyncio
-from unittest.mock import Mock, patch, AsyncMock
-from typing import Dict, Any, List
 import time
+from unittest.mock import AsyncMock, Mock
 
-from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor
-from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowInstance
+import pytest
+
 from aromcp.workflow_server.state.manager import StateManager
+from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor
 from aromcp.workflow_server.workflow.step_processors import StepProcessor
 
 
@@ -44,10 +42,7 @@ class TestQueueExecutionComprehensive:
     @pytest.fixture
     def queue_executor(self, mock_state_manager, mock_step_processor):
         """Create queue executor with mocked dependencies."""
-        executor = QueueBasedWorkflowExecutor(
-            state_manager=mock_state_manager,
-            step_processor=mock_step_processor
-        )
+        executor = QueueBasedWorkflowExecutor(state_manager=mock_state_manager, step_processor=mock_step_processor)
         return executor
 
     @pytest.fixture
@@ -59,7 +54,7 @@ class TestQueueExecutionComprehensive:
             current_step_index=0,
             total_steps=5,
             state={"inputs": {}, "state": {}, "computed": {}},
-            execution_context={"queue_stats": {"pending": 0, "processing": 0, "completed": 0}}
+            execution_context={"queue_stats": {"pending": 0, "processing": 0, "completed": 0}},
         )
 
     def test_batch_queue_maintains_order_with_priority(self, queue_executor, sample_workflow_state):
@@ -73,7 +68,7 @@ class TestQueueExecutionComprehensive:
             {"id": "step2", "type": "user_message", "queue_mode": "batch", "priority": 2, "message": "High priority"},
             {"id": "step3", "type": "user_message", "queue_mode": "batch", "priority": 1, "message": "Second batch"},
             {"id": "step4", "type": "user_message", "queue_mode": "immediate", "message": "Immediate"},
-            {"id": "step5", "type": "user_message", "queue_mode": "batch", "priority": 1, "message": "Third batch"}
+            {"id": "step5", "type": "user_message", "queue_mode": "batch", "priority": 1, "message": "Third batch"},
         ]
 
         # Queue all steps
@@ -82,18 +77,18 @@ class TestQueueExecutionComprehensive:
 
         # Verify queue ordering - immediate steps should process first
         queued_steps = queue_executor.get_queued_steps()
-        
+
         # Immediate steps should be first
         assert queued_steps[0]["queue_mode"] == "immediate"
-        
+
         # Within batch queue, higher priority (priority 2) should come before lower priority (priority 1)
         batch_steps = [s for s in queued_steps if s["queue_mode"] == "batch"]
         priorities = [s["priority"] for s in batch_steps]
-        
+
         # Find first occurrence of each priority level
         priority_2_index = next(i for i, p in enumerate(priorities) if p == 2)
         priority_1_indices = [i for i, p in enumerate(priorities) if p == 1]
-        
+
         # Priority 2 should come before all priority 1 steps
         assert all(priority_2_index < idx for idx in priority_1_indices)
 
@@ -105,10 +100,16 @@ class TestQueueExecutionComprehensive:
         # Create workflow with blocking steps
         steps = [
             {"id": "step1", "type": "shell_command", "command": "echo 'start'", "queue_mode": "immediate"},
-            {"id": "step2", "type": "user_input", "queue_mode": "blocking", "prompt": "Enter value", "input_type": "string"},
+            {
+                "id": "step2",
+                "type": "user_input",
+                "queue_mode": "blocking",
+                "prompt": "Enter value",
+                "input_type": "string",
+            },
             {"id": "step3", "type": "user_message", "queue_mode": "batch", "message": "Should not execute yet"},
             {"id": "step4", "type": "wait_step", "queue_mode": "blocking", "message": "Waiting for client"},
-            {"id": "step5", "type": "shell_command", "command": "echo 'end'", "queue_mode": "immediate"}
+            {"id": "step5", "type": "shell_command", "command": "echo 'end'", "queue_mode": "immediate"},
         ]
 
         # Queue all steps
@@ -133,7 +134,7 @@ class TestQueueExecutionComprehensive:
 
         # Simulate client providing input and resuming
         queue_executor.resolve_blocking_step("step2", {"user_input": "test_value"})
-        
+
         # Now batch step should be processable
         batch_processed = queue_executor.process_next_batch()
         assert len(batch_processed) == 1
@@ -155,13 +156,25 @@ class TestQueueExecutionComprehensive:
             {"id": "step2", "type": "shell_command", "queue_mode": "immediate", "command": "echo 'immediate'"},
             {"id": "step3", "type": "conditional", "queue_mode": "immediate", "condition": "true", "then_steps": []},
             {"id": "step4", "type": "user_input", "queue_mode": "blocking", "prompt": "Input required"},
-            {"id": "step5", "type": "user_message", "queue_mode": "immediate", "message": "Setting test variable", "state_update": {"path": "this.test", "value": "immediate_value"}},
-            {"id": "step6", "type": "mcp_call", "queue_mode": "immediate", "tool": "test_tool", "execution_context": "server"}
+            {
+                "id": "step5",
+                "type": "user_message",
+                "queue_mode": "immediate",
+                "message": "Setting test variable",
+                "state_update": {"path": "this.test", "value": "immediate_value"},
+            },
+            {
+                "id": "step6",
+                "type": "mcp_call",
+                "queue_mode": "immediate",
+                "tool": "test_tool",
+                "execution_context": "server",
+            },
         ]
 
         start_time = time.time()
-        
-        # Queue all steps  
+
+        # Queue all steps
         for step in steps:
             queue_executor.queue_step(step, sample_workflow_state)
 
@@ -171,19 +184,19 @@ class TestQueueExecutionComprehensive:
             immediate_step = queue_executor.get_next_immediate_step()
             if not immediate_step:
                 break
-            
+
             # Process immediately
             result = await queue_executor.process_step_immediately(immediate_step, sample_workflow_state)
             immediate_processed.append(result)
 
         immediate_time = time.time() - start_time
-        
+
         # Verify immediate steps were processed
         assert len(immediate_processed) == 4  # shell_command, conditional, set_variable, mcp_call
-        
+
         # Verify immediate processing completed quickly (< 100ms)
         assert immediate_time < 0.1
-        
+
         # Verify immediate step types
         processed_types = [step["type"] for step in immediate_processed]
         expected_immediate_types = ["shell_command", "conditional", "set_variable", "mcp_call"]
@@ -202,13 +215,13 @@ class TestQueueExecutionComprehensive:
         # Create foreach step that should expand into multiple steps
         foreach_step = {
             "id": "foreach1",
-            "type": "foreach", 
+            "type": "foreach",
             "queue_mode": "expand",
             "items": ["item1", "item2", "item3"],
             "steps": [
                 {"type": "user_message", "message": "Processing {{ loop.item }}"},
-                {"type": "shell_command", "command": "echo '{{ loop.item }}'", "queue_mode": "immediate"}
-            ]
+                {"type": "shell_command", "command": "echo '{{ loop.item }}'", "queue_mode": "immediate"},
+            ],
         }
 
         # Queue the foreach step
@@ -219,15 +232,15 @@ class TestQueueExecutionComprehensive:
 
         # Verify expansion created individual steps for each item
         assert len(expanded_steps) == 6  # 3 items × 2 steps per item
-        
+
         # Verify loop context is properly set
         message_steps = [s for s in expanded_steps if s["type"] == "user_message"]
         assert len(message_steps) == 3
-        
+
         # Check that loop variables are substituted
         messages = [s["message"] for s in message_steps]
         assert "Processing item1" in messages
-        assert "Processing item2" in messages  
+        assert "Processing item2" in messages
         assert "Processing item3" in messages
 
         # Verify immediate steps within expansion are properly marked
@@ -241,10 +254,28 @@ class TestQueueExecutionComprehensive:
         # Create steps with wait coordination
         steps = [
             {"id": "step1", "type": "shell_command", "queue_mode": "immediate", "command": "echo 'start'"},
-            {"id": "step2", "type": "user_message", "queue_mode": "wait", "message": "Wait for coordination", "wait_for": ["step4"]},
+            {
+                "id": "step2",
+                "type": "user_message",
+                "queue_mode": "wait",
+                "message": "Wait for coordination",
+                "wait_for": ["step4"],
+            },
             {"id": "step3", "type": "user_message", "queue_mode": "batch", "message": "Batch message"},
-            {"id": "step4", "type": "user_message", "queue_mode": "immediate", "message": "Synchronization ready", "state_update": {"path": "this.sync", "value": "ready"}},
-            {"id": "step5", "type": "user_message", "queue_mode": "wait", "message": "Second wait", "wait_for": ["step4"]}
+            {
+                "id": "step4",
+                "type": "user_message",
+                "queue_mode": "immediate",
+                "message": "Synchronization ready",
+                "state_update": {"path": "this.sync", "value": "ready"},
+            },
+            {
+                "id": "step5",
+                "type": "user_message",
+                "queue_mode": "wait",
+                "message": "Second wait",
+                "wait_for": ["step4"],
+            },
         ]
 
         # Queue all steps
@@ -284,14 +315,14 @@ class TestQueueExecutionComprehensive:
         # Create long-running step simulation
         long_step = {
             "id": "long_step",
-            "type": "shell_command", 
+            "type": "shell_command",
             "queue_mode": "immediate",
             "command": "sleep 35",  # Exceeds 30s timeout
-            "timeout": 30
+            "timeout": 30,
         }
 
         start_time = time.time()
-        
+
         # Queue the step
         queue_executor.queue_step(long_step, sample_workflow_state)
 
@@ -300,7 +331,7 @@ class TestQueueExecutionComprehensive:
             queue_executor.process_step_with_timeout(long_step, sample_workflow_state, timeout=30)
 
         elapsed_time = time.time() - start_time
-        
+
         # Verify timeout was enforced around 30 seconds (allow some tolerance)
         assert 29 <= elapsed_time <= 32
         assert "timeout" in str(exc_info.value).lower()
@@ -315,7 +346,13 @@ class TestQueueExecutionComprehensive:
             {"id": "batch1", "type": "user_message", "queue_mode": "batch", "message": "Batch 1"},
             {"id": "batch2", "type": "user_message", "queue_mode": "batch", "message": "Batch 2"},
             {"id": "blocking1", "type": "user_input", "queue_mode": "blocking", "prompt": "Input"},
-            {"id": "immediate2", "type": "user_message", "queue_mode": "immediate", "message": "Setting variable x", "state_update": {"path": "this.x", "value": "1"}}
+            {
+                "id": "immediate2",
+                "type": "user_message",
+                "queue_mode": "immediate",
+                "message": "Setting variable x",
+                "state_update": {"path": "this.x", "value": "1"},
+            },
         ]
 
         # Queue all steps
@@ -324,10 +361,10 @@ class TestQueueExecutionComprehensive:
 
         # Get initial statistics
         stats = queue_executor.get_queue_statistics()
-        
+
         # Verify queue counts
         assert stats["immediate_queue_size"] == 2
-        assert stats["batch_queue_size"] == 2  
+        assert stats["batch_queue_size"] == 2
         assert stats["blocking_queue_size"] == 1
         assert stats["total_queued"] == 5
 
@@ -349,27 +386,54 @@ class TestQueueModeIntegration:
         """Steps similar to code-standards:enforce.yaml production workflow."""
         return [
             # Initial immediate setup
-            {"id": "init", "type": "user_message", "queue_mode": "immediate", "message": "Initializing workflow", "state_update": {"path": "this.status", "value": "starting"}},
-            
+            {
+                "id": "init",
+                "type": "user_message",
+                "queue_mode": "immediate",
+                "message": "Initializing workflow",
+                "state_update": {"path": "this.status", "value": "starting"},
+            },
             # User communication (batch)
-            {"id": "start_msg", "type": "user_message", "queue_mode": "batch", "message": "Starting code standards enforcement..."},
-            
+            {
+                "id": "start_msg",
+                "type": "user_message",
+                "queue_mode": "batch",
+                "message": "Starting code standards enforcement...",
+            },
             # Server-side processing (immediate)
             {"id": "lint", "type": "shell_command", "queue_mode": "immediate", "command": "npm run lint"},
             {"id": "typecheck", "type": "shell_command", "queue_mode": "immediate", "command": "npm run typecheck"},
             {"id": "test", "type": "shell_command", "queue_mode": "immediate", "command": "npm test"},
-            
             # Conditional processing (immediate)
-            {"id": "check_results", "type": "conditional", "queue_mode": "immediate", "condition": "this.lint_success && this.test_success"},
-            
+            {
+                "id": "check_results",
+                "type": "conditional",
+                "queue_mode": "immediate",
+                "condition": "this.lint_success && this.test_success",
+            },
             # User interaction if needed (blocking)
-            {"id": "user_review", "type": "user_input", "queue_mode": "blocking", "prompt": "Review results and confirm", "condition": "!this.all_passed"},
-            
+            {
+                "id": "user_review",
+                "type": "user_input",
+                "queue_mode": "blocking",
+                "prompt": "Review results and confirm",
+                "condition": "!this.all_passed",
+            },
             # Final status update (batch)
-            {"id": "final_msg", "type": "user_message", "queue_mode": "batch", "message": "Code standards check completed"},
-            
+            {
+                "id": "final_msg",
+                "type": "user_message",
+                "queue_mode": "batch",
+                "message": "Code standards check completed",
+            },
             # Cleanup (immediate)
-            {"id": "cleanup", "type": "user_message", "queue_mode": "immediate", "message": "Workflow completed", "state_update": {"path": "this.status", "value": "completed"}}
+            {
+                "id": "cleanup",
+                "type": "user_message",
+                "queue_mode": "immediate",
+                "message": "Workflow completed",
+                "state_update": {"path": "this.status", "value": "completed"},
+            },
         ]
 
     def test_production_workflow_queue_flow(self, production_workflow_steps):
@@ -377,20 +441,24 @@ class TestQueueModeIntegration:
         Test production workflow queue processing matches expected execution order
         """
         state_manager = Mock(spec=StateManager)
-        state_manager.get_flattened_state.return_value = {"lint_success": True, "test_success": True, "all_passed": True}
-        
+        state_manager.get_flattened_state.return_value = {
+            "lint_success": True,
+            "test_success": True,
+            "all_passed": True,
+        }
+
         step_processor = Mock(spec=StepProcessor)
         step_processor.process_step = AsyncMock(return_value={"status": "completed"})
-        
+
         queue_executor = QueueBasedWorkflowExecutor(state_manager=state_manager, step_processor=step_processor)
-        
+
         workflow_state = WorkflowState(
             workflow_id="wf_production",
-            status="running", 
+            status="running",
             current_step_index=0,
             total_steps=len(production_workflow_steps),
             state={"inputs": {}, "state": {}, "computed": {}},
-            execution_context={}
+            execution_context={},
         )
 
         # Queue all workflow steps
@@ -422,10 +490,10 @@ class TestQueueModeIntegration:
 
         # Should have processed 6 immediate steps: init, lint, typecheck, test, check_results, cleanup
         assert len(immediate_steps) == 6
-        
+
         # Should have 2 batch steps: start_msg, final_msg
         assert len(batch_steps) == 2
-        
+
         # Verify no blocking step due to condition
         blocking_steps = [item for item in execution_order if item[1] == "blocking"]
         assert len(blocking_steps) == 0  # Condition should prevent user_review
@@ -434,7 +502,7 @@ class TestQueueModeIntegration:
         immediate_ids = [item[0] for item in immediate_steps]
         assert immediate_ids[0] == "init"  # Should be first
         assert "lint" in immediate_ids
-        assert "typecheck" in immediate_ids  
+        assert "typecheck" in immediate_ids
         assert "test" in immediate_ids
         assert "check_results" in immediate_ids
         assert immediate_ids[-1] == "cleanup"  # Should be last immediate step

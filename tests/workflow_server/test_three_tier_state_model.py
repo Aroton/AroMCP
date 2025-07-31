@@ -9,14 +9,14 @@ Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
 """
 
 import pytest
+
+from aromcp.workflow_server.state.manager import StateManager
 from aromcp.workflow_server.state.models import (
     ComputedFieldDefinition,
+    InvalidPathError,
     StateSchema,
     WorkflowState,
-    ComputedFieldError,
-    InvalidPathError,
 )
-from aromcp.workflow_server.state.manager import StateManager
 
 
 class TestThreeTierStateModel:
@@ -31,7 +31,7 @@ class TestThreeTierStateModel:
         assert hasattr(state, "inputs")
         assert hasattr(state, "state")
         assert hasattr(state, "computed")
-        
+
         # Verify no legacy 'raw' attribute exists
         assert not hasattr(state, "raw")
 
@@ -41,7 +41,7 @@ class TestThreeTierStateModel:
         initial_data = {
             "inputs": {"user_id": "123", "config": {"debug": True}},
             "state": {"counter": 0, "status": "active"},
-            "computed": {"display_name": "User 123", "counter_doubled": 0}
+            "computed": {"display_name": "User 123", "counter_doubled": 0},
         }
 
         # When
@@ -65,11 +65,7 @@ class TestThreeTierStateModel:
     def test_workflow_state_invalid_tier_types_are_corrected(self):
         """Test that invalid types for tiers are corrected to empty dicts"""
         # Given - pass invalid types for tiers
-        state = WorkflowState(
-            inputs="invalid_string",
-            state=None,
-            computed=123
-        )
+        state = WorkflowState(inputs="invalid_string", state=None, computed=123)
 
         # Then - should be corrected to empty dicts
         assert state.inputs == {}
@@ -97,7 +93,7 @@ class TestDeprecatedRawNamespaceRemoval:
         # Then - setting raw should create a new attribute, not affect inputs
         original_inputs = state.inputs.copy()
         state.raw = {"test": "value"}
-        
+
         # inputs should be unchanged since raw is no longer a property
         assert state.inputs == original_inputs
         # and raw should just be a regular attribute, not affecting the inputs tier
@@ -121,7 +117,7 @@ class TestDeprecatedRawNamespaceRemoval:
         # Then - setting raw should create a new attribute, not affect inputs
         original_inputs = schema.inputs.copy()
         schema.raw = {"test": "str"}
-        
+
         # inputs should be unchanged since raw is no longer a property
         assert schema.inputs == original_inputs
         # and raw should just be a regular attribute, not affecting the inputs tier
@@ -168,12 +164,9 @@ class TestStateManagerThreeTierEnforcement:
         # Given
         manager = StateManager()
         workflow_id = "test_workflow"
-        
+
         # Initialize with some data
-        updates = [
-            {"path": "inputs.user_id", "value": "123"},
-            {"path": "state.counter", "value": 5}
-        ]
+        updates = [{"path": "inputs.user_id", "value": "123"}, {"path": "state.counter", "value": 5}]
         manager.update(workflow_id, updates)
 
         # When
@@ -200,7 +193,7 @@ class TestStateManagerThreeTierEnforcement:
         # When/Then - updating truly invalid tier should fail (but raw is allowed for backward compatibility)
         with pytest.raises(InvalidPathError):
             manager.update(workflow_id, [{"path": "invalid.value", "value": 10}])
-        
+
         # Raw should work (legacy support)
         result = manager.update(workflow_id, [{"path": "raw.value", "value": 10}])
         assert result is not None  # Should succeed
@@ -216,7 +209,7 @@ class TestComputedFieldErrorHandling:
             from_paths=["inputs.value"],
             transform="invalid_expression",
             on_error="use_fallback",
-            fallback="default_value"
+            fallback="default_value",
         )
 
         # Then
@@ -227,10 +220,7 @@ class TestComputedFieldErrorHandling:
         """Test 'propagate' error handling strategy"""
         # Given
         field_def = ComputedFieldDefinition(
-            from_paths=["inputs.value"],
-            transform="input * 2",
-            on_error="propagate",
-            fallback=None
+            from_paths=["inputs.value"], transform="input * 2", on_error="propagate", fallback=None
         )
 
         # Then
@@ -240,10 +230,7 @@ class TestComputedFieldErrorHandling:
         """Test 'ignore' error handling strategy"""
         # Given
         field_def = ComputedFieldDefinition(
-            from_paths=["inputs.value"],
-            transform="input * 2",
-            on_error="ignore",
-            fallback=None
+            from_paths=["inputs.value"], transform="input * 2", on_error="ignore", fallback=None
         )
 
         # Then
@@ -253,23 +240,15 @@ class TestComputedFieldErrorHandling:
         """Test that invalid error strategies raise ValueError"""
         # When/Then
         with pytest.raises(ValueError, match="on_error must be one of"):
-            ComputedFieldDefinition(
-                from_paths=["inputs.value"],
-                transform="input * 2",
-                on_error="invalid_strategy"
-            )
+            ComputedFieldDefinition(from_paths=["inputs.value"], transform="input * 2", on_error="invalid_strategy")
 
     def test_computed_field_error_strategies_are_enforced(self):
         """Test that all valid error strategies are accepted"""
         valid_strategies = ["use_fallback", "propagate", "ignore"]
-        
+
         for strategy in valid_strategies:
             # Should not raise any exception
-            field_def = ComputedFieldDefinition(
-                from_paths=["inputs.value"],
-                transform="input * 2",
-                on_error=strategy
-            )
+            field_def = ComputedFieldDefinition(from_paths=["inputs.value"], transform="input * 2", on_error=strategy)
             assert field_def.on_error == strategy
 
 
@@ -280,26 +259,19 @@ class TestComputedFieldDefinitionValidation:
         """Test that from_paths cannot be empty"""
         # When/Then
         with pytest.raises(ValueError, match="from_paths cannot be empty"):
-            ComputedFieldDefinition(
-                from_paths=[],
-                transform="input * 2"
-            )
+            ComputedFieldDefinition(from_paths=[], transform="input * 2")
 
     def test_computed_field_requires_transform(self):
         """Test that transform cannot be empty"""
         # When/Then
         with pytest.raises(ValueError, match="transform cannot be empty"):
-            ComputedFieldDefinition(
-                from_paths=["inputs.value"],
-                transform=""
-            )
+            ComputedFieldDefinition(from_paths=["inputs.value"], transform="")
 
     def test_computed_field_with_inputs_paths(self):
         """Test computed field with inputs tier paths"""
         # Given
         field_def = ComputedFieldDefinition(
-            from_paths=["inputs.counter", "inputs.multiplier"],
-            transform="input[0] * input[1]"
+            from_paths=["inputs.counter", "inputs.multiplier"], transform="input[0] * input[1]"
         )
 
         # Then
@@ -310,8 +282,7 @@ class TestComputedFieldDefinitionValidation:
         """Test computed field with state tier paths"""
         # Given
         field_def = ComputedFieldDefinition(
-            from_paths=["state.active", "state.count"],
-            transform="input[0] ? input[1] : 0"
+            from_paths=["state.active", "state.count"], transform="input[0] ? input[1] : 0"
         )
 
         # Then
@@ -322,8 +293,7 @@ class TestComputedFieldDefinitionValidation:
         """Test computed field with mixed inputs and state paths"""
         # Given
         field_def = ComputedFieldDefinition(
-            from_paths=["inputs.base_value", "state.multiplier"],
-            transform="input[0] * input[1]"
+            from_paths=["inputs.base_value", "state.multiplier"], transform="input[0] * input[1]"
         )
 
         # Then

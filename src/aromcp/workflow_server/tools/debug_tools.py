@@ -10,8 +10,8 @@ from ...utils.json_parameter_middleware import json_convert
 from ..errors.tracking import ErrorTracker
 from ..state.manager import StateManager
 from ..state.transformer import TransformationEngine
-from ..workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
 from ..workflow.loader import WorkflowLoader
+from ..workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
 
 logger = logging.getLogger(__name__)
 

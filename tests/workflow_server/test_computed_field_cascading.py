@@ -9,14 +9,12 @@ Focus: Cascading computed field dependencies and recalculation
 Pillar: State Management
 """
 
-import pytest
+from typing import Any
 from unittest.mock import Mock, patch
-from typing import Dict, Any, List
-import json
+
+import pytest
 
 from aromcp.workflow_server.state.manager import StateManager
-from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowInstance
-from aromcp.workflow_server.state.concurrent import ConcurrentStateManager
 
 
 class TestComputedFieldCascading:
@@ -32,11 +30,11 @@ class TestComputedFieldCascading:
         evaluator.execute = Mock(side_effect=self._mock_js_evaluation)
         return evaluator
 
-    def _mock_js_evaluation(self, expression: str, context: Dict[str, Any]) -> Any:
+    def _mock_js_evaluation(self, expression: str, context: dict[str, Any]) -> Any:
         """Mock JavaScript evaluation with realistic computed field logic."""
         self._call_count += 1
         call_id = self._call_count
-        
+
         # Match exact expressions instead of substring matching
         if expression == "this.firstName + ' ' + this.lastName":
             # fullName expression
@@ -103,7 +101,7 @@ class TestComputedFieldCascading:
     @pytest.fixture
     def state_manager(self, mock_js_evaluator):
         """Create state manager with mocked JavaScript evaluator."""
-        with patch('aromcp.workflow_server.state.manager.TransformationEngine', return_value=mock_js_evaluator):
+        with patch("aromcp.workflow_server.state.manager.TransformationEngine", return_value=mock_js_evaluator):
             manager = StateManager()
             return manager
 
@@ -115,26 +113,23 @@ class TestComputedFieldCascading:
                 # Level 1: Direct dependency on inputs/state
                 "fullName": {
                     "expression": "this.firstName + ' ' + this.lastName",
-                    "dependencies": ["firstName", "lastName"]
+                    "dependencies": ["firstName", "lastName"],
                 },
                 "isComplete": {
                     "expression": "this.firstName && this.lastName && this.email",
-                    "dependencies": ["firstName", "lastName", "email"]
+                    "dependencies": ["firstName", "lastName", "email"],
                 },
                 # Level 2: Depends on Level 1 computed fields
                 "displayName": {
                     "expression": "this.fullName + ' (' + this.email + ')'",
-                    "dependencies": ["fullName", "email"]
+                    "dependencies": ["fullName", "email"],
                 },
-                "status": {
-                    "expression": "this.isComplete ? 'Complete' : 'Incomplete'",
-                    "dependencies": ["isComplete"]
-                },
+                "status": {"expression": "this.isComplete ? 'Complete' : 'Incomplete'", "dependencies": ["isComplete"]},
                 # Level 3: Depends on Level 2 computed fields
                 "summary": {
                     "expression": "this.status + ': ' + this.displayName",
-                    "dependencies": ["status", "displayName"]
-                }
+                    "dependencies": ["status", "displayName"],
+                },
             }
         }
 
@@ -146,28 +141,25 @@ class TestComputedFieldCascading:
                 # Level 1: Base calculations
                 "scoreCategory": {
                     "expression": "this.score >= 90 ? 'Excellent' : this.score >= 70 ? 'Good' : 'Needs Improvement'",
-                    "dependencies": ["score"]
+                    "dependencies": ["score"],
                 },
                 # Level 2: Depends on Level 1
                 "finalGrade": {
                     "expression": "this.scoreCategory + ' (' + this.score + '/100)'",
-                    "dependencies": ["scoreCategory", "score"]
+                    "dependencies": ["scoreCategory", "score"],
                 },
                 # Also Level 1: Independent calculation
-                "passStatus": {
-                    "expression": "this.score >= 60 ? 'PASS' : 'FAIL'",
-                    "dependencies": ["score"]
-                },
+                "passStatus": {"expression": "this.score >= 60 ? 'PASS' : 'FAIL'", "dependencies": ["score"]},
                 # Level 2: Depends on passStatus
                 "canGraduate": {
                     "expression": "this.passStatus === 'PASS' && this.attendanceRate >= 0.8",
-                    "dependencies": ["passStatus", "attendanceRate"]
+                    "dependencies": ["passStatus", "attendanceRate"],
                 },
                 # Level 3: Depends on Level 2 fields
                 "academicSummary": {
                     "expression": "this.finalGrade + ' - ' + (this.canGraduate ? 'Eligible' : 'Not Eligible')",
-                    "dependencies": ["finalGrade", "canGraduate"]
-                }
+                    "dependencies": ["finalGrade", "canGraduate"],
+                },
             }
         }
 
@@ -180,7 +172,7 @@ class TestComputedFieldCascading:
         state_manager.initialize_state(
             inputs={},
             default_state={"firstName": "John", "lastName": "Doe", "email": "john@example.com"},
-            state_schema=cascading_state_schema
+            state_schema=cascading_state_schema,
         )
 
         # Get initial computed values
@@ -192,11 +184,7 @@ class TestComputedFieldCascading:
         assert initial_state["summary"] == "Complete: John Doe (john@example.com)"
 
         # Change firstName - should trigger cascading updates
-        state_manager.update_state([{
-            "path": "state.firstName",
-            "operation": "set",
-            "value": "Jane"
-        }])
+        state_manager.update_state([{"path": "state.firstName", "operation": "set", "value": "Jane"}])
 
         # Verify cascading updates occurred
         updated_state = state_manager.get_flattened_state()
@@ -204,7 +192,7 @@ class TestComputedFieldCascading:
         assert updated_state["fullName"] == "Jane Doe"  # Level 1 cascade
         assert updated_state["displayName"] == "Jane Doe (john@example.com)"  # Level 2 cascade
         assert updated_state["summary"] == "Complete: Jane Doe (john@example.com)"  # Level 3 cascade
-        
+
         # Status should remain the same since all required fields are still present
         assert updated_state["isComplete"] == True
         assert updated_state["status"] == "Complete"
@@ -218,29 +206,25 @@ class TestComputedFieldCascading:
         state_manager.initialize_state(
             inputs={},
             default_state={"firstName": "John", "lastName": "Doe", "email": "john@example.com"},
-            state_schema=cascading_state_schema
+            state_schema=cascading_state_schema,
         )
 
         # Remove email - should cascade through isComplete, status, displayName, summary
-        state_manager.update_state([{
-            "path": "state.email",
-            "operation": "set", 
-            "value": ""
-        }])
+        state_manager.update_state([{"path": "state.email", "operation": "set", "value": ""}])
 
         updated_state = state_manager.get_flattened_state()
-        
+
         # Direct change
         assert updated_state["email"] == ""
-        
+
         # Level 1 cascades
         assert updated_state["fullName"] == "John Doe"  # Unchanged, doesn't depend on email
         assert updated_state["isComplete"] == False  # Changed due to missing email
-        
-        # Level 2 cascades  
+
+        # Level 2 cascades
         assert updated_state["displayName"] == "John Doe"  # Changed, no email to show
         assert updated_state["status"] == "Incomplete"  # Changed due to isComplete change
-        
+
         # Level 3 cascade
         assert updated_state["summary"] == "Incomplete: John Doe"  # Fully cascaded change
 
@@ -253,26 +237,28 @@ class TestComputedFieldCascading:
         state_manager.initialize_state(
             inputs={},
             default_state={"firstName": "John", "lastName": "Doe", "email": "john@example.com"},
-            state_schema=cascading_state_schema
+            state_schema=cascading_state_schema,
         )
 
         # Track recalculation calls
         recalculation_count = 0
         original_update_computed = state_manager._update_computed_fields
-        
+
         def counting_update_computed(*args, **kwargs):
             nonlocal recalculation_count
             recalculation_count += 1
             return original_update_computed(*args, **kwargs)
-            
+
         state_manager._update_computed_fields = counting_update_computed
 
         # Make multiple changes simultaneously
-        state_manager.update_state([
-            {"path": "state.firstName", "operation": "set", "value": "Jane"},
-            {"path": "state.lastName", "operation": "set", "value": "Smith"},
-            {"path": "state.email", "operation": "set", "value": "jane.smith@example.com"}
-        ])
+        state_manager.update_state(
+            [
+                {"path": "state.firstName", "operation": "set", "value": "Jane"},
+                {"path": "state.lastName", "operation": "set", "value": "Smith"},
+                {"path": "state.email", "operation": "set", "value": "jane.smith@example.com"},
+            ]
+        )
 
         # Should have triggered only one recalculation pass for efficiency
         assert recalculation_count == 1
@@ -292,9 +278,7 @@ class TestComputedFieldCascading:
         """
         # Initialize state with score-based schema
         state_manager.initialize_state(
-            inputs={},
-            default_state={"score": 85, "attendanceRate": 0.9},
-            state_schema=multi_level_schema
+            inputs={}, default_state={"score": 85, "attendanceRate": 0.9}, state_schema=multi_level_schema
         )
 
         # Get initial state - score of 85 should result in "Good" category
@@ -306,11 +290,7 @@ class TestComputedFieldCascading:
         assert initial_state["academicSummary"] == "Good (85/100) - Eligible"  # Level 3
 
         # Change score to 95 - should cascade through all levels
-        state_manager.update_state([{
-            "path": "state.score",
-            "operation": "set",
-            "value": 95
-        }])
+        state_manager.update_state([{"path": "state.score", "operation": "set", "value": 95}])
 
         updated_state = state_manager.get_flattened_state()
         assert updated_state["score"] == 95  # Direct change
@@ -321,11 +301,7 @@ class TestComputedFieldCascading:
         assert updated_state["academicSummary"] == "Excellent (95/100) - Eligible"  # Level 3 cascade
 
         # Change score to 45 - should cascade through all levels differently
-        state_manager.update_state([{
-            "path": "state.score", 
-            "operation": "set",
-            "value": 45
-        }])
+        state_manager.update_state([{"path": "state.score", "operation": "set", "value": 45}])
 
         final_state = state_manager.get_flattened_state()
         assert final_state["score"] == 45
@@ -343,28 +319,18 @@ class TestComputedFieldCascading:
         # Schema with circular dependency
         circular_schema = {
             "computed": {
-                "fieldA": {
-                    "expression": "this.fieldB + '_A'",
-                    "dependencies": ["fieldB"]
-                },
-                "fieldB": {
-                    "expression": "this.fieldC + '_B'", 
-                    "dependencies": ["fieldC"]
-                },
-                "fieldC": {
-                    "expression": "this.fieldA + '_C'",  # Circular back to fieldA
-                    "dependencies": ["fieldA"]
-                }
+                "fieldA": {"expression": "this.fieldB + '_A'", "dependencies": ["fieldB"]},
+                "fieldB": {"expression": "this.fieldC + '_B'", "dependencies": ["fieldC"]},
+                "fieldC": {"expression": "this.fieldA + '_C'", "dependencies": ["fieldA"]},  # Circular back to fieldA
             }
         }
 
         # Should detect circular dependency during initialization
         from aromcp.workflow_server.state.models import CircularDependencyError
+
         with pytest.raises(CircularDependencyError) as exc_info:
             state_manager.initialize_state(
-                inputs={},
-                default_state={"baseValue": "start"},
-                state_schema=circular_schema
+                inputs={}, default_state={"baseValue": "start"}, state_schema=circular_schema
             )
 
         assert "circular dependency" in str(exc_info.value).lower()
@@ -378,11 +344,11 @@ class TestComputedFieldCascading:
         state_manager.initialize_state(
             inputs={},
             default_state={"firstName": "John", "email": "john@example.com"},
-            state_schema=cascading_state_schema
+            state_schema=cascading_state_schema,
         )
 
         state = state_manager.get_flattened_state()
-        
+
         # Should handle missing lastName gracefully
         assert state["fullName"] == "John "  # Space but no last name
         assert state["isComplete"] == False  # Missing lastName
@@ -391,11 +357,7 @@ class TestComputedFieldCascading:
         assert "Incomplete" in state["summary"]
 
         # Add missing dependency
-        state_manager.update_state([{
-            "path": "state.lastName",
-            "operation": "set",
-            "value": "Doe"
-        }])
+        state_manager.update_state([{"path": "state.lastName", "operation": "set", "value": "Doe"}])
 
         # Should now cascade to complete state
         complete_state = state_manager.get_flattened_state()
@@ -411,36 +373,32 @@ class TestComputedFieldCascading:
         state_manager.initialize_state(
             inputs={},
             default_state={"firstName": "John", "lastName": "Doe", "email": "john@example.com"},
-            state_schema=cascading_state_schema
+            state_schema=cascading_state_schema,
         )
 
         # Track which fields get recalculated
         recalculated_fields = []
         original_compute = state_manager._compute_field
-        
+
         def tracking_compute(state, field_name, *args, **kwargs):
             recalculated_fields.append(field_name)
             return original_compute(state, field_name, *args, **kwargs)
-            
+
         state_manager._compute_field = tracking_compute
 
         # Change only firstName
         recalculated_fields.clear()
-        state_manager.update_state([{
-            "path": "state.firstName",
-            "operation": "set", 
-            "value": "Jane"
-        }])
+        state_manager.update_state([{"path": "state.firstName", "operation": "set", "value": "Jane"}])
 
         # Should recalculate fields that depend on firstName (directly or transitively)
-        expected_recalculated = {"fullName", "isComplete", "displayName", "status", "summary"}  
+        expected_recalculated = {"fullName", "isComplete", "displayName", "status", "summary"}
         # fullName: depends on firstName directly
         # isComplete: depends on firstName directly
         # displayName: depends on fullName (which depends on firstName)
         # status: depends on isComplete (which depends on firstName)
         # summary: depends on both displayName and status (both transitively depend on firstName)
         actual_recalculated = set(recalculated_fields)
-        
+
         # Verify all expected fields were recalculated
         assert expected_recalculated == actual_recalculated
 
@@ -451,11 +409,11 @@ class TestComputedFieldCascading:
         """
         import threading
         import time
-        
+
         state_manager.initialize_state(
             inputs={},
             default_state={"firstName": "John", "lastName": "Doe", "email": "john@example.com"},
-            state_schema=cascading_state_schema
+            state_schema=cascading_state_schema,
         )
 
         errors = []
@@ -463,11 +421,9 @@ class TestComputedFieldCascading:
 
         def update_first_name(name_suffix):
             try:
-                state_manager.update_state([{
-                    "path": "state.firstName",
-                    "operation": "set",
-                    "value": f"John{name_suffix}"
-                }])
+                state_manager.update_state(
+                    [{"path": "state.firstName", "operation": "set", "value": f"John{name_suffix}"}]
+                )
                 # Small delay to encourage race conditions
                 time.sleep(0.01)
                 state = state_manager.get_flattened_state()
@@ -476,12 +432,10 @@ class TestComputedFieldCascading:
                 errors.append(str(e))
 
         def update_last_name(name_suffix):
-            try:  
-                state_manager.update_state([{
-                    "path": "state.lastName",
-                    "operation": "set",
-                    "value": f"Doe{name_suffix}"
-                }])
+            try:
+                state_manager.update_state(
+                    [{"path": "state.lastName", "operation": "set", "value": f"Doe{name_suffix}"}]
+                )
                 time.sleep(0.01)
                 state = state_manager.get_flattened_state()
                 results[f"last_{name_suffix}"] = state["fullName"]
@@ -511,7 +465,7 @@ class TestComputedFieldCascading:
         assert "fullName" in final_state
         assert len(final_state["fullName"].split()) == 2  # Should have first and last name
         assert final_state["isComplete"] == True  # Should still be complete
-        
+
 
 class TestComputedFieldPerformance:
     """Test performance characteristics of cascading computed fields."""
@@ -520,29 +474,29 @@ class TestComputedFieldPerformance:
     def performance_schema(self):
         """Large schema with many cascading dependencies for performance testing."""
         schema = {"computed": {}}
-        
+
         # Create 50 computed fields with various dependency patterns
         for i in range(50):
             if i == 0:
                 # First field depends on base state
                 schema["computed"][f"field_{i}"] = {
                     "expression": f"this.baseValue + '_{i}'",
-                    "dependencies": ["baseValue"]
+                    "dependencies": ["baseValue"],
                 }
             elif i < 25:
                 # First 25 fields create a linear dependency chain
                 schema["computed"][f"field_{i}"] = {
                     "expression": f"this.field_{i-1} + '_{i}'",
-                    "dependencies": [f"field_{i-1}"]
+                    "dependencies": [f"field_{i-1}"],
                 }
             else:
                 # Remaining fields depend on multiple earlier fields
-                deps = [f"field_{j}" for j in range(max(0, i-5), i)]
+                deps = [f"field_{j}" for j in range(max(0, i - 5), i)]
                 schema["computed"][f"field_{i}"] = {
                     "expression": f"'{i}:' + this.{deps[0]} if deps else 'empty'",
-                    "dependencies": deps
+                    "dependencies": deps,
                 }
-                
+
         return schema
 
     def test_large_cascading_update_performance(self, performance_schema):
@@ -552,32 +506,31 @@ class TestComputedFieldPerformance:
         """
         mock_evaluator = Mock()
         mock_evaluator.execute = Mock(return_value="computed_value")
-        
-        with patch('aromcp.workflow_server.state.manager.TransformationEngine', return_value=mock_evaluator):
+
+        with patch("aromcp.workflow_server.state.manager.TransformationEngine", return_value=mock_evaluator):
             state_manager = StateManager()
-            
+
             # Initialize with performance schema
             state_manager.initialize_state(
                 inputs={},
                 default_state={"baseValue": "start"},
                 state_schema=performance_schema,
-                workflow_id="wf_perf_test"
+                workflow_id="wf_perf_test",
             )
 
             # Time a cascading update
             import time
+
             start_time = time.time()
-            
-            state_manager.update_state([{
-                "path": "state.baseValue",
-                "operation": "set",
-                "value": "updated_start"
-            }], workflow_id="wf_perf_test")
-            
+
+            state_manager.update_state(
+                [{"path": "state.baseValue", "operation": "set", "value": "updated_start"}], workflow_id="wf_perf_test"
+            )
+
             elapsed_time = time.time() - start_time
-            
+
             # Should complete within reasonable time (< 1 second for 50 fields)
             assert elapsed_time < 1.0, f"Cascading update took too long: {elapsed_time:.2f}s"
-            
+
             # Verify some recalculations occurred
             assert mock_evaluator.execute.call_count > 0

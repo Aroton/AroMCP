@@ -86,10 +86,10 @@ class TransformationEngine:
 
                 # Convert PythonMonkey objects to native Python objects to avoid deepcopy issues
                 native_result = self._convert_to_native_python(result)
-                
+
                 # Clean up global context
                 delattr(self._js_engine.globalThis, "input")
-                
+
                 return native_result
             except Exception as e:
                 # Clean up global context even on error
@@ -97,11 +97,13 @@ class TransformationEngine:
                     delattr(self._js_engine.globalThis, "input")
                 except:
                     pass  # Ignore cleanup errors
-                
+
                 # Provide meaningful error message for common PythonMonkey issues
                 error_msg = str(e)
                 if "segmentation fault" in error_msg.lower() or "sigsegv" in error_msg.lower():
-                    raise ComputedFieldError(f"JavaScript execution crashed: {transform} - try using Python fallback syntax") from e
+                    raise ComputedFieldError(
+                        f"JavaScript execution crashed: {transform} - try using Python fallback syntax"
+                    ) from e
                 elif "syntax" in error_msg.lower():
                     raise SyntaxError(f"JavaScript syntax error in transform: {transform} - {error_msg}") from e
                 elif "reference" in error_msg.lower() and "not defined" in error_msg.lower():
@@ -535,7 +537,7 @@ class CascadingUpdateCalculator:
             # Try both the field name directly and with "computed." prefix
             transitive = self.reverse_deps.get(field, set())
             transitive.update(self.reverse_deps.get(f"computed.{field}", set()))
-            
+
             for trans_field in transitive:
                 if trans_field not in affected:
                     affected.add(trans_field)
@@ -548,32 +550,32 @@ class CascadingUpdateCalculator:
 
 class AdvancedTransformer:
     """Advanced transformer with enhanced cascading and conditional updates."""
-    
+
     def __init__(self):
         """Initialize the advanced transformer."""
         self.transformation_engine = TransformationEngine()
         self._dependency_cache = {}
         self._update_strategies = {}
-    
+
     def handle_conditional_cascading(self, condition: str, updates: list[dict[str, Any]]) -> None:
         """Handle conditional cascading updates based on conditions."""
         try:
             # Evaluate condition using transformation engine
             condition_result = self.transformation_engine.execute(condition, {})
-            
+
             if condition_result:
                 for update in updates:
                     field_name = update.get("field")
                     transform = update.get("transform")
                     input_data = update.get("input", {})
-                    
+
                     if field_name and transform:
                         # Execute the transform
                         result = self.transformation_engine.execute(transform, input_data)
                         logger.info(f"Conditional update applied to {field_name}: {result}")
         except Exception as e:
             logger.error(f"Conditional cascading failed: {e}")
-    
+
     def process_array_transformations(self, array_path: str, transform: str) -> list[Any]:
         """Process transformations on array elements."""
         try:
@@ -592,48 +594,48 @@ class AdvancedTransformer:
         except Exception as e:
             logger.error(f"Array transformation failed for {array_path}: {e}")
             return []
-    
+
     def optimize_dependency_resolution(self, dependencies: dict[str, list[str]]) -> dict[str, list[str]]:
         """Optimize dependency resolution order for better performance."""
         optimized = {}
-        
+
         for field, deps in dependencies.items():
             # Remove redundant dependencies and optimize order
             unique_deps = list(dict.fromkeys(deps))  # Remove duplicates while preserving order
-            
+
             # Sort by complexity (simple fields first)
             unique_deps.sort(key=lambda x: (len(x.split(".")), x))
-            
+
             optimized[field] = unique_deps
-            
+
         return optimized
-    
+
     def cascade_updates(self, changes: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
         """Process cascading updates with advanced dependency resolution."""
         try:
             # Initialize dependency resolver
             resolver = DependencyResolver(schema)
             resolved_deps = resolver.resolve()
-            
+
             # Initialize cascade calculator
             cascade_calc = CascadingUpdateCalculator(resolved_deps)
-            
+
             # Get affected fields
             changed_paths = list(changes.keys())
             affected_fields = cascade_calc.get_affected_fields(changed_paths)
-            
+
             # Process updates in dependency order
             updated_values = {}
             for field in affected_fields:
                 field_info = resolved_deps[field]
                 transform = field_info["transform"]
-                
+
                 # Get input values for transformation
                 input_values = {}
                 for dep_path in field_info["dependencies"]:
                     if dep_path in changes:
                         input_values[dep_path] = changes[dep_path]
-                
+
                 # Execute transformation
                 try:
                     result = self.transformation_engine.execute(transform, input_values)
@@ -645,9 +647,9 @@ class AdvancedTransformer:
                         updated_values[f"computed.{field}"] = fallback
                     else:
                         logger.error(f"Cascading update failed for {field}: {e}")
-            
+
             return updated_values
-            
+
         except Exception as e:
             logger.error(f"Cascade updates failed: {e}")
             return {}

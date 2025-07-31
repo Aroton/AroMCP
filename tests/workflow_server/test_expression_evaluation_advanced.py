@@ -9,13 +9,12 @@ Focus: PythonMonkey fallback behavior, complex nested expression evaluation
 Pillar: Variable Resolution
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any, List
-import json
+from unittest.mock import Mock, patch
 
-from aromcp.workflow_server.workflow.expressions import ExpressionEvaluator
+import pytest
+
 from aromcp.workflow_server.state.manager import StateManager
+from aromcp.workflow_server.workflow.expressions import ExpressionEvaluator
 
 
 class TestExpressionEvaluationAdvanced:
@@ -24,16 +23,16 @@ class TestExpressionEvaluationAdvanced:
     @pytest.fixture
     def mock_pythonmonkey_available(self):
         """Mock PythonMonkey as available."""
-        with patch('aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE', True):
+        with patch("aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE", True):
             mock_pm = Mock()
             mock_pm.eval = Mock()
-            with patch('aromcp.workflow_server.workflow.expression_evaluator.pythonmonkey', mock_pm):
+            with patch("aromcp.workflow_server.workflow.expression_evaluator.pythonmonkey", mock_pm):
                 yield mock_pm
 
     @pytest.fixture
     def mock_pythonmonkey_unavailable(self):
         """Mock PythonMonkey as unavailable to test fallback."""
-        with patch('aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE', False):
+        with patch("aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE", False):
             yield
 
     @pytest.fixture
@@ -54,44 +53,32 @@ class TestExpressionEvaluationAdvanced:
                 "profile": {
                     "name": "John Doe",
                     "age": 30,
-                    "preferences": {
-                        "theme": "dark",
-                        "language": "en",
-                        "notifications": True
-                    },
+                    "preferences": {"theme": "dark", "language": "en", "notifications": True},
                     "roles": ["user", "admin", "developer"],
-                    "metadata": {
-                        "created_at": "2023-01-15",
-                        "last_login": "2024-07-20",
-                        "login_count": 150
-                    }
+                    "metadata": {"created_at": "2023-01-15", "last_login": "2024-07-20", "login_count": 150},
                 },
                 "settings": {
                     "privacy": {"public": False, "analytics": True},
-                    "display": {"compact": True, "animations": False}
-                }
+                    "display": {"compact": True, "animations": False},
+                },
             },
             "project": {
                 "info": {
                     "name": "Test Project",
                     "version": "1.2.3",
                     "tags": ["react", "typescript", "testing"],
-                    "stats": {
-                        "files": 245,
-                        "tests": 89,
-                        "coverage": 0.85
-                    }
+                    "stats": {"files": 245, "tests": 89, "coverage": 0.85},
                 },
                 "config": {
                     "build": {"target": "es2020", "minify": True},
-                    "lint": {"strict": True, "rules": ["airbnb", "prettier"]}
-                }
+                    "lint": {"strict": True, "rules": ["airbnb", "prettier"]},
+                },
             },
             "calculations": {
                 "scores": [95, 87, 92, 78, 99],
                 "weights": [0.3, 0.2, 0.25, 0.15, 0.1],
-                "thresholds": {"excellent": 90, "good": 80, "fair": 70}
-            }
+                "thresholds": {"excellent": 90, "good": 80, "fair": 70},
+            },
         }
 
     def test_python_fallback_basic_expressions(self, expression_evaluator_fallback, complex_context):
@@ -106,13 +93,11 @@ class TestExpressionEvaluationAdvanced:
             {"expression": "100 / 4", "expected": 25.0},
             {"expression": "15 % 4", "expected": 3},
             {"expression": "2 ** 3", "expected": 8},
-            
             # Boolean expressions
             {"expression": "True and False", "expected": False},
             {"expression": "True or False", "expected": True},
             {"expression": "not True", "expected": False},
             {"expression": "not False", "expected": True},
-            
             # Comparison expressions
             {"expression": "5 > 3", "expected": True},
             {"expression": "5 < 3", "expected": False},
@@ -120,18 +105,14 @@ class TestExpressionEvaluationAdvanced:
             {"expression": "5 <= 4", "expected": False},
             {"expression": "5 == 5", "expected": True},
             {"expression": "5 != 3", "expected": True},
-            
             # Mixed expressions
             {"expression": "(5 > 3) and (2 < 4)", "expected": True},
             {"expression": "(10 / 2) == 5", "expected": True},
-            {"expression": "not (3 > 5)", "expected": True}
+            {"expression": "not (3 > 5)", "expected": True},
         ]
 
         for test_case in test_cases:
-            result = expression_evaluator_fallback.evaluate_expression(
-                test_case["expression"], 
-                complex_context
-            )
+            result = expression_evaluator_fallback.evaluate_expression(test_case["expression"], complex_context)
             assert result == test_case["expected"], f"Failed for expression: {test_case['expression']}"
 
     def test_python_fallback_with_context_variables(self, expression_evaluator_fallback, complex_context):
@@ -144,31 +125,27 @@ class TestExpressionEvaluationAdvanced:
             {"expression": "user['profile']['age']", "expected": 30},
             {"expression": "project['info']['version']", "expected": "1.2.3"},
             {"expression": "len(calculations['scores'])", "expected": 5},
-            
             # Variable in calculations
             {"expression": "user['profile']['age'] + 5", "expected": 35},
             {"expression": "project['info']['stats']['files'] > 200", "expected": True},
             {"expression": "calculations['thresholds']['excellent'] - 10", "expected": 80},
-            
             # List/array operations
             {"expression": "calculations['scores'][0]", "expected": 95},
             {"expression": "len(user['profile']['roles'])", "expected": 3},
             {"expression": "'admin' in user['profile']['roles']", "expected": True},
-            
             # String operations
             {"expression": "user['profile']['name'].lower()", "expected": "john doe"},
             {"expression": "project['info']['name'].replace('Test', 'Demo')", "expected": "Demo Project"},
-            {"expression": "len(project['info']['name'])", "expected": 12}
+            {"expression": "len(project['info']['name'])", "expected": 12},
         ]
 
         for test_case in test_cases:
-            result = expression_evaluator_fallback.evaluate_expression(
-                test_case["expression"],
-                complex_context
-            )
+            result = expression_evaluator_fallback.evaluate_expression(test_case["expression"], complex_context)
             assert result == test_case["expected"], f"Failed for expression: {test_case['expression']}"
 
-    def test_python_fallback_limitations_vs_pythonmonkey(self, expression_evaluator_fallback, expression_evaluator_with_pm, mock_pythonmonkey_available):
+    def test_python_fallback_limitations_vs_pythonmonkey(
+        self, expression_evaluator_fallback, expression_evaluator_with_pm, mock_pythonmonkey_available
+    ):
         """
         Test AC-VR-008: Python fallback has known limitations compared to PythonMonkey
         Focus: ES6+ features that only work with PythonMonkey
@@ -190,7 +167,7 @@ class TestExpressionEvaluationAdvanced:
             [2, 4, 6, 8, 10],  # map result
             15,  # reduce result
             "Value is: 1",  # template literal
-            1  # destructuring result
+            1,  # destructuring result
         ]
 
         # Test PythonMonkey handling ES6 features
@@ -205,7 +182,9 @@ class TestExpressionEvaluationAdvanced:
             with pytest.raises((SyntaxError, NameError, TypeError)):
                 expression_evaluator_fallback.evaluate_expression(expression, context)
 
-    def test_complex_nested_expressions_with_pythonmonkey(self, expression_evaluator_with_pm, mock_pythonmonkey_available, complex_context):
+    def test_complex_nested_expressions_with_pythonmonkey(
+        self, expression_evaluator_with_pm, mock_pythonmonkey_available, complex_context
+    ):
         """
         Test AC-VR-020: Complex nested expressions evaluate correctly
         Focus: Multi-level nested object/array access with complex logic
@@ -215,41 +194,38 @@ class TestExpressionEvaluationAdvanced:
             {
                 "expr": "user.profile.roles.filter(role => role.includes('admin')).length > 0",
                 "mock_result": True,
-                "description": "Check if user has admin role using nested access and ES6 methods"
+                "description": "Check if user has admin role using nested access and ES6 methods",
             },
             {
                 "expr": "project.info.tags.map(tag => tag.toUpperCase()).join(', ')",
                 "mock_result": "REACT, TYPESCRIPT, TESTING",
-                "description": "Transform and join nested array elements"
+                "description": "Transform and join nested array elements",
             },
             {
                 "expr": "calculations.scores.reduce((sum, score, index) => sum + (score * calculations.weights[index]), 0)",
                 "mock_result": 90.5,
-                "description": "Weighted average calculation with nested array access"
+                "description": "Weighted average calculation with nested array access",
             },
             {
                 "expr": "Object.keys(user.settings).every(key => typeof user.settings[key] === 'object')",
                 "mock_result": True,
-                "description": "Complex object introspection with nested access"
+                "description": "Complex object introspection with nested access",
             },
             {
                 "expr": "project.info.stats.coverage >= calculations.thresholds.excellent / 100",
                 "mock_result": False,  # 0.85 >= 0.9 is False
-                "description": "Multi-level nested comparison with arithmetic"
-            }
+                "description": "Multi-level nested comparison with arithmetic",
+            },
         ]
 
         mock_pythonmonkey_available.eval.side_effect = [expr["mock_result"] for expr in complex_expressions]
 
         for i, test_case in enumerate(complex_expressions):
-            result = expression_evaluator_with_pm.evaluate_expression(
-                test_case["expr"], 
-                complex_context
-            )
-            
+            result = expression_evaluator_with_pm.evaluate_expression(test_case["expr"], complex_context)
+
             expected = test_case["mock_result"]
             assert result == expected, f"Failed for {test_case['description']}: {test_case['expr']}"
-            
+
         # Verify PythonMonkey was called for each expression
         assert mock_pythonmonkey_available.eval.call_count == len(complex_expressions)
 
@@ -263,43 +239,42 @@ class TestExpressionEvaluationAdvanced:
             {
                 "expr": "len([role for role in user['profile']['roles'] if 'admin' in role]) > 0",
                 "expected": True,
-                "description": "List comprehension with nested access"
+                "description": "List comprehension with nested access",
             },
             {
                 "expr": "sum(calculations['scores']) / len(calculations['scores'])",
                 "expected": 90.2,  # (95+87+92+78+99)/5
-                "description": "Average calculation with nested access"
+                "description": "Average calculation with nested access",
             },
             {
                 "expr": "all(score >= calculations['thresholds']['fair'] for score in calculations['scores'])",
                 "expected": True,  # All scores >= 70
-                "description": "Complex boolean evaluation with generator"
+                "description": "Complex boolean evaluation with generator",
             },
             {
                 "expr": "user['profile']['metadata']['login_count'] > project['info']['stats']['files']",
                 "expected": False,  # 150 > 245 is False
-                "description": "Deep nested comparison"
+                "description": "Deep nested comparison",
             },
             {
                 "expr": "max(calculations['scores']) - min(calculations['scores'])",
                 "expected": 21,  # 99 - 78
-                "description": "Range calculation with nested arrays"
+                "description": "Range calculation with nested arrays",
             },
             {
                 "expr": "'typescript' in [tag.lower() for tag in project['info']['tags']]",
                 "expected": True,
-                "description": "Case-insensitive search in nested array"
-            }
+                "description": "Case-insensitive search in nested array",
+            },
         ]
 
         for test_case in python_compatible_complex:
-            result = expression_evaluator_fallback.evaluate_expression(
-                test_case["expr"],
-                complex_context
-            )
+            result = expression_evaluator_fallback.evaluate_expression(test_case["expr"], complex_context)
             assert result == test_case["expected"], f"Failed for {test_case['description']}: {test_case['expr']}"
 
-    def test_expression_evaluation_error_handling(self, expression_evaluator_fallback, expression_evaluator_with_pm, mock_pythonmonkey_available):
+    def test_expression_evaluation_error_handling(
+        self, expression_evaluator_fallback, expression_evaluator_with_pm, mock_pythonmonkey_available
+    ):
         """
         Test error handling in both PythonMonkey and fallback modes
         Focus: Graceful handling of invalid expressions and context errors
@@ -322,7 +297,7 @@ class TestExpressionEvaluationAdvanced:
 
         # Test PythonMonkey error handling
         mock_pythonmonkey_available.eval.side_effect = Exception("JavaScript error")
-        
+
         for expr in invalid_expressions:
             with pytest.raises(Exception):
                 expression_evaluator_with_pm.evaluate_expression(expr, context)
@@ -333,12 +308,12 @@ class TestExpressionEvaluationAdvanced:
         Focus: System correctly detects PythonMonkey availability
         """
         # Test with PythonMonkey available
-        with patch('aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE', True):
+        with patch("aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE", True):
             evaluator = ExpressionEvaluator()
             assert evaluator.use_pythonmonkey == True
 
         # Test with PythonMonkey unavailable
-        with patch('aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE', False):
+        with patch("aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE", False):
             evaluator = ExpressionEvaluator()
             assert evaluator.use_pythonmonkey == False
 
@@ -354,13 +329,13 @@ class TestExpressionEvaluationAdvanced:
             "user['profile']['age'] > 25",
             "len(calculations['scores'])",
             "'admin' in user['profile']['roles']",
-            "project['info']['stats']['coverage'] * 100"
+            "project['info']['stats']['coverage'] * 100",
         ]
 
         # Test fallback performance
-        with patch('aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE', False):
+        with patch("aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE", False):
             fallback_evaluator = ExpressionEvaluator()
-            
+
             start_time = time.time()
             for _ in range(100):  # Run multiple times for timing
                 for expr in simple_expressions:
@@ -368,13 +343,13 @@ class TestExpressionEvaluationAdvanced:
             fallback_time = time.time() - start_time
 
         # Test PythonMonkey performance (mocked)
-        with patch('aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE', True):
+        with patch("aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE", True):
             mock_pm = Mock()
             mock_pm.eval.return_value = "mocked_result"
-            
-            with patch('aromcp.workflow_server.workflow.expression_evaluator.pythonmonkey', mock_pm):
+
+            with patch("aromcp.workflow_server.workflow.expression_evaluator.pythonmonkey", mock_pm):
                 pm_evaluator = ExpressionEvaluator()
-                
+
                 start_time = time.time()
                 for _ in range(100):
                     for expr in simple_expressions:
@@ -401,7 +376,7 @@ class TestExpressionEvaluationAdvanced:
             "large_number": 9007199254740991,  # JavaScript MAX_SAFE_INTEGER
             "float_precision": 0.1 + 0.2,  # Float precision issue
             "nested_nulls": {"level1": {"level2": None}},
-            "mixed_array": [1, "string", None, True, {"nested": "object"}]
+            "mixed_array": [1, "string", None, True, {"nested": "object"}],
         }
 
         test_cases = [
@@ -417,14 +392,11 @@ class TestExpressionEvaluationAdvanced:
             {"expr": "nested_nulls['level1']['level2'] is None", "expected": True},
             {"expr": "len(mixed_array)", "expected": 5},
             {"expr": "isinstance(mixed_array[0], int)", "expected": True},
-            {"expr": "mixed_array[4]['nested']", "expected": "object"}
+            {"expr": "mixed_array[4]['nested']", "expected": "object"},
         ]
 
         for test_case in test_cases:
-            result = expression_evaluator_fallback.evaluate_expression(
-                test_case["expr"],
-                edge_case_context
-            )
+            result = expression_evaluator_fallback.evaluate_expression(test_case["expr"], edge_case_context)
             assert result == test_case["expected"], f"Failed for edge case: {test_case['expr']}"
 
 
@@ -442,19 +414,17 @@ class TestExpressionEvaluationIntegration:
             # Inputs tier
             "user_input": "John",
             "threshold": 80,
-            
-            # State tier  
+            # State tier
             "current_score": 85,
             "attempts": 3,
-            
             # Computed tier (highest precedence)
             "final_score": 92,
-            "status": "passed"
+            "status": "passed",
         }
 
         # Mock expression evaluator
         evaluator = Mock(spec=ExpressionEvaluator)
-        
+
         def mock_evaluate(expression, context):
             # Simulate evaluation with state context
             if "final_score > threshold" in expression:
@@ -470,11 +440,11 @@ class TestExpressionEvaluationIntegration:
 
         # Test expressions with state context
         context = state_manager.get_flattened_state()
-        
+
         test_expressions = [
             {"expr": "final_score > threshold", "expected": True},
             {"expr": "status == 'passed'", "expected": True},
-            {"expr": "attempts < 5", "expected": True}
+            {"expr": "attempts < 5", "expected": True},
         ]
 
         for test in test_expressions:
@@ -495,10 +465,10 @@ class TestExpressionEvaluationIntegration:
             "this": {"current_value": 42, "enabled": True},
             "global": {"config": {"max_retries": 3}, "version": "1.0"},
             "inputs": {"user_name": "Alice", "timeout": 30},
-            "loop": {"index": 2, "item": "test_item"}
+            "loop": {"index": 2, "item": "test_item"},
         }
 
-        with patch('aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE', False):
+        with patch("aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE", False):
             evaluator = ExpressionEvaluator()
 
             scoped_expressions = [
@@ -506,7 +476,7 @@ class TestExpressionEvaluationIntegration:
                 {"expr": "global['config']['max_retries'] == 3", "expected": True},
                 {"expr": "inputs['timeout'] < 60", "expected": True},
                 {"expr": "loop['index'] > 1", "expected": True},
-                {"expr": "this['enabled'] and global['version'] == '1.0'", "expected": True}
+                {"expr": "this['enabled'] and global['version'] == '1.0'", "expected": True},
             ]
 
             for test in scoped_expressions:

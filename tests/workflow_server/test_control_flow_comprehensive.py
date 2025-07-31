@@ -9,16 +9,13 @@ Focus: Advanced nested loop control, infinite loop detection and diagnostics
 Pillar: Control Flow
 """
 
-import pytest
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, Any, List
 
-from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
-from aromcp.workflow_server.workflow.loader import WorkflowLoader
 from aromcp.workflow_server.workflow.context import context_manager
-from aromcp.workflow_server.state.manager import StateManager
+from aromcp.workflow_server.workflow.loader import WorkflowLoader
+from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
 
 
 class TestControlFlowComprehensive:
@@ -42,11 +39,11 @@ class TestControlFlowComprehensive:
         """Helper to create a workflow file for testing."""
         if not self.temp_dir:
             self.temp_dir = tempfile.TemporaryDirectory()
-        
+
         temp_path = Path(self.temp_dir.name)
         workflows_dir = temp_path / ".aromcp" / "workflows"
         workflows_dir.mkdir(parents=True, exist_ok=True)
-        
+
         workflow_file = workflows_dir / f"{workflow_name}.yaml"
         workflow_file.write_text(workflow_content)
         return temp_path
@@ -131,21 +128,21 @@ steps:
           - path: "state.outer_count"
             value: "state.outer_count + 1"
 """
-        
+
         project_path = self._create_workflow_file("test-nested-loop-break", workflow_content)
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-nested-loop-break")
-        
+
         # Start workflow
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Process server-side steps by calling get_next_step
         while True:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -154,21 +151,21 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-        
+
         state = final_status["state"]["state"]
-        
+
         # Verify outer loop ran all iterations
         assert state["outer_count"] == 3, "Outer loop should complete all iterations"
         assert len([x for x in state["outer_iterations"] if x.endswith("_start")]) == 3
         assert len([x for x in state["outer_iterations"] if x.endswith("_end")]) == 3
-        
+
         # Verify inner loop broke at the correct point for each outer iteration
         inner_iter = state["inner_iterations"]
-        
+
         # For each outer loop iteration, inner loop should break at index 2
         for outer in range(3):
             inner_for_outer = [x for x in inner_iter if x.startswith(f"outer_{outer}_")]
@@ -229,21 +226,21 @@ steps:
               - path: "state.processed_pairs"
                 value: "[...state.processed_pairs, `${loop.outer_val}_${loop.inner_val}`]"
 """
-        
+
         project_path = self._create_workflow_file("test-nested-loop-continue", workflow_content)
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-nested-loop-continue")
-        
+
         # Start workflow
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Process server-side steps by calling get_next_step
         while True:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -252,32 +249,32 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-        
+
         state = final_status["state"]["state"]
-        
+
         # Verify all outer loop iterations completed
         processed = state["processed_pairs"]
         skipped = state["skipped_pairs"]
-        
+
         # Should have 3 outer * 5 inner = 15 total iterations
         # But 3 should be skipped (one per outer loop when inner_val = 30)
         assert len(processed) == 12, "Should process 12 pairs (15 total - 3 skipped)"
         assert len(skipped) == 3, "Should skip 3 pairs"
-        
+
         # Verify specific skipped pairs
         assert "1_30" in skipped
         assert "2_30" in skipped
         assert "3_30" in skipped
-        
+
         # Verify these were NOT processed
         assert "1_30" not in processed
         assert "2_30" not in processed
         assert "3_30" not in processed
-        
+
         # Verify all other combinations were processed
         for outer in [1, 2, 3]:
             for inner in [10, 20, 40, 50]:
@@ -337,21 +334,21 @@ steps:
               - path: "state.last_values"
                 value: "state.loop_data.slice(-5).map(d => d.iteration)"
 """
-        
+
         project_path = self._create_workflow_file("test-infinite-loop-detection", workflow_content)
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-infinite-loop-detection")
-        
+
         # Start workflow
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Process server-side steps by calling get_next_step
         while True:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
-        
+
         # Wait for completion (should hit max_iterations)
         timeout = 10
         start_time = time.time()
@@ -360,22 +357,22 @@ steps:
             if status["status"] in ["completed", "failed"]:
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
-        
+
         # The workflow should complete (not fail) but hit max iterations
         assert final_status["status"] == "completed", "Workflow should complete even when hitting max iterations"
-        
+
         state = final_status["state"]["state"]
-        
+
         # Verify loop hit max iterations limit
         assert state["counter"] == 25, "Loop should execute exactly max_iterations times"
         assert len(state["loop_data"]) == 25, "Should have diagnostic data for all iterations"
-        
+
         # Verify diagnostic information was collected
         assert len(state["last_values"]) > 0, "Should have recorded pattern detection"
-        
+
         # Verify the loop condition never changed (infinite loop scenario)
         assert state["always_true"] == True, "Loop condition remained true (infinite loop)"
 
@@ -468,21 +465,21 @@ steps:
               : 0
           }
 """
-        
+
         project_path = self._create_workflow_file("test-max-iterations-diagnostics", workflow_content)
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-max-iterations-diagnostics")
-        
+
         # Start workflow
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Process server-side steps by calling get_next_step
         while True:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -491,29 +488,29 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-        
+
         state = final_status["state"]["state"]
-        
+
         # Verify diagnostic information was collected
         assert state["iteration_count"] == 15, "Should stop at max_iterations"
         assert len(state["condition_evaluations"]) == 15, "Should track all condition evaluations"
-        
+
         # Verify state snapshots (keeps last 5)
         assert len(state["state_snapshots"]) == 5, "Should keep last 5 snapshots"
         last_snapshot = state["state_snapshots"][-1]
         assert last_snapshot["iteration"] == 14, "Last snapshot should be from iteration 14"
         assert last_snapshot["condition_check"] == True, "Condition was still true when stopped"
-        
+
         # Verify memory checkpoints (every 5 iterations: 0, 5, 10)
         assert len(state["memory_usage"]) == 3, "Should have 3 memory checkpoints"
         assert state["memory_usage"][0]["iteration"] == 0
         assert state["memory_usage"][1]["iteration"] == 5
         assert state["memory_usage"][2]["iteration"] == 10
-        
+
         # Verify performance metrics summary
         metrics = state["performance_metrics"]
         assert metrics["total_iterations"] == 15
@@ -542,11 +539,11 @@ class TestNestedLoopEdgeCases:
         """Helper to create a workflow file for testing."""
         if not self.temp_dir:
             self.temp_dir = tempfile.TemporaryDirectory()
-        
+
         temp_path = Path(self.temp_dir.name)
         workflows_dir = temp_path / ".aromcp" / "workflows"
         workflows_dir.mkdir(parents=True, exist_ok=True)
-        
+
         workflow_file = workflows_dir / f"{workflow_name}.yaml"
         workflow_file.write_text(workflow_content)
         return temp_path
@@ -614,19 +611,19 @@ steps:
                   - path: "state.results"
                     value: "[...state.results, state.current_combo]"
 """
-        
+
         project_path = self._create_workflow_file("test-triple-nested-loops", workflow_content)
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-triple-nested-loops")
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Process server-side steps by calling get_next_step
         while True:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -635,28 +632,28 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed"
-        
+
         results = final_status["state"]["state"]["results"]
-        
+
         # Verify skipped combinations are not in results
         assert "B_2_green" not in results, "Should skip B_2_green"
         assert "C_3_red" not in results, "Should skip C_3_red"
-        
+
         # Verify break only affected innermost loop
         # A_4_blue should break color loop, so no A_4_blue in results
         assert "A_4_blue" not in results, "Should not process A_4_blue"
         # But A_4_red and A_4_green should be processed
         assert "A_4_red" in results, "Should process colors before break"
         assert "A_4_green" in results, "Should process colors before break"
-        
+
         # B_3_blue should break color loop for B_3
         assert "B_3_blue" not in results, "Should not process B_3_blue"
         assert "B_3_red" in results, "Should process B_3_red before break"
         assert "B_3_green" in results, "Should process B_3_green before break"
-        
+
         # Verify other B_4 combinations still processed (break didn't affect number loop)
         assert "B_4_red" in results, "Break in B_3 shouldn't affect B_4"
         assert "B_4_green" in results, "Break in B_3 shouldn't affect B_4"

@@ -30,7 +30,10 @@ class TestWorkflowValidation:
 
     def test_missing_required_fields(self):
         """Test detection of missing required fields."""
-        workflow = {"description": "Missing name and version", "steps": [{"id": "test_step", "type": "user_message", "message": "Test"}]}
+        workflow = {
+            "description": "Missing name and version",
+            "steps": [{"id": "test_step", "type": "user_message", "message": "Test"}],
+        }
 
         validator = WorkflowValidator()
         result = validator.validate(workflow)
@@ -75,7 +78,12 @@ class TestWorkflowValidation:
                 },
             },
             "steps": [
-                {"id": "get_input", "type": "user_input", "prompt": "Enter initial counter", "variable_name": "init_count"},
+                {
+                    "id": "get_input",
+                    "type": "user_input",
+                    "prompt": "Enter initial counter",
+                    "variable_name": "init_count",
+                },
                 {
                     "id": "check_items",
                     "type": "conditional",
@@ -89,7 +97,12 @@ class TestWorkflowValidation:
                         }
                     ],
                     "else_steps": [
-                        {"id": "show_no_items", "type": "user_message", "message": "No items to process", "message_type": "warning"}
+                        {
+                            "id": "show_no_items",
+                            "type": "user_message",
+                            "message": "No items to process",
+                            "message_type": "warning",
+                        }
                     ],
                 },
                 {
@@ -97,7 +110,14 @@ class TestWorkflowValidation:
                     "type": "foreach",
                     "items": "{{ state.items }}",
                     "variable_name": "item",
-                    "body": [{"id": "call_process_item", "type": "mcp_call", "tool": "process_item", "parameters": {"item": "{{ item }}"}}],
+                    "body": [
+                        {
+                            "id": "call_process_item",
+                            "type": "mcp_call",
+                            "tool": "process_item",
+                            "parameters": {"item": "{{ item }}"},
+                        }
+                    ],
                 },
                 {
                     "id": "process_items_parallel",
@@ -152,7 +172,7 @@ class TestWorkflowValidation:
                     "id": "invalid_foreach",
                     "type": "foreach",
                     # Missing items
-                    "body": [{"id": "step", "type": "user_message", "message": "test"}]
+                    "body": [{"id": "step", "type": "user_message", "message": "test"}],
                 },
             ],
         }

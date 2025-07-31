@@ -205,7 +205,7 @@ class ExpressionLexer:
                 self.advance()
                 self.advance()
                 self.advance()
-                
+
             elif self.current_char == "=" and self.peek_next() == "=":
                 tokens.append(Token(TokenType.COMPARISON, "==", start_pos))
                 self.advance()
@@ -216,7 +216,7 @@ class ExpressionLexer:
                 self.advance()
                 self.advance()
                 self.advance()
-                
+
             elif self.current_char == "!" and self.peek_next() == "=":
                 tokens.append(Token(TokenType.COMPARISON, "!=", start_pos))
                 self.advance()
@@ -318,7 +318,12 @@ class ExpressionParser:
         """Parse equality operators (==, !=)."""
         left = self.comparison()
 
-        while self.current_token.type == TokenType.COMPARISON and self.current_token.value in ("==", "!=", "===", "!=="):
+        while self.current_token.type == TokenType.COMPARISON and self.current_token.value in (
+            "==",
+            "!=",
+            "===",
+            "!==",
+        ):
             op = self.current_token.value
             self.advance()
             right = self.comparison()
@@ -468,16 +473,16 @@ class ExpressionParser:
             # Array literal [item1, item2, ...]
             self.advance()
             elements = []
-            
+
             # Handle empty array []
             if self.current_token.type == TokenType.RBRACKET:
                 self.advance()
                 return {"type": "array_literal", "elements": elements}
-            
+
             # Parse array elements
             while True:
                 elements.append(self.ternary())
-                
+
                 if self.current_token.type == TokenType.RBRACKET:
                     self.advance()
                     break
@@ -489,7 +494,7 @@ class ExpressionParser:
                         break
                 else:
                     raise ExpressionError("Expected ',' or ']' in array literal")
-            
+
             return {"type": "array_literal", "elements": elements}
 
         else:
@@ -503,9 +508,11 @@ class ExpressionEvaluator:
         self.context = {}
         self.scoped_context = {}
 
-    def evaluate(self, expression: str, context: dict[str, Any], scoped_context: dict[str, dict[str, Any]] | None = None) -> Any:
+    def evaluate(
+        self, expression: str, context: dict[str, Any], scoped_context: dict[str, dict[str, Any]] | None = None
+    ) -> Any:
         """Evaluate an expression string against a context.
-        
+
         Args:
             expression: The expression string to evaluate
             context: Legacy context for backward compatibility
@@ -535,7 +542,7 @@ class ExpressionEvaluator:
 
         elif node_type == "identifier":
             name = node["name"]
-            
+
             # For simple identifiers, use legacy context resolution
             if name in self.context:
                 return self.context[name]
@@ -564,14 +571,16 @@ class ExpressionEvaluator:
             # Check if this is a scoped variable access (e.g., this.variable)
             obj_node = node["object"]
             prop = node["property"]
-            
-            if (obj_node["type"] == "identifier" and 
-                obj_node["name"] in ["this", "global", "loop", "inputs"] and
-                self.scoped_context):
+
+            if (
+                obj_node["type"] == "identifier"
+                and obj_node["name"] in ["this", "global", "loop", "inputs"]
+                and self.scoped_context
+            ):
                 # This is a scoped variable access
                 scope_name = obj_node["name"]
                 return self._get_scoped_variable(scope_name, prop)
-            
+
             # Regular property access - evaluate the object first
             obj = self._evaluate_node(obj_node)
             return self._get_property(obj, prop)
@@ -579,12 +588,14 @@ class ExpressionEvaluator:
         elif node_type == "array_access":
             # Check if the object is a scoped variable
             obj_node = node["object"]
-            
+
             # Handle nested scoped access (e.g., this.items[0])
-            if (obj_node["type"] == "property_access" and
-                obj_node["object"]["type"] == "identifier" and
-                obj_node["object"]["name"] in ["this", "global", "loop", "inputs"] and
-                self.scoped_context):
+            if (
+                obj_node["type"] == "property_access"
+                and obj_node["object"]["type"] == "identifier"
+                and obj_node["object"]["name"] in ["this", "global", "loop", "inputs"]
+                and self.scoped_context
+            ):
                 # Get the scoped object first
                 scope_name = obj_node["object"]["name"]
                 prop = obj_node["property"]
@@ -592,7 +603,7 @@ class ExpressionEvaluator:
             else:
                 # Regular object evaluation
                 obj = self._evaluate_node(obj_node)
-            
+
             index = self._evaluate_node(node["index"])
             return self._get_array_element(obj, index)
 
@@ -615,43 +626,43 @@ class ExpressionEvaluator:
 
     def _get_scoped_variable(self, scope_name: str, variable_path: str) -> Any:
         """Get a variable from a scoped context.
-        
+
         Args:
             scope_name: The scope name ('this', 'global', 'loop', 'inputs')
             variable_path: The path within that scope (e.g., 'config.settings.value')
-            
+
         Returns:
             The value at the specified path, or None if not found
         """
         if scope_name not in self.scoped_context:
             return None
-            
+
         scope_data = self.scoped_context[scope_name]
         if scope_data is None:
             return None
-            
+
         return self._navigate_path(scope_data, variable_path)
-    
+
     def _navigate_path(self, obj: Any, path: str) -> Any:
         """Navigate a nested object path like 'config.settings.value'.
-        
+
         Args:
             obj: The object to navigate
             path: Dot-separated path string
-            
+
         Returns:
             The value at the path, or None if not found
         """
         if obj is None:
             return None
-            
+
         current = obj
         path_parts = path.split(".")
-        
+
         for part in path_parts:
             if current is None:
                 return None
-                
+
             if isinstance(current, dict):
                 current = current.get(part)
             elif isinstance(current, list):
@@ -668,7 +679,7 @@ class ExpressionEvaluator:
             else:
                 # Try to get attribute for other objects
                 current = getattr(current, part, None)
-                
+
         return current
 
     def _evaluate_binary_op(self, op: str, left: Any, right: Any) -> Any:
@@ -922,12 +933,12 @@ class ExpressionEvaluator:
             return self._loose_equals(left, 1 if right else 0)
 
         return False
-    
+
     def _strict_equals(self, left: Any, right: Any) -> bool:
         """Implement JavaScript === comparison (strict equality)."""
         # Same type and value
         if type(left) is type(right):
             return left == right
-        
+
         # No type coercion in strict equality
         return False

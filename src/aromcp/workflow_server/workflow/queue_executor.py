@@ -4,15 +4,15 @@ This executor uses a queue-based approach instead of recursive execution,
 making it simpler, more debuggable, and less prone to infinite loops.
 """
 
+import asyncio
 import os
 import threading
 import uuid
-import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
 from ..state.manager import StateManager
-from ..utils.error_tracking import create_workflow_error, enhance_exception_message, log_exception_with_location
+from ..utils.error_tracking import create_workflow_error
 from .context import ExecutionContext, StackFrame, context_manager
 from .expressions import ExpressionEvaluator
 from .models import WorkflowDefinition, WorkflowInstance, WorkflowStep
@@ -44,7 +44,7 @@ class QueueBasedWorkflowExecutor:
 
         # Debug mode detection
         self._debug_serial = os.getenv("AROMCP_WORKFLOW_DEBUG", "").lower() == "serial"
-        
+
         # Shutdown control
         self._accepting_workflows = True
 
@@ -75,7 +75,9 @@ class QueueBasedWorkflowExecutor:
         except Exception as e:
             raise ValueError(f"Failed to read state for workflow {workflow_id}: {str(e)}") from e
 
-    def _update_state(self, workflow_id: str, updates: list[dict[str, Any]], context: ExecutionContext | None = None) -> dict[str, Any]:
+    def _update_state(
+        self, workflow_id: str, updates: list[dict[str, Any]], context: ExecutionContext | None = None
+    ) -> dict[str, Any]:
         """Update workflow state with proper error handling.
 
         Args:
@@ -105,7 +107,7 @@ class QueueBasedWorkflowExecutor:
             if "inputs" not in initial_state:
                 initial_state["inputs"] = {}
             initial_state["inputs"].update(inputs)
-            
+
             # Also merge inputs into state tier for backward compatibility
             if "state" not in initial_state:
                 initial_state["state"] = {}
@@ -123,7 +125,7 @@ class QueueBasedWorkflowExecutor:
         self.workflows[workflow_id] = instance
 
         # Track workflow status in state manager for test compatibility
-        if not hasattr(self.state_manager, '_workflow_statuses'):
+        if not hasattr(self.state_manager, "_workflow_statuses"):
             self.state_manager._workflow_statuses = {}
         self.state_manager._workflow_statuses[workflow_id] = "running"
 
@@ -221,7 +223,7 @@ class QueueBasedWorkflowExecutor:
                 execution_context = step_config["execution"]
                 if step.type == "shell_command" and "execution_context" in step.definition:
                     execution_context = step.definition["execution_context"]
-                
+
                 # Special handling: mcp_call with workflow_state_update tool should be processed server-side
                 if step.type == "mcp_call" and step.definition.get("tool") == "workflow_state_update":
                     execution_context = "server"
@@ -232,15 +234,12 @@ class QueueBasedWorkflowExecutor:
                         # Don't process wait_step - just return it to client
                         queue.pop_next()
                         message = step.definition.get("message", "Waiting for next client request...")
-                        queue.client_queue.append({
-                            "id": step.id,
-                            "type": "wait_step",
-                            "definition": {"message": message},
-                            "is_wait": True
-                        })
+                        queue.client_queue.append(
+                            {"id": step.id, "type": "wait_step", "definition": {"message": message}, "is_wait": True}
+                        )
                         # Stop processing - wait_step should be the only thing returned
                         break
-                    
+
                     # Process other server steps
                     queue.pop_next()
                     result = self._process_server_step(instance, step, queue)
@@ -342,14 +341,13 @@ class QueueBasedWorkflowExecutor:
                     instance.status = "completed"
                     instance.completed_at = datetime.now(UTC).isoformat()
                     # Update status tracking
-                    if hasattr(self.state_manager, '_workflow_statuses'):
+                    if hasattr(self.state_manager, "_workflow_statuses"):
                         self.state_manager._workflow_statuses[workflow_id] = "completed"
                 context_manager.remove_context(workflow_id)
                 return None
 
             # No more steps but might be in a loop
             return None
-
 
     def _implicitly_complete_step(self, workflow_id: str, step_id: str, instance: "WorkflowInstance") -> None:
         """Implicitly complete a client step (called when get_next_step is called again).
@@ -414,8 +412,8 @@ class QueueBasedWorkflowExecutor:
             return None
 
         # Track current task and step positions (subsequent calls)
-        processed_task_count = getattr(queue, '_debug_processed_tasks', 0)
-        current_step_index = getattr(queue, '_debug_current_step_index', 0)
+        processed_task_count = getattr(queue, "_debug_processed_tasks", 0)
+        current_step_index = getattr(queue, "_debug_current_step_index", 0)
 
         if processed_task_count >= len(tasks):
             # All tasks completed - continue with next workflow step
@@ -441,8 +439,8 @@ class QueueBasedWorkflowExecutor:
                 definition={
                     "task_id": task_id,
                     "total_tasks": len(tasks),
-                    "completed_task_index": processed_task_count
-                }
+                    "completed_task_index": processed_task_count,
+                },
             )
             queue.main_queue.insert(0, task_completion_step)
             return None
@@ -455,11 +453,11 @@ class QueueBasedWorkflowExecutor:
 
         # Add sub-agent task inputs with defaults from queue storage
         sub_agent_task = getattr(queue, f"{debug_key}_sub_agent_task_def", None)
-        if sub_agent_task and hasattr(sub_agent_task, 'inputs'):
+        if sub_agent_task and hasattr(sub_agent_task, "inputs"):
             for input_name, input_def in sub_agent_task.inputs.items():
                 if input_name == "file_path":
                     enhanced_context[input_name] = task_context.get("item", "")
-                elif hasattr(input_def, 'default') and input_def.default is not None:
+                elif hasattr(input_def, "default") and input_def.default is not None:
                     enhanced_context[input_name] = input_def.default
                 elif input_name in task_context:
                     enhanced_context[input_name] = task_context[input_name]
@@ -478,9 +476,7 @@ class QueueBasedWorkflowExecutor:
 
         # Create the single next step
         next_step = WorkflowStep(
-            id=f"{task_id}.{next_step_def['id']}",
-            type=next_step_def["type"],
-            definition=merged_definition
+            id=f"{task_id}.{next_step_def['id']}", type=next_step_def["type"], definition=merged_definition
         )
 
         # Add step advancement marker that will trigger the next step in sequence
@@ -492,8 +488,8 @@ class QueueBasedWorkflowExecutor:
                 "current_step_index": current_step_index,
                 "total_steps": len(flattened_steps),
                 "total_tasks": len(tasks),
-                "current_task_index": processed_task_count
-            }
+                "current_task_index": processed_task_count,
+            },
         )
 
         # Add both steps to queue in reverse order (advancement marker first, then actual step)
@@ -514,39 +510,41 @@ class QueueBasedWorkflowExecutor:
             """Recursively extract actionable steps from nested structures."""
             indent = "  " * depth
             for step in steps:
-                step_type = step.get('type', '')
-                step_id = step.get('id', '')
+                step_type = step.get("type", "")
+                step_id = step.get("id", "")
                 print(f"🐛 DEBUG: {indent}Examining: {step_id} ({step_type})")
 
-                if step_type in ['mcp_call', 'user_message', 'shell_command']:
+                if step_type in ["mcp_call", "user_message", "shell_command"]:
                     # This is an actionable step
                     flattened.append(step)
                     print(f"🐛 DEBUG: {indent}  ✓ Added actionable step")
-                elif step_type == 'conditional':
+                elif step_type == "conditional":
                     # Recursively extract from conditional branches
                     # Handle both WorkflowStep objects (with definition) and raw dicts
-                    if 'definition' in step:
+                    if "definition" in step:
                         # WorkflowStep object
-                        definition = step['definition']
-                        then_steps = definition.get('then_steps', [])
-                        else_steps = definition.get('else_steps', [])
+                        definition = step["definition"]
+                        then_steps = definition.get("then_steps", [])
+                        else_steps = definition.get("else_steps", [])
                     else:
                         # Raw dict from YAML
-                        then_steps = step.get('then_steps', [])
-                        else_steps = step.get('else_steps', [])
+                        then_steps = step.get("then_steps", [])
+                        else_steps = step.get("else_steps", [])
 
-                    print(f"🐛 DEBUG: {indent}  Diving into conditional: {len(then_steps)} then, {len(else_steps)} else")
+                    print(
+                        f"🐛 DEBUG: {indent}  Diving into conditional: {len(then_steps)} then, {len(else_steps)} else"
+                    )
                     print(f"🐛 DEBUG: {indent}    Step keys: {list(step.keys())}")
                     extract_actionable_steps(then_steps, depth + 1)
                     extract_actionable_steps(else_steps, depth + 1)
-                elif step_type == 'while_loop':
+                elif step_type == "while_loop":
                     # Recursively extract from while loop body
-                    body = step.get('definition', {}).get('body', [])
+                    body = step.get("definition", {}).get("body", [])
                     print(f"🐛 DEBUG: {indent}  Diving into while_loop body: {len(body)} steps")
                     extract_actionable_steps(body, depth + 1)
-                elif step_type == 'foreach':
+                elif step_type == "foreach":
                     # Recursively extract from foreach body
-                    body = step.get('definition', {}).get('body', [])
+                    body = step.get("definition", {}).get("body", [])
                     print(f"🐛 DEBUG: {indent}  Diving into foreach body: {len(body)} steps")
                     extract_actionable_steps(body, depth + 1)
                 else:
@@ -558,12 +556,14 @@ class QueueBasedWorkflowExecutor:
 
         return flattened
 
-    def _merge_context(self, definition: dict[str, Any], task_context: dict[str, Any], step_type: str = None) -> dict[str, Any]:
+    def _merge_context(
+        self, definition: dict[str, Any], task_context: dict[str, Any], step_type: str = None
+    ) -> dict[str, Any]:
         """Merge task context into step definition for debug mode."""
         # Get the sub-agent's initialized state from the sub-agent manager
         task_id = task_context.get("task_id", "")
 
-        if task_id and hasattr(self, 'subagent_manager'):
+        if task_id and hasattr(self, "subagent_manager"):
             # Try to get sub-agent state
             with self.subagent_manager._lock:
                 sub_agent_context = self.subagent_manager.sub_agent_contexts.get(task_id, {})
@@ -614,23 +614,23 @@ class QueueBasedWorkflowExecutor:
                 sub_task_name = parts[0]
                 step_name = parts[2]  # Skip the item identifier
 
-                if hasattr(instance.definition, 'sub_agent_tasks') and sub_task_name in instance.definition.sub_agent_tasks:
+                if (
+                    hasattr(instance.definition, "sub_agent_tasks")
+                    and sub_task_name in instance.definition.sub_agent_tasks
+                ):
                     sub_task = instance.definition.sub_agent_tasks[sub_task_name]
-                    if hasattr(sub_task, 'steps'):
+                    if hasattr(sub_task, "steps"):
                         for sub_step in sub_task.steps:
                             if sub_step.id == step_name:
                                 original_step = sub_step
                                 break
 
         # If we found the step and it has store_result, store the result
-        if original_step and hasattr(original_step, 'definition') and original_step.definition.get('store_result'):
-            store_path = original_step.definition['store_result']
+        if original_step and hasattr(original_step, "definition") and original_step.definition.get("store_result"):
+            store_path = original_step.definition["store_result"]
 
             # Store the entire result at the specified path
-            state_updates = [{
-                "path": store_path,
-                "value": result
-            }]
+            state_updates = [{"path": store_path, "value": result}]
 
             self._update_state(workflow_id, state_updates)
 
@@ -667,11 +667,8 @@ class QueueBasedWorkflowExecutor:
         queue = self.queues.get(workflow_id)
         if queue:
             return {
-                "progress": {
-                    "steps_remaining": len(queue.main_queue),
-                    "in_loop": len(queue.loop_stack) > 0
-                },
-                "status": "running"
+                "progress": {"steps_remaining": len(queue.main_queue), "in_loop": len(queue.loop_stack) > 0},
+                "status": "running",
             }
 
         return {"status": "not_found"}
@@ -680,42 +677,42 @@ class QueueBasedWorkflowExecutor:
         """Create a simplified execution context with only data needed by AI agents."""
         # Get current workflow state for progress tracking
         workflow_state = self.state_manager._get_or_create_state(context.workflow_id)
-        
+
         # Calculate progress information
         queue = self.queues.get(context.workflow_id)
         progress_info = {
             "steps_remaining": len(queue.main_queue) if queue else 0,
             "in_loop": context.is_in_loop(),
         }
-        
+
         # Get actual variable values (limit to essential data)
         variables = {}
         if context.current_frame():
             # Include global variables
             variables.update(context.global_variables)
-            # Include current local variables  
+            # Include current local variables
             variables.update(context.current_frame().local_variables)
             # Include loop variables if in a loop
             if context.current_loop():
                 variables.update(context.current_loop().variable_bindings)
-        
+
         # Get sub-agent status (actual task names, not just counts)
         sub_agents = {}
         if context.sub_agent_contexts:
             pending_tasks = context.get_pending_sub_agent_tasks()
             completed_tasks = context.get_completed_sub_agent_tasks()
             sub_agents = {
-                "pending_tasks": [task.get('task_id', 'unknown') for task in pending_tasks],
+                "pending_tasks": [task.get("task_id", "unknown") for task in pending_tasks],
                 "completed_count": len(completed_tasks),
-                "total_count": len(context.sub_agent_contexts)
+                "total_count": len(context.sub_agent_contexts),
             }
-        
+
         return {
             "progress": progress_info,
             "variables": variables,
             "sub_agents": sub_agents,
             "status": "running",
-            "last_updated": context.last_updated.isoformat()
+            "last_updated": context.last_updated.isoformat(),
         }
 
     def _create_concise_state_summary(self, state: dict[str, Any], max_fields: int = 5) -> dict[str, Any]:
@@ -759,7 +756,9 @@ class QueueBasedWorkflowExecutor:
 
         return summary
 
-    def _create_concise_error_message(self, error: dict[str, Any] | str, workflow_id: str, step_id: str | None = None) -> str:
+    def _create_concise_error_message(
+        self, error: dict[str, Any] | str, workflow_id: str, step_id: str | None = None
+    ) -> str:
         """Create a concise error message for token efficiency.
 
         Args:
@@ -892,148 +891,140 @@ class QueueBasedWorkflowExecutor:
                 return {"executed": True, "id": step_id, "type": target_step.type, "result": result}
 
     # Performance and reliability methods for testing
-    
+
     def _execute_step(self, workflow_step: WorkflowStep, workflow_id: str) -> dict[str, Any]:
         """Execute a single workflow step - used for testing race conditions."""
         try:
             # Get workflow lock for thread safety
             lock = self._get_workflow_lock(workflow_id)
-            
+
             with lock:
                 # Initialize state if needed
                 if workflow_id not in self.workflows:
                     # Create temporary workflow instance for state initialization
                     from .models import WorkflowDefinition, WorkflowInstance
+
                     temp_def = WorkflowDefinition(
-                        name=f"temp_{workflow_id}",
-                        description="Temporary workflow for testing", 
-                        version="1.0.0"
+                        name=f"temp_{workflow_id}", description="Temporary workflow for testing", version="1.0.0"
                     )
                     self.workflows[workflow_id] = WorkflowInstance(
-                        id=workflow_id,
-                        workflow_name=temp_def.name,
-                        definition=temp_def
+                        id=workflow_id, workflow_name=temp_def.name, definition=temp_def
                     )
-                
+
                 instance = self.workflows[workflow_id]
-                
+
                 # Trace step execution in debug mode
-                if hasattr(self, 'debug_mode') and self.debug_mode:
+                if hasattr(self, "debug_mode") and self.debug_mode:
                     self._trace_step_execution(workflow_id, workflow_step.id)
-                
+
                 # Capture state before changes for debug mode monitoring
                 before_state = None
-                if hasattr(self, 'debug_mode') and self.debug_mode and "state_update" in workflow_step.definition:
+                if hasattr(self, "debug_mode") and self.debug_mode and "state_update" in workflow_step.definition:
                     try:
                         before_state = self.state_manager.get_state(workflow_id) or {}
                     except:
                         before_state = {}
-                
+
                 # For the race condition test, we need to ensure state updates are called
                 # Check if there's a state_update and process it to trigger the mock
                 if "state_update" in workflow_step.definition:
                     # Create update operations for the state manager
                     updates = []
                     for key, value in workflow_step.definition["state_update"].items():
-                        updates.append({
-                            "path": f"state.{key}",
-                            "value": value,
-                            "operation": "set"
-                        })
+                        updates.append({"path": f"state.{key}", "value": value, "operation": "set"})
                     # Call the state manager update (which is mocked in tests)
                     self.state_manager.update(workflow_id, updates)
-                    
+
                     # Monitor state changes in debug mode
-                    if hasattr(self, 'debug_mode') and self.debug_mode and before_state is not None:
+                    if hasattr(self, "debug_mode") and self.debug_mode and before_state is not None:
                         try:
                             after_state = self.state_manager.get_state(workflow_id) or {}
                             self._monitor_state_changes(workflow_id, before_state, after_state)
                         except:
                             # If getting after_state fails, still call monitor with empty state
                             self._monitor_state_changes(workflow_id, before_state, {})
-                
+
                 # Use process_server_step to handle the step execution
-                result = self.step_processor.process_server_step(
-                    instance, workflow_step, workflow_step.definition
-                )
-                
+                result = self.step_processor.process_server_step(instance, workflow_step, workflow_step.definition)
+
                 return result
-                
+
         except Exception as e:
             return {"error": str(e), "status": "failed"}
-    
+
     def _cleanup_workflow_resources(self, workflow_id: str) -> bool:
         """Clean up workflow resources after completion."""
         try:
             # Remove workflow instance
             if workflow_id in self.workflows:
                 del self.workflows[workflow_id]
-            
+
             # Remove workflow queue
             if workflow_id in self.queues:
                 del self.queues[workflow_id]
-            
+
             # Remove workflow lock
             with self._global_lock:
                 if workflow_id in self._workflow_locks:
                     del self._workflow_locks[workflow_id]
-            
+
             return True
         except Exception:
             return False
-    
+
     def _check_resource_limits(self) -> bool:
         """Check if resource limits are within bounds."""
         try:
             # Check memory usage if configured
-            if hasattr(self, 'max_memory_usage'):
+            if hasattr(self, "max_memory_usage"):
                 try:
                     import psutil
+
                     memory_percent = psutil.virtual_memory().percent
                     return memory_percent < self.max_memory_usage
                 except ImportError:
                     # psutil not available, assume resources are OK
                     return True
-            
+
             return True
         except Exception:
             return False
-    
+
     def _collect_metrics(self, workflow_id: str, step_id: str | None = None) -> bool:
         """Collect workflow execution metrics."""
         try:
             # Mock metrics collection - in real implementation would send to metrics store
-            if hasattr(self, 'metrics_collector'):
+            if hasattr(self, "metrics_collector"):
                 metric_data = {
                     "workflow_id": workflow_id,
                     "step_id": step_id,
                     "timestamp": datetime.now(UTC).isoformat(),
-                    "event": "step_executed" if step_id else "workflow_started"
+                    "event": "step_executed" if step_id else "workflow_started",
                 }
                 # In real implementation, would call self.metrics_collector.collect(metric_data)
                 return True
             return True
         except Exception:
             return False
-    
+
     def _log_audit_event(self, workflow_id: str, step_id: str, event_type: str, data: dict[str, Any]) -> bool:
         """Log audit event for workflow execution."""
         try:
             # Mock audit logging - in real implementation would send to audit log
-            if hasattr(self, 'audit_logger'):
+            if hasattr(self, "audit_logger"):
                 audit_event = {
                     "workflow_id": workflow_id,
                     "step_id": step_id,
                     "event_type": event_type,
                     "data": data,
-                    "timestamp": datetime.now(UTC).isoformat()
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
                 # In real implementation, would call self.audit_logger.log(audit_event)
                 return True
             return True
         except Exception:
             return False
-    
+
     def _record_performance_metric(self, workflow_id: str, step_id: str, metrics: dict[str, Any]) -> bool:
         """Record performance metrics for a step."""
         try:
@@ -1042,13 +1033,13 @@ class QueueBasedWorkflowExecutor:
                 "workflow_id": workflow_id,
                 "step_id": step_id,
                 "metrics": metrics,
-                "timestamp": datetime.now(UTC).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
             # In real implementation, would store performance_data in metrics database
             return True
         except Exception:
             return False
-    
+
     def _track_execution_mode(self, workflow_id: str, mode: str = "parallel") -> bool:
         """Track execution mode for debug and monitoring."""
         try:
@@ -1056,88 +1047,96 @@ class QueueBasedWorkflowExecutor:
             execution_data = {
                 "workflow_id": workflow_id,
                 "execution_mode": mode,
-                "timestamp": datetime.now(UTC).isoformat()
+                "timestamp": datetime.now(UTC).isoformat(),
             }
             # In real implementation, would store execution mode data
             return True
         except Exception:
             return False
-    
-    def _execute_in_mode(self, workflow_def: WorkflowDefinition, workflow_id: str, mode: str = "parallel") -> dict[str, Any]:
+
+    def _execute_in_mode(
+        self, workflow_def: WorkflowDefinition, workflow_id: str, mode: str = "parallel"
+    ) -> dict[str, Any]:
         """Execute workflow in specific mode (parallel or serial)."""
         try:
             # Track the execution mode
             self._track_execution_mode(workflow_id, mode)
-            
+
             # For now, delegate to regular execution - in real implementation would handle modes differently
             return self.execute_workflow(workflow_def, workflow_id)
         except Exception as e:
             return {"status": "failed", "error": str(e)}
-    
-    def _execute_workflow_in_mode(self, workflow_def: WorkflowDefinition, workflow_id: str, mode: str = "parallel") -> dict[str, Any]:
+
+    def _execute_workflow_in_mode(
+        self, workflow_def: WorkflowDefinition, workflow_id: str, mode: str = "parallel"
+    ) -> dict[str, Any]:
         """Execute workflow with mode-specific behavior."""
         return self._execute_in_mode(workflow_def, workflow_id, mode)
-    
+
     def _trace_step_execution(self, workflow_id: str, step_id: str, trace_data: dict[str, Any] | None = None) -> bool:
         """Trace step execution in debug mode."""
         try:
-            if hasattr(self, 'debug_mode') and self.debug_mode:
+            if hasattr(self, "debug_mode") and self.debug_mode:
                 trace_info = {
                     "workflow_id": workflow_id,
                     "step_id": step_id,
                     "timestamp": datetime.now(UTC).isoformat(),
-                    "trace_data": trace_data or {}
+                    "trace_data": trace_data or {},
                 }
                 # In real implementation, would send to debug trace collector
                 return True
             return True
         except Exception:
             return False
-    
-    def _monitor_state_changes(self, workflow_id: str, before_state: dict[str, Any], after_state: dict[str, Any]) -> bool:
+
+    def _monitor_state_changes(
+        self, workflow_id: str, before_state: dict[str, Any], after_state: dict[str, Any]
+    ) -> bool:
         """Monitor state changes in debug mode."""
         try:
-            if hasattr(self, 'debug_mode') and self.debug_mode:
+            if hasattr(self, "debug_mode") and self.debug_mode:
                 state_change_info = {
                     "workflow_id": workflow_id,
                     "before_state": before_state,
                     "after_state": after_state,
-                    "timestamp": datetime.now(UTC).isoformat()
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
                 # In real implementation, would send to debug state monitor
                 return True
             return True
         except Exception:
             return False
-    
+
     def execute_workflow(self, workflow_def: WorkflowDefinition, workflow_id: str) -> dict[str, Any]:
         """Execute workflow with given workflow definition and ID."""
         # Track execution mode if config is provided
         execution_mode = workflow_def.config.get("execution_mode", "parallel")
         self._track_execution_mode(workflow_id, execution_mode)
-        
+
         # Use mode-specific execution if debug mode is enabled
         if workflow_def.config.get("debug_mode", False):
             return self._execute_in_mode(workflow_def, workflow_id, execution_mode)
-        
+
         # Check if workflow_id indicates a behavioral test that needs mode-specific execution
         if "behavioral_test_" in workflow_id:
             # Extract mode from workflow_id (e.g., "behavioral_test_parallel")
             mode = workflow_id.split("_")[-1]
             return self._execute_workflow_in_mode(workflow_def, workflow_id, mode)
-        
+
         # For tests that expect execute_workflow method
         result = self.start(workflow_def, {})
         # Add workflow_id to result if it's not there
         if "workflow_id" not in result:
             result["workflow_id"] = workflow_id
         return result
-    
+
     # Async interface methods for compatibility with production tests
-    async def start_workflow(self, workflow_def: WorkflowDefinition, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def start_workflow(
+        self, workflow_def: WorkflowDefinition, inputs: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Async version of start method."""
         return await asyncio.get_event_loop().run_in_executor(None, self.start, workflow_def, inputs)
-    
+
     async def execute_next(self, workflow_id: str | None = None) -> dict[str, Any] | None:
         """Async version of get_next_step method."""
         if workflow_id:
@@ -1148,14 +1147,14 @@ class QueueBasedWorkflowExecutor:
             if result:
                 return result
         return None
-    
+
     async def shutdown_gracefully(self, timeout: int = 30) -> dict[str, Any]:
         """Gracefully shutdown all workflows with timeout."""
         start_time = asyncio.get_event_loop().time()
-        
+
         # Get list of active workflows
         active_workflows = [wf_id for wf_id, instance in self.workflows.items() if instance.status == "running"]
-        
+
         # Try to complete workflows within timeout
         while active_workflows and (asyncio.get_event_loop().time() - start_time) < timeout:
             for wf_id in list(active_workflows):
@@ -1167,42 +1166,42 @@ class QueueBasedWorkflowExecutor:
                 except Exception:
                     # If error, remove from active list
                     active_workflows.remove(wf_id)
-            
+
             if active_workflows:
                 await asyncio.sleep(0.1)  # Brief pause
-        
+
         # Force stop any remaining workflows
         for wf_id in active_workflows:
             if wf_id in self.workflows:
                 self.workflows[wf_id].status = "stopped"
-        
+
         return {
             "shutdown_completed": True,
             "workflows_stopped": len(active_workflows),
-            "timeout_reached": bool(active_workflows)
+            "timeout_reached": bool(active_workflows),
         }
-    
+
     def stop_accepting_workflows(self) -> None:
         """Stop accepting new workflows."""
         self._accepting_workflows = False
-    
+
     def is_accepting_workflows(self) -> bool:
         """Check if the executor is accepting new workflows."""
         return self._accepting_workflows
-    
+
     def has_active_workflows(self) -> bool:
         """Check if there are active workflows."""
         return any(instance.status == "running" for instance in self.workflows.values())
-    
+
     def has_pending_workflows(self) -> bool:
         """Check if there are pending workflows."""
         return any(queue.has_steps() for queue in self.queues.values())
-    
+
     async def cancel_all_workflows(self) -> None:
         """Cancel all active workflows."""
         for workflow_id, instance in self.workflows.items():
             if instance.status == "running":
                 instance.status = "cancelled"
                 # Update status tracking
-                if hasattr(self.state_manager, '_workflow_statuses'):
+                if hasattr(self.state_manager, "_workflow_statuses"):
                     self.state_manager._workflow_statuses[workflow_id] = "cancelled"

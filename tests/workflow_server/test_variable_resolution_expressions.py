@@ -73,15 +73,8 @@ class TestScopedVariableSyntax:
     def test_scoped_syntax_variable_path_validation(self):
         """Test scoped variable syntax validates scoped variable paths during resolution (AC 7.1)."""
         # Test valid scoped variable paths
-        valid_paths = [
-            "this.field",
-            "global.var",
-            "inputs.param",
-            "loop.item",
-            "loop.index",
-            "loop.iteration"
-        ]
-        
+        valid_paths = ["this.field", "global.var", "inputs.param", "loop.item", "loop.index", "loop.iteration"]
+
         for path in valid_paths:
             # Verify scoped variable syntax compliance
             assert path.startswith(("this.", "global.", "inputs.", "loop."))
@@ -341,51 +334,37 @@ class TestTemplateFallbackLogic:
         from aromcp.workflow_server.workflow.step_processors import StepProcessor
         from aromcp.workflow_server.workflow.step_registry import StepRegistry
         from aromcp.workflow_server.workflow.subagent_manager import SubAgentManager
-        
+
         self.state_manager = StateManager()
         self.expression_evaluator = ExpressionEvaluator()
         self.step_registry = StepRegistry()
-        
+
         # Set up processors
-        self.step_processor = StepProcessor(
-            self.state_manager, 
-            self.expression_evaluator
-        )
-        
-        self.subagent_manager = SubAgentManager(
-            self.state_manager, 
-            self.expression_evaluator, 
-            self.step_registry
-        )
+        self.step_processor = StepProcessor(self.state_manager, self.expression_evaluator)
+
+        self.subagent_manager = SubAgentManager(self.state_manager, self.expression_evaluator, self.step_registry)
 
     def test_template_fallback_missing_variables(self):
         """Test template variable substitution handles missing variables with fallbacks (AC 7.3)."""
         # Test state with some context
-        state = {
-            "item": "src/test.ts",
-            "task_id": "test_task_001",
-            "loop": {
-                "iteration": 3
-            },
-            "max_attempts": 5
-        }
-        
+        state = {"item": "src/test.ts", "task_id": "test_task_001", "loop": {"iteration": 3}, "max_attempts": 5}
+
         # Test templates with missing variables
         test_cases = [
             {
                 "template": "❌ Failed to enforce standards on {{ raw.file_path }} after {{ loop.iteration }} attempts",
-                "expected": "❌ Failed to enforce standards on src/test.ts after 3 attempts"
+                "expected": "❌ Failed to enforce standards on src/test.ts after 3 attempts",
             },
             {
                 "template": "Processing {{ file_path }} (attempt {{ loop.iteration }}/{{ max_attempts }})",
-                "expected": "Processing src/test.ts (attempt 3/5)"
+                "expected": "Processing src/test.ts (attempt 3/5)",
             },
             {
                 "template": "Task {{ task_id }}: {{ raw.nonexistent_field }}",
-                "expected": "Task test_task_001: <raw.nonexistent_field>"
-            }
+                "expected": "Task test_task_001: <raw.nonexistent_field>",
+            },
         ]
-        
+
         for case in test_cases:
             result = self.subagent_manager._replace_variables(case["template"], state)
             assert result == case["expected"], f"Expected '{case['expected']}', got '{result}'"
@@ -396,30 +375,23 @@ class TestTemplateFallbackLogic:
             "item": "src/utils.py",
             "raw": {
                 "file_path": "src/utils.py",
-                "step_results": {
-                    "hints": {"success": True},
-                    "lint": None,
-                    "typescript": None
-                }
-            }
+                "step_results": {"hints": {"success": True}, "lint": None, "typescript": None},
+            },
         }
-        
+
         # Test nested property access
         test_cases = [
-            {
-                "template": "Hints: {{ raw.step_results.hints.success }}",
-                "expected": "Hints: True"
-            },
+            {"template": "Hints: {{ raw.step_results.hints.success }}", "expected": "Hints: True"},
             {
                 "template": "Lint: {{ raw.step_results.lint.success }}",
-                "expected": "Lint: <raw.step_results.lint.success>"
+                "expected": "Lint: <raw.step_results.lint.success>",
             },
             {
                 "template": "Missing: {{ raw.missing_field.nested.value }}",
-                "expected": "Missing: <raw.missing_field.nested.value>"
-            }
+                "expected": "Missing: <raw.missing_field.nested.value>",
+            },
         ]
-        
+
         for case in test_cases:
             result = self.subagent_manager._replace_variables(case["template"], state)
             assert result == case["expected"], f"Expected '{case['expected']}', got '{result}'"
@@ -432,20 +404,20 @@ class TestTemplateFallbackLogic:
             "item": "src/component.tsx",
             "index": 0,
             "total": 1,
-            "loop": {
-                "iteration": 0
-            }
+            "loop": {"iteration": 0},
         }
-        
+
         # This is the message that was showing empty values
         problematic_template = "❌ Failed to enforce standards on {{ file_path }} after {{ loop.iteration }} attempts"
-        
+
         # With our fallback logic, it should show meaningful values
         result = self.subagent_manager._replace_variables(problematic_template, state)
         expected = "❌ Failed to enforce standards on src/component.tsx after 0 attempts"
-        
+
         assert result == expected, f"Expected '{expected}', got '{result}'"
-        
+
         # Verify it's not showing empty values (the key improvement)
         assert " on  after" not in result, "Template variables should not be empty"
-        assert result != "❌ Failed to enforce standards on  after  attempts", "Should not have completely empty variables"
+        assert (
+            result != "❌ Failed to enforce standards on  after  attempts"
+        ), "Should not have completely empty variables"

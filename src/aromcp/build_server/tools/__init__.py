@@ -112,11 +112,11 @@ def register_build_tools(mcp):
             # First request - ALWAYS start with cursor=None
             lint_project(cursor=None, max_tokens=5000)
             → {"issues": [...25 lint issues...], "total": 150, "next_cursor": "src/utils.js", "has_more": true}
-            
+
             # Second request - use EXACT next_cursor from previous response
             lint_project(cursor="src/utils.js", max_tokens=5000)
             → {"issues": [...25 more lint issues...], "total": 150, "next_cursor": "tests/test_app.js", "has_more": true}
-            
+
             # Continue until has_more is false
             lint_project(cursor="tests/test_app.js", max_tokens=5000)
             → {"issues": [...final lint issues...], "total": 150, "next_cursor": null, "has_more": false}
@@ -127,7 +127,7 @@ def register_build_tools(mcp):
         - next_cursor: Cursor for next page (null if no more pages)
         - has_more: Boolean indicating if more pages exist
 
-        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination. 
+        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination.
         Simply use the cursor values provided in responses.
 
         Note: ESSENTIAL quality gate - run this after EVERY code edit. Always use use_standards=True for best results.
@@ -180,11 +180,11 @@ def register_build_tools(mcp):
             # First request - ALWAYS start with cursor=None
             run_test_suite(cursor=None, max_tokens=5000)
             → {"test_results": [...50 test results...], "total": 155, "next_cursor": "tests/components/Button.test.js", "has_more": true}
-            
+
             # Second request - use EXACT next_cursor from previous response
             run_test_suite(cursor="tests/components/Button.test.js", max_tokens=5000)
             → {"test_results": [...50 more test results...], "total": 155, "next_cursor": "tests/utils/helpers.test.js", "has_more": true}
-            
+
             # Continue until has_more is false
             run_test_suite(cursor="tests/utils/helpers.test.js", max_tokens=5000)
             → {"test_results": [...final test results...], "total": 155, "next_cursor": null, "has_more": false}
@@ -195,7 +195,7 @@ def register_build_tools(mcp):
         - next_cursor: Cursor for next page (null if no more pages)
         - has_more: Boolean indicating if more pages exist
 
-        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination. 
+        IMPORTANT: Do NOT attempt to implement your own pagination logic. The server handles all pagination.
         Simply use the cursor values provided in responses.
 
         Note: Auto-detects test framework from package.json or project files. For linting use lint_project,

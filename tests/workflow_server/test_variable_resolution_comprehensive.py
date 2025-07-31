@@ -15,9 +15,9 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
-from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
-from aromcp.workflow_server.workflow.loader import WorkflowLoader
 from aromcp.workflow_server.workflow.context import context_manager
+from aromcp.workflow_server.workflow.loader import WorkflowLoader
+from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
 
 
 class TestVariableResolutionComprehensive:
@@ -41,11 +41,11 @@ class TestVariableResolutionComprehensive:
         """Helper to create a workflow file for testing."""
         if not self.temp_dir:
             self.temp_dir = tempfile.TemporaryDirectory()
-        
+
         temp_path = Path(self.temp_dir.name)
         workflows_dir = temp_path / ".aromcp" / "workflows"
         workflows_dir.mkdir(parents=True, exist_ok=True)
-        
+
         workflow_file = workflows_dir / f"{workflow_name}.yaml"
         workflow_file.write_text(workflow_content)
         return temp_path
@@ -119,17 +119,17 @@ steps:
         slice_works: state.numbers.slice(1, 3)
       }
 """
-        
+
         # Patch PythonMonkey to be unavailable
-        with patch('aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE', False):
+        with patch("aromcp.workflow_server.workflow.expression_evaluator.PYTHONMONKEY_AVAILABLE", False):
             project_path = self._create_workflow_file("test-pythonmonkey-fallback", workflow_content)
-            
+
             # Start workflow
             loader = WorkflowLoader(project_root=str(project_path))
             workflow_def = loader.load("test-pythonmonkey-fallback")
             result = self.executor.start(workflow_def)
             workflow_id = result["workflow_id"]
-            
+
             # Wait for completion
             timeout = 10
             start_time = time.time()
@@ -138,13 +138,13 @@ steps:
                 if status["status"] == "completed":
                     break
                 time.sleep(0.1)
-            
+
             # Get final state
             final_status = self.executor.get_workflow_status(workflow_id)
             assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-            
+
             results = final_status["state"]["state"]["results"]
-            
+
             # Verify arithmetic operations work in fallback
             arith = results["arithmetic"]
             assert arith["addition"] == 15
@@ -153,7 +153,7 @@ steps:
             assert arith["division"] == 5
             assert arith["modulo"] == 1
             assert arith["power"] == 100
-            
+
             # Verify comparisons work in fallback
             comp = results["comparisons"]
             assert comp["greater"] == True
@@ -162,14 +162,14 @@ steps:
             assert comp["not_equal"] == True
             assert comp["gte"] == True
             assert comp["lte"] == True
-            
+
             # Verify logical operations work in fallback
             logical = results["logical"]
             assert logical["and_op"] == True
             assert logical["or_op"] == True
             assert logical["not_op"] == True
             assert logical["ternary"] == "big"
-            
+
             # Verify basic array access works
             arrays = results["arrays"]
             assert arrays["length"] == 5
@@ -277,15 +277,15 @@ ${state.data.users.map(u => `- ${u.name} (${u.age})`).join('\\n')}`,
         entries: state.data.users.map((u, i) => [i, u.name])
       }
 """
-        
+
         project_path = self._create_workflow_file("test-es6-features", workflow_content)
-        
+
         # Start workflow
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-es6-features")
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -294,13 +294,13 @@ ${state.data.users.map(u => `- ${u.name} (${u.age})`).join('\\n')}`,
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-        
+
         results = final_status["state"]["state"]["results"]
-        
+
         # Verify arrow functions and array methods
         arrow = results["arrow_functions"]
         assert len(arrow["filtered"]) == 2  # Alice (30) and Charlie (35)
@@ -309,14 +309,14 @@ ${state.data.users.map(u => `- ${u.name} (${u.age})`).join('\\n')}`,
         assert arrow["found"]["name"] == "Alice"  # First admin
         assert arrow["some"] == True
         assert arrow["every"] == True
-        
+
         # Verify template literals
         templates = results["template_literals"]
         assert templates["simple"] == "Total users: 4"
         assert "Average age: 29.5" in templates["expression"]
         assert "- Alice (30)" in templates["multiline"]
         assert templates["nested"] == "Config: theme=dark, auth=true"
-        
+
         # Verify destructuring
         destruct = results["destructuring"]
         assert destruct["array_destructure"]["first"] == 85
@@ -325,14 +325,14 @@ ${state.data.users.map(u => `- ${u.name} (${u.age})`).join('\\n')}`,
         assert destruct["object_destructure"]["theme"] == "dark"
         assert destruct["object_destructure"]["auth"] == True
         assert destruct["nested_destructure"]["firstName"] == "Alice"
-        
+
         # Verify spread operator
         spread = results["spread_operator"]
         assert len(spread["array_spread"]) == 7
         assert spread["object_spread"]["version"] == "2.0"
         assert spread["object_spread"]["features"]["beta"] == True
         assert spread["combined"][2] == 90  # Inserted in middle
-        
+
         # Verify modern array methods
         modern = results["modern_arrays"]
         assert modern["includes"] == True
@@ -482,15 +482,15 @@ steps:
         };
       })()
 """
-        
+
         project_path = self._create_workflow_file("test-deep-nested-expressions", workflow_content)
-        
+
         # Start workflow
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-deep-nested-expressions")
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -499,19 +499,19 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-        
+
         results = final_status["state"]["state"]["results"]
-        
+
         # Verify deep property access
         deep = results["deep_access"]
         assert deep["deep_value"] == "TypeScript"
         assert deep["deep_calc"] == 70000  # 450000 - 380000
         assert deep["deep_nested_calc"] == 550000  # 250000 + 300000
-        
+
         # Verify method chains
         chains = results["method_chains"]
         assert "React" in chains["all_skills"]
@@ -520,12 +520,12 @@ steps:
         assert chains["total_projects"] == 58  # Sum of all active and completed projects
         assert chains["budget_analysis"][0]["team"] == "frontend"
         assert chains["budget_analysis"][0]["remaining"] == 175000
-        
+
         # Verify nested conditionals
         cond = results["conditionals"]
         assert cond["team_status"][0]["budget_health"] == "warning"  # 65% spent
         assert cond["team_status"][1]["budget_health"] == "critical"  # 84% spent
-        
+
         # Verify transformations
         trans = results["transformations"]
         assert "React" in trans["skill_matrix"]["frontend"]
@@ -655,15 +655,15 @@ steps:
         };
       })()
 """
-        
+
         project_path = self._create_workflow_file("test-mixed-function-property", workflow_content)
-        
+
         # Start workflow
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-mixed-function-property")
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -672,35 +672,35 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-        
+
         results = final_status["state"]["state"]["results"]
-        
+
         # Verify filtered calculations
         filtered = results["filtered_calcs"]
         assert len(filtered["filtered_products"]) == 2  # Monitor and Keyboard in price range
         assert filtered["filtered_products"][0]["name"] == "Monitor"  # In stock
         # Verify no out of stock items when inStock filter is applied
         assert all(p["inStock"] for p in filtered["filtered_products"])
-        
+
         # Verify category summary
         assert filtered["category_summary"]["electronics"]["count"] == 2
         assert filtered["category_summary"]["accessories"]["count"] == 2
-        
+
         # Verify transformations
         trans = results["transformations"]
         inventory = {item["status"]: item for item in trans["inventory_report"]}
         assert inventory["out_of_stock"]["count"] == 1  # Keyboard
         assert inventory["low_stock"]["count"] == 1  # Monitor
         assert inventory["in_stock"]["count"] == 2  # Laptop and Mouse
-        
+
         # Verify tag analysis
         assert "peripheral" in trans["tag_analysis"]
         assert len(trans["tag_analysis"]["peripheral"]["products"]) == 3
-        
+
         # Verify function composition
         comp = results["composition"]
         assert len(comp["formatted_prices"]) == 4
@@ -852,15 +852,15 @@ steps:
           .filter(s => s.count > 0)
       }
 """
-        
+
         project_path = self._create_workflow_file("test-array-method-chaining", workflow_content)
-        
+
         # Start workflow
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-array-method-chaining")
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -869,20 +869,20 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         # Get final state
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", f"Workflow failed: {final_status.get('error')}"
-        
+
         results = final_status["state"]["state"]["results"]
-        
+
         # Verify basic chaining
         basic = results["basic_chains"]
         assert basic["completed_purchases_total"] == 575  # 150 + 300 + 125
         assert basic["user_summaries"]["alice"]["total"] == 275  # 150 + 125
         assert basic["user_summaries"]["bob"]["total"] == -75  # -75 refund
         assert basic["transaction_stats"]["count"] == 5  # 5 completed transactions
-        
+
         # Verify advanced chaining
         advanced = results["advanced_chains"]
         assert "purchase_completed" in advanced["grouped_by_type_and_status"]
@@ -890,13 +890,13 @@ steps:
         assert len(advanced["daily_summaries"]) > 0
         assert advanced["top_users"][0]["user"] == "alice"  # Alice has most purchases
         assert advanced["top_users"][0]["total"] == 275
-        
+
         # Verify nested operations
         nested = results["nested_ops"]
         alice_data = next(u for u in nested["user_transaction_matrix"] if u["user"] == "alice")
         assert len(alice_data["transactions"]) == 3  # Alice has 3 transactions
         assert alice_data["summary"]["net"] == 275  # Alice's net amount
-        
+
         status_data = {s["status"]: s for s in nested["status_flow"]}
         assert status_data["completed"]["count"] == 5
         assert status_data["pending"]["count"] == 1
@@ -921,11 +921,11 @@ class TestExpressionEvaluationEdgeCases:
         """Helper to create a workflow file."""
         if not self.temp_dir:
             self.temp_dir = tempfile.TemporaryDirectory()
-        
+
         temp_path = Path(self.temp_dir.name)
         workflows_dir = temp_path / ".aromcp" / "workflows"
         workflows_dir.mkdir(parents=True, exist_ok=True)
-        
+
         workflow_file = workflows_dir / f"{workflow_name}.yaml"
         workflow_file.write_text(workflow_content)
         return temp_path
@@ -1003,15 +1003,15 @@ steps:
         object_string: {a: 1} + ""
       }
 """
-        
+
         project_path = self._create_workflow_file("test-expression-errors", workflow_content)
-        
+
         # Start workflow
         loader = WorkflowLoader(project_root=str(project_path))
         workflow_def = loader.load("test-expression-errors")
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Wait for completion
         timeout = 10
         start_time = time.time()
@@ -1020,26 +1020,26 @@ steps:
             if status["status"] == "completed":
                 break
             time.sleep(0.1)
-        
+
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed", "Workflow should complete despite expression errors"
-        
+
         results = final_status["state"]["state"]["results"]
-        
+
         # Verify undefined handling
         assert results["undefined_test"] == "Undefined property handled correctly"
-        
+
         # Verify optional chaining (if supported)
         if "optional_chain" in results:
             assert results["optional_chain"]["safe_access"] == "default"
             assert results["optional_chain"]["valid_access"] == "value"
-        
+
         # Verify math operations
-        assert results["math_ops"]["divide_by_zero"] == float('inf')
+        assert results["math_ops"]["divide_by_zero"] == float("inf")
         assert results["math_ops"]["infinity_check"] == True
         assert results["math_ops"]["nan_check"] == True
         assert results["math_ops"]["safe_division"] == 42
-        
+
         # Verify type coercion
         assert results["coercion"]["string_number"] == "421"
         assert results["coercion"]["number_string"] == "421"

@@ -321,7 +321,11 @@ class TestSubAgentManager:
         # Given
         manager = SubAgentManager()
         steps = [
-            {"type": "shell_command", "command": "echo 'Updating raw.progress'", "state_update": {"path": "raw.progress", "value": "started"}},
+            {
+                "type": "shell_command",
+                "command": "echo 'Updating raw.progress'",
+                "state_update": {"path": "raw.progress", "value": "started"},
+            },
             {"type": "mcp_call", "method": "lint_project", "params": {}},
         ]
 
@@ -492,7 +496,9 @@ class TestConcurrentStateManager:
         # Initialize workflow
         from aromcp.workflow_server.state.models import WorkflowState
 
-        manager._base_manager._states["wf_123"] = WorkflowState(state={"field1": 0, "field2": 0}, computed={}, inputs={})
+        manager._base_manager._states["wf_123"] = WorkflowState(
+            state={"field1": 0, "field2": 0}, computed={}, inputs={}
+        )
 
         results = []
 
@@ -828,7 +834,14 @@ class TestPhase4AcceptanceCriteria:
         # Given
         manager = SubAgentManager()
         manager.register_task_definition(
-            "process_batch", [{"type": "shell_command", "command": "echo 'Updating raw.{{ task_id }}.status'", "state_update": {"path": "raw.{{ task_id }}.status", "value": "processing"}}]
+            "process_batch",
+            [
+                {
+                    "type": "shell_command",
+                    "command": "echo 'Updating raw.{{ task_id }}.status'",
+                    "state_update": {"path": "raw.{{ task_id }}.status", "value": "processing"},
+                }
+            ],
         )
 
         context = {"files": ["a.ts", "b.ts"], "batch_id": "batch_0"}
@@ -960,38 +973,35 @@ class TestParallelTimeoutManagement:
 
     def test_parallel_task_timeout_enforcement(self):
         """Test timeout enforcement for individual parallel tasks (AC-PE-015)."""
-        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
         from aromcp.workflow_server.workflow.parallel import ParallelExecution, ParallelTask
-        
+        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
+
         timeout_manager = TimeoutManager()
-        
+
         # Create parallel execution with tasks
         tasks = [
             ParallelTask(task_id="task_fast", context={"timeout": 2.0}),
             ParallelTask(task_id="task_slow", context={"timeout": 0.5}),
-            ParallelTask(task_id="task_normal", context={"timeout": 1.0})
+            ParallelTask(task_id="task_normal", context={"timeout": 1.0}),
         ]
-        
+
         execution = ParallelExecution(
             execution_id="exec_timeout",
             workflow_id="wf_123",
             parent_step_id="parallel_step",
             tasks=tasks,
-            max_parallel=3
+            max_parallel=3,
         )
-        
+
         # Set timeouts for each task
         for task in tasks:
-            timeout_manager.set_step_timeout(
-                task.task_id, 
-                timeout_seconds=task.context["timeout"]
-            )
+            timeout_manager.set_step_timeout(task.task_id, timeout_seconds=task.context["timeout"])
             timeout_manager.start_step(task.task_id)
             task.status = "running"
-        
+
         # Simulate execution
         time.sleep(0.6)
-        
+
         # Check timeouts
         timed_out_tasks = []
         for task in tasks:
@@ -999,57 +1009,54 @@ class TestParallelTimeoutManagement:
                 timed_out_tasks.append(task.task_id)
                 task.status = "failed"
                 task.error = "Timeout exceeded"
-        
+
         # task_slow should have timed out
         assert "task_slow" in timed_out_tasks
         assert len(timed_out_tasks) == 1
-        
+
         # Update execution status
         assert execution.failed_task_count == 1
 
     def test_parallel_execution_overall_timeout(self):
         """Test overall timeout for parallel execution (AC-PE-015)."""
         from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
-        
+
         timeout_manager = TimeoutManager()
         evaluator = ExpressionEvaluator()
         processor = ParallelForEachProcessor(evaluator)
-        
+
         # Create parallel execution
         step_def = ParallelForEachStep(
-            items="items",
-            max_parallel=5,
-            sub_agent_task="process",
-            timeout_seconds=2.0  # Overall timeout
+            items="items", max_parallel=5, sub_agent_task="process", timeout_seconds=2.0  # Overall timeout
         )
-        
+
         state = {"items": list(range(10))}  # 10 items
         result = processor.process_parallel_foreach(step_def, state, "parallel_1", "wf_123")
-        
+
         execution_id = result["step"]["definition"]["execution_id"]
-        
+
         # Set overall timeout
         timeout_manager.set_step_timeout("parallel_1", timeout_seconds=2.0)
         timeout_manager.start_step("parallel_1")
-        
+
         # Simulate slow task processing
         start_time = time.time()
         processed = 0
-        
+
         while processed < 10:
             # Get next tasks
             available = processor.get_next_available_tasks(execution_id)
-            
+
             if timeout_manager.check_timeout("parallel_1"):
                 # Overall timeout exceeded
                 break
-                
+
             for task in available[:2]:  # Process 2 at a time
                 processor.update_task_status(execution_id, task.task_id, "running")
                 time.sleep(0.3)  # Simulate work
                 processor.update_task_status(execution_id, task.task_id, "completed")
                 processed += 1
-        
+
         # Should have timed out before processing all
         assert processed < 10
         assert time.time() - start_time >= 2.0
@@ -1057,20 +1064,18 @@ class TestParallelTimeoutManagement:
     def test_cascading_timeout_in_sub_agents(self):
         """Test cascading timeouts from parent to sub-agents (AC-PE-015)."""
         from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
-        
+
         timeout_manager = TimeoutManager()
         manager = SubAgentManager()
-        
+
         # Register task
-        manager.register_task_definition("timeout_task", [
-            {"type": "shell_command", "command": "sleep 5"}
-        ])
-        
+        manager.register_task_definition("timeout_task", [{"type": "shell_command", "command": "sleep 5"}])
+
         # Create parent timeout
         parent_timeout = 2.0
         timeout_manager.set_step_timeout("parent_parallel", timeout_seconds=parent_timeout)
         timeout_manager.start_step("parent_parallel")
-        
+
         # Create sub-agents with inherited timeout
         agents = []
         for i in range(3):
@@ -1079,76 +1084,64 @@ class TestParallelTimeoutManagement:
                 task_id=f"task_{i}",
                 task_name="timeout_task",
                 context={},
-                parent_step_id="parent_parallel"
+                parent_step_id="parent_parallel",
             )
-            
+
             if agent:
                 agents.append(agent)
                 # Sub-agent inherits parent timeout
                 timeout_manager.set_step_timeout(
-                    f"task_{i}",
-                    timeout_seconds=parent_timeout,
-                    parent_step="parent_parallel"
+                    f"task_{i}", timeout_seconds=parent_timeout, parent_step="parent_parallel"
                 )
                 timeout_manager.start_step(f"task_{i}")
                 manager.update_agent_status(agent.agent_id, "active")
-        
+
         # Wait for parent timeout
         time.sleep(2.1)
-        
+
         # Check cascading timeout
         assert timeout_manager.check_timeout("parent_parallel")
-        
+
         # All sub-agents should also timeout
         for i in range(3):
             assert timeout_manager.check_timeout(f"task_{i}")
-            
+
         # Update agent status to failed
         for agent in agents:
             manager.update_agent_status(agent.agent_id, "failed", error="Parent timeout")
 
     def test_timeout_with_resource_management(self):
         """Test timeout handling with resource cleanup in parallel execution (AC-PE-015)."""
-        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
         from aromcp.workflow_server.workflow.resource_manager import ResourceManager
-        
+        from aromcp.workflow_server.workflow.timeout_manager import TimeoutManager
+
         timeout_manager = TimeoutManager()
         resource_manager = ResourceManager()
-        
+
         # Set resource limits
-        resource_manager.set_workflow_limits(
-            workflow_id="wf_parallel",
-            max_memory_mb=200,
-            max_threads=10
-        )
-        
+        resource_manager.set_workflow_limits(workflow_id="wf_parallel", max_memory_mb=200, max_threads=10)
+
         # Allocate resources for parallel tasks
         task_resources = []
         for i in range(5):
             allocated = resource_manager.allocate_resources(
-                workflow_id="wf_parallel",
-                requested_memory_mb=30,
-                requested_threads=2,
-                resource_id=f"task_{i}"
+                workflow_id="wf_parallel", requested_memory_mb=30, requested_threads=2, resource_id=f"task_{i}"
             )
             if allocated:
                 task_resources.append(f"task_{i}")
-        
+
         # Set timeout with cleanup
         timeout_manager.set_step_timeout("parallel_exec", timeout_seconds=1.0)
         timeout_manager.start_step("parallel_exec")
-        
+
         # Wait for timeout
         time.sleep(1.1)
-        
+
         # On timeout, cleanup resources
         if timeout_manager.check_timeout("parallel_exec"):
             for resource_id in task_resources:
-                resource_manager.release_resources(
-                    workflow_id="wf_parallel",
-                    resource_id=resource_id
-                )
-        
+                resource_manager.release_resources(workflow_id="wf_parallel", resource_id=resource_id)
+
         # Verify resources released
         usage = resource_manager.get_workflow_usage("wf_parallel")
         assert usage is None or usage.memory_mb == 0
@@ -1160,72 +1153,69 @@ class TestParallelPerformanceMonitoring:
     def test_parallel_task_performance_tracking(self):
         """Test tracking performance metrics for parallel tasks (AC-PE-016)."""
         from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
-        
+
         monitor = PerformanceMonitor()
         evaluator = ExpressionEvaluator()
         processor = ParallelForEachProcessor(evaluator)
-        
+
         # Start monitoring parallel execution
         monitor.start_operation("parallel_execution", {"workflow_id": "wf_123"})
-        
+
         # Create parallel tasks
         step_def = ParallelForEachStep(items="items", max_parallel=3, sub_agent_task="process")
         state = {"items": ["item1", "item2", "item3", "item4", "item5"]}
-        
+
         result = processor.process_parallel_foreach(step_def, state, "parallel_1", "wf_123")
         execution_id = result["step"]["definition"]["execution_id"]
-        
+
         # Process tasks and track metrics
         processed_count = 0
         while processed_count < 5:
             available = processor.get_next_available_tasks(execution_id)
-            
+
             for task in available:
                 task_start = time.time()
-                
+
                 # Update to running
                 processor.update_task_status(execution_id, task.task_id, "running")
-                
+
                 # Simulate work
                 work_time = 0.1 + (processed_count * 0.05)  # Variable work time
                 time.sleep(work_time)
-                
+
                 # Complete task
                 processor.update_task_status(execution_id, task.task_id, "completed")
-                
+
                 # Record metrics
                 task_duration = time.time() - task_start
-                monitor.record_metric("task_duration", task_duration, {
-                    "task_id": task.task_id,
-                    "item_index": processed_count
-                })
-                
-                monitor.record_metric("task_work_time", work_time, {
-                    "task_id": task.task_id
-                })
-                
+                monitor.record_metric(
+                    "task_duration", task_duration, {"task_id": task.task_id, "item_index": processed_count}
+                )
+
+                monitor.record_metric("task_work_time", work_time, {"task_id": task.task_id})
+
                 processed_count += 1
-        
+
         monitor.end_operation("parallel_execution")
-        
+
         # Analyze metrics
         duration_stats = monitor.get_metrics_summary("task_duration")
         assert duration_stats["count"] == 5
         assert duration_stats["avg"] > 0.1
         assert duration_stats["max"] > duration_stats["min"]
-        
+
         work_stats = monitor.get_metrics_summary("task_work_time")
         assert work_stats["count"] == 5
 
     def test_parallel_execution_bottleneck_detection(self):
         """Test detection of bottlenecks in parallel execution (AC-PE-016)."""
         from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
-        
+
         monitor = PerformanceMonitor()
-        
+
         # Simulate parallel execution with bottleneck
         monitor.start_operation("bottleneck_test")
-        
+
         # Track queue wait times
         queue_times = []
         for i in range(10):
@@ -1233,19 +1223,19 @@ class TestParallelPerformanceMonitoring:
             queue_wait = i * 0.1
             queue_times.append(queue_wait)
             monitor.record_metric("queue_wait_time", queue_wait, {"task_index": i})
-            
+
             # Execution time remains constant
             monitor.record_metric("execution_time", 0.2, {"task_index": i})
-        
+
         # Detect bottleneck pattern
         wait_stats = monitor.get_metrics_summary("queue_wait_time")
         exec_stats = monitor.get_metrics_summary("execution_time")
-        
+
         # Queue wait time increases (bottleneck indicator)
         assert wait_stats["max"] > wait_stats["min"] * 5
         # Execution time remains stable
         assert exec_stats["max"] / exec_stats["min"] < 1.5
-        
+
         # Calculate bottleneck score
         bottleneck_score = wait_stats["avg"] / exec_stats["avg"]
         assert bottleneck_score > 1.0  # Wait time exceeds execution time
@@ -1254,64 +1244,48 @@ class TestParallelPerformanceMonitoring:
         """Test monitoring resource utilization in parallel execution (AC-PE-016)."""
         from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
         from aromcp.workflow_server.workflow.resource_manager import ResourceManager
-        
+
         monitor = PerformanceMonitor()
         resource_manager = ResourceManager()
-        
+
         # Set up workflow resources
         workflow_id = "wf_resource_test"
-        resource_manager.set_workflow_limits(
-            workflow_id=workflow_id,
-            max_memory_mb=500,
-            max_cpu_percent=80
-        )
-        
+        resource_manager.set_workflow_limits(workflow_id=workflow_id, max_memory_mb=500, max_cpu_percent=80)
+
         # Monitor resource utilization during parallel execution
         monitor.start_operation("resource_utilization", {"workflow_id": workflow_id})
-        
+
         # Simulate parallel task resource usage
         active_tasks = []
         for i in range(5):
             # Allocate resources for task
             allocated = resource_manager.allocate_resources(
-                workflow_id=workflow_id,
-                requested_memory_mb=80,
-                requested_cpu_percent=15,
-                resource_id=f"task_{i}"
+                workflow_id=workflow_id, requested_memory_mb=80, requested_cpu_percent=15, resource_id=f"task_{i}"
             )
-            
+
             if allocated:
                 active_tasks.append(f"task_{i}")
-                
+
                 # Get current utilization
                 usage = resource_manager.get_workflow_usage(workflow_id)
                 if usage:
-                    monitor.record_metric("memory_utilization", usage.memory_mb, {
-                        "active_tasks": len(active_tasks)
-                    })
-                    monitor.record_metric("cpu_utilization", usage.cpu_percent, {
-                        "active_tasks": len(active_tasks)
-                    })
-            
+                    monitor.record_metric("memory_utilization", usage.memory_mb, {"active_tasks": len(active_tasks)})
+                    monitor.record_metric("cpu_utilization", usage.cpu_percent, {"active_tasks": len(active_tasks)})
+
             time.sleep(0.1)
-        
+
         # Release some resources
         for i in range(2):
-            resource_manager.release_resources(
-                workflow_id=workflow_id,
-                resource_id=active_tasks[i]
-            )
+            resource_manager.release_resources(workflow_id=workflow_id, resource_id=active_tasks[i])
             active_tasks.remove(active_tasks[i])
-            
+
             # Record reduced utilization
             usage = resource_manager.get_workflow_usage(workflow_id)
             if usage:
-                monitor.record_metric("memory_utilization", usage.memory_mb, {
-                    "active_tasks": len(active_tasks)
-                })
-        
+                monitor.record_metric("memory_utilization", usage.memory_mb, {"active_tasks": len(active_tasks)})
+
         monitor.end_operation("resource_utilization")
-        
+
         # Analyze resource patterns
         memory_stats = monitor.get_metrics_summary("memory_utilization")
         assert memory_stats["max"] > memory_stats["min"]
@@ -1319,66 +1293,53 @@ class TestParallelPerformanceMonitoring:
 
     def test_parallel_performance_with_debug_integration(self):
         """Test performance monitoring with debug manager integration (AC-PE-016)."""
-        from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
         from aromcp.workflow_server.debugging.debug_tools import DebugManager
-        
+        from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
+
         monitor = PerformanceMonitor()
         debug_manager = DebugManager()
-        
+
         # Enable performance debugging
         debug_manager.set_debug_mode(True)
         monitor.enable_detailed_tracking(True)
-        
+
         # Create parallel execution scenario
         execution_id = "exec_debug"
         monitor.start_operation("parallel_debug", {"execution_id": execution_id})
-        
+
         # Track detailed task lifecycle
         for i in range(3):
             task_id = f"task_{i}"
-            
+
             # Add debug checkpoint
-            debug_manager.add_checkpoint(
-                workflow_id="wf_debug",
-                step_id=task_id,
-                state_before={"status": "pending"}
-            )
-            
+            debug_manager.add_checkpoint(workflow_id="wf_debug", step_id=task_id, state_before={"status": "pending"})
+
             # Task queue time
             queue_start = time.time()
             time.sleep(0.05)  # Simulate queue wait
             queue_time = time.time() - queue_start
-            
-            monitor.record_metric("detailed_queue_time", queue_time, {
-                "task_id": task_id,
-                "timestamp": time.time()
-            })
-            
+
+            monitor.record_metric("detailed_queue_time", queue_time, {"task_id": task_id, "timestamp": time.time()})
+
             # Task execution
             exec_start = time.time()
             time.sleep(0.1)  # Simulate work
             exec_time = time.time() - exec_start
-            
-            monitor.record_metric("detailed_exec_time", exec_time, {
-                "task_id": task_id,
-                "timestamp": time.time()
-            })
-            
+
+            monitor.record_metric("detailed_exec_time", exec_time, {"task_id": task_id, "timestamp": time.time()})
+
             # Update debug checkpoint
             debug_manager.update_checkpoint(
-                workflow_id="wf_debug",
-                step_id=task_id,
-                state_after={"status": "completed"},
-                execution_time=exec_time
+                workflow_id="wf_debug", step_id=task_id, state_after={"status": "completed"}, execution_time=exec_time
             )
-        
+
         monitor.end_operation("parallel_debug")
-        
+
         # Verify detailed tracking
         queue_metrics = monitor.get_metrics_by_tag("detailed_queue_time", {"task_id": "task_0"})
         assert len(queue_metrics) > 0
         assert "timestamp" in queue_metrics[0]["tags"]
-        
+
         # Check debug checkpoints
         checkpoints = debug_manager.get_workflow_checkpoints("wf_debug")
         assert len(checkpoints) >= 3
@@ -1387,49 +1348,41 @@ class TestParallelPerformanceMonitoring:
     def test_adaptive_parallelism_based_on_performance(self):
         """Test adaptive parallelism adjustment based on performance metrics (AC-PE-016)."""
         from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
-        
+
         monitor = PerformanceMonitor()
         evaluator = ExpressionEvaluator()
         processor = ParallelForEachProcessor(evaluator)
-        
+
         # Start with initial parallelism
         current_parallelism = 5
         optimal_parallelism = current_parallelism
-        
+
         # Monitor performance at different parallelism levels
         for test_round in range(3):
             monitor.start_operation(f"adaptive_test_{test_round}")
-            
+
             # Create execution with current parallelism
-            step_def = ParallelForEachStep(
-                items="items",
-                max_parallel=current_parallelism,
-                sub_agent_task="process"
-            )
-            
+            step_def = ParallelForEachStep(items="items", max_parallel=current_parallelism, sub_agent_task="process")
+
             state = {"items": list(range(20))}
-            result = processor.process_parallel_foreach(
-                step_def, state, f"parallel_{test_round}", "wf_adaptive"
-            )
-            
+            result = processor.process_parallel_foreach(step_def, state, f"parallel_{test_round}", "wf_adaptive")
+
             # Simulate execution and measure throughput
             start_time = time.time()
             completed = 0
-            
+
             # Process all items
             while completed < 20:
                 time.sleep(0.05)  # Simulate work
                 completed += current_parallelism
-            
+
             total_time = time.time() - start_time
             throughput = 20 / total_time
-            
-            monitor.record_metric("throughput", throughput, {
-                "parallelism": current_parallelism
-            })
-            
+
+            monitor.record_metric("throughput", throughput, {"parallelism": current_parallelism})
+
             monitor.end_operation(f"adaptive_test_{test_round}")
-            
+
             # Adjust parallelism based on throughput
             if test_round == 0:
                 baseline_throughput = throughput
@@ -1444,7 +1397,7 @@ class TestParallelPerformanceMonitoring:
             else:
                 if throughput > baseline_throughput:
                     optimal_parallelism = current_parallelism
-        
+
         # Verify we found different throughput at different parallelism levels
         throughput_metrics = monitor.get_all_metrics("throughput")
         throughput_values = [m["value"] for m in throughput_metrics]

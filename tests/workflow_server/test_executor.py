@@ -24,7 +24,14 @@ class TestWorkflowExecutor:
         if steps is None:
             steps = [
                 WorkflowStep(id="step1", type="user_message", definition={"message": "Hello"}),
-                WorkflowStep(id="step2", type="shell_command", definition={"command": "echo 'updating counter'", "state_update": {"path": "state.counter", "value": 1}}),
+                WorkflowStep(
+                    id="step2",
+                    type="shell_command",
+                    definition={
+                        "command": "echo 'updating counter'",
+                        "state_update": {"path": "state.counter", "value": 1},
+                    },
+                ),
             ]
 
         return WorkflowDefinition(
@@ -123,8 +130,12 @@ class TestWorkflowExecutor:
                     "condition": "raw.counter < 3",
                     "max_iterations": 5,
                     "body": [
-                        {"type": "shell_command", "command": "echo 'incrementing'", "state_update": {"path": "raw.counter", "operation": "increment"}},
-                        {"type": "user_message", "message": "Counter incremented to {{ state.counter }}"}
+                        {
+                            "type": "shell_command",
+                            "command": "echo 'incrementing'",
+                            "state_update": {"path": "raw.counter", "operation": "increment"},
+                        },
+                        {"type": "user_message", "message": "Counter incremented to {{ state.counter }}"},
                     ],
                 },
             )
@@ -143,11 +154,11 @@ class TestWorkflowExecutor:
         # Should get batched format with user messages and server-completed state updates
         assert "steps" in step_result
         # server_completed_steps is a debug feature, not testing against it
-        
+
         # Should have user messages from multiple loop iterations
         user_messages = [s for s in step_result["steps"] if s["type"] == "user_message"]
         assert len(user_messages) >= 1
-        
+
         # Should have shell_command steps processed on server (debug feature not tested)
 
     def test_foreach_loop_processing(self):
@@ -176,11 +187,11 @@ class TestWorkflowExecutor:
         # Should get batched format with user messages from loop iterations
         assert "steps" in step_result
         # server_completed_steps is a debug feature, not testing against it
-        
+
         # Should have user messages from foreach iterations
         user_messages = [s for s in step_result["steps"] if s["type"] == "user_message"]
         assert len(user_messages) >= 1
-        
+
         # Messages should contain variable replacements
         messages = [msg["definition"]["message"] for msg in user_messages]
         assert any("file1.txt" in msg for msg in messages)
@@ -209,13 +220,13 @@ class TestWorkflowExecutor:
         # Get next step - should be user input (user_input is client-side)
         step_result = executor.get_next_step(workflow_id)
         assert step_result is not None
-        
+
         # Should be in batched format
         assert "steps" in step_result
         user_input_steps = [s for s in step_result["steps"] if s["type"] == "user_input"]
         assert len(user_input_steps) == 1
         user_input_step = user_input_steps[0]
-            
+
         assert user_input_step["type"] == "user_input"
         assert user_input_step["definition"]["prompt"] == "Enter your name:"
 
@@ -246,14 +257,14 @@ class TestWorkflowExecutor:
         start_result = executor.start(workflow_def, {"counter": 0})
         workflow_id = start_result["workflow_id"]
 
-        # Get first step from loop body - should get user messages from loop iterations  
+        # Get first step from loop body - should get user messages from loop iterations
         step_result = executor.get_next_step(workflow_id)
         assert step_result is not None
-        
+
         # Should get batched format with user messages from loop iterations
         assert "steps" in step_result
         # server_completed_steps is a debug feature, not testing against it
-        
+
         # Should have user messages from multiple iterations (max_iterations=3)
         user_messages = [s for s in step_result["steps"] if s["type"] == "user_message"]
         assert len(user_messages) >= 1
@@ -302,7 +313,7 @@ class TestWorkflowExecutor:
                 # Steps will be implicitly completed on next get_next_step call
                 first_step = step_result["steps"][0]
                 print(f"Processing step: {first_step['id']} ({first_step['type']})")
-            
+
             iterations += 1
 
         # Should complete without infinite loops
@@ -377,19 +388,19 @@ class TestWorkflowExecutor:
         status = executor.get_workflow_status(workflow_id)
         assert status["status"] == "completed"
 
-
     def test_variable_replacement_with_context(self):
         """Test variable replacement with state-based variables."""
         steps = [
             WorkflowStep(
-                id="input1", 
-                type="shell_command", 
-                definition={"command": "echo 'setting value'", "state_update": {"path": "raw.user_value", "value": "test_value"}}
+                id="input1",
+                type="shell_command",
+                definition={
+                    "command": "echo 'setting value'",
+                    "state_update": {"path": "raw.user_value", "value": "test_value"},
+                },
             ),
             WorkflowStep(
-                id="message1", 
-                type="user_message", 
-                definition={"message": "You entered: {{ inputs.user_value }}"}
+                id="message1", type="user_message", definition={"message": "You entered: {{ inputs.user_value }}"}
             ),
         ]
 
@@ -406,13 +417,13 @@ class TestWorkflowExecutor:
         # Should get batched format with user message and server-completed state update
         assert "steps" in step_result
         # server_completed_steps is a debug feature, not testing against it
-        
+
         # Should have user message with variable replaced
         user_messages = [s for s in step_result["steps"] if s["type"] == "user_message"]
         assert len(user_messages) == 1
         message = user_messages[0]["definition"]["message"]
         assert message == "You entered: test_value"
-        
+
         # Should have shell_command processed on server (debug feature not tested)
 
     def test_execution_context_cleanup(self):
@@ -430,7 +441,7 @@ class TestWorkflowExecutor:
 
         # Complete workflow - get first step
         step_result = executor.get_next_step(workflow_id)
-        
+
         # Get next step (implicitly completes step1, should be None and clean up context)
         step_result = executor.get_next_step(workflow_id)
         assert step_result is None

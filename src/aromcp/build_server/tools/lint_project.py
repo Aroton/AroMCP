@@ -293,8 +293,10 @@ def lint_project_impl(
             items_field="issues",
             cursor=cursor,
             max_tokens=max_tokens,
-            sort_key=lambda x: (x.file if hasattr(x, 'file') else x['file'], 
-                               x.line if hasattr(x, 'line') else x['line']),  # Handle both dict and dataclass
+            sort_key=lambda x: (
+                x.file if hasattr(x, "file") else x["file"],
+                x.line if hasattr(x, "line") else x["line"],
+            ),  # Handle both dict and dataclass
         )
 
         # Add debug info if requested
@@ -304,6 +306,7 @@ def lint_project_impl(
             elif hasattr(paginated_response, "__dict__"):
                 # If it's still a dataclass, convert to dict to add debug info
                 from dataclasses import asdict
+
                 result_dict = asdict(paginated_response)
                 result_dict["debug_info"] = debug_info
                 return result_dict
@@ -323,6 +326,7 @@ def lint_project_impl(
             )
             # Convert to dict and add error info
             from dataclasses import asdict
+
             result_dict = asdict(error_response)
             result_dict["error"] = {"code": "LINT_FAILED", "message": str(e)}
             result_dict["debug_info"] = debug_info

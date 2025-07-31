@@ -25,19 +25,32 @@ class TestWorkflowValidator:
             "name": "test:operations",
             "description": "Test operations",
             "version": "1.0.0",
-            "default_state": {
-                "state": {"value": 0}
-            },
+            "default_state": {"state": {"value": 0}},
             "steps": [
-                {"id": "valid1", "type": "shell_command", "command": "echo test", "state_update": {"path": "state.value", "value": "1"}},
-                {"id": "valid2", "type": "shell_command", "command": "echo test", "state_update": {"path": "state.value", "value": "1", "operation": "increment"}},
-                {"id": "invalid", "type": "shell_command", "command": "echo test", "state_update": {"path": "state.value", "value": "1", "operation": "invalid_op"}},
+                {
+                    "id": "valid1",
+                    "type": "shell_command",
+                    "command": "echo test",
+                    "state_update": {"path": "state.value", "value": "1"},
+                },
+                {
+                    "id": "valid2",
+                    "type": "shell_command",
+                    "command": "echo test",
+                    "state_update": {"path": "state.value", "value": "1", "operation": "increment"},
+                },
+                {
+                    "id": "invalid",
+                    "type": "shell_command",
+                    "command": "echo test",
+                    "state_update": {"path": "state.value", "value": "1", "operation": "invalid_op"},
+                },
             ],
         }
 
         validator = WorkflowValidator()
         result = validator.validate(workflow)
-        
+
         # Should fail due to invalid operation
         assert result is False
         # Check that it fails due to invalid operation
@@ -151,7 +164,7 @@ class TestWorkflowValidator:
         # prompt_template is now optional, so no error for missing_prompt task
         assert any("must be an object" in error for error in validator.errors)
         # Should have warnings about missing description and missing prompt_template/steps
-        assert len(validator.warnings) > 0  
+        assert len(validator.warnings) > 0
         assert any("should have either prompt_template or steps" in warning for warning in validator.warnings)
 
     def test_config_validation(self):
@@ -220,9 +233,7 @@ class TestWorkflowValidator:
             "name": "test:special-steps",
             "description": "Test special steps",
             "version": "1.0.0",
-            "default_state": {
-                "flag": False
-            },
+            "default_state": {"flag": False},
             "steps": [
                 {"id": "break_step", "type": "break"},  # Valid in loops
                 {"id": "continue_step", "type": "continue"},  # Valid in loops
@@ -233,7 +244,12 @@ class TestWorkflowValidator:
                 },
                 {"id": "agent_cmd", "type": "agent_shell_command", "command": "ls -la", "reason": "List files"},
                 {"id": "internal_call", "type": "internal_mcp_call", "tool": "internal_tool", "parameters": {}},
-                {"id": "cond_msg", "type": "conditional_message", "condition": "{{ state.flag }}", "message": "Flag is set"},
+                {
+                    "id": "cond_msg",
+                    "type": "conditional_message",
+                    "condition": "{{ state.flag }}",
+                    "message": "Flag is set",
+                },
             ],
         }
 
@@ -254,24 +270,16 @@ class TestWorkflowValidator:
             "name": "test:circular",
             "description": "Test circular dependencies",
             "version": "1.0.0",
-            "default_state": {
-                "value": 10
-            },
+            "default_state": {"value": 10},
             "state_schema": {
                 "computed": {
-                    "field_a": {
-                        "from": "computed.field_b",
-                        "transform": "input * 2"
-                    },
-                    "field_b": {
-                        "from": "computed.field_a",
-                        "transform": "input + 1"
-                    }
+                    "field_a": {"from": "computed.field_b", "transform": "input * 2"},
+                    "field_b": {"from": "computed.field_a", "transform": "input + 1"},
                 }
             },
-            "steps": []
+            "steps": [],
         }
-        
+
         validator = WorkflowValidator()
         validator.schema = None  # Disable JSON schema validation for test
         assert not validator.validate(workflow)
@@ -284,28 +292,17 @@ class TestWorkflowValidator:
             "name": "test:circular-indirect",
             "description": "Test indirect circular dependencies",
             "version": "1.0.0",
-            "default_state": {
-                "value": 10
-            },
+            "default_state": {"value": 10},
             "state_schema": {
                 "computed": {
-                    "field_a": {
-                        "from": "computed.field_b",
-                        "transform": "input * 2"
-                    },
-                    "field_b": {
-                        "from": "computed.field_c",
-                        "transform": "input + 1"
-                    },
-                    "field_c": {
-                        "from": "computed.field_a",
-                        "transform": "input / 2"
-                    }
+                    "field_a": {"from": "computed.field_b", "transform": "input * 2"},
+                    "field_b": {"from": "computed.field_c", "transform": "input + 1"},
+                    "field_c": {"from": "computed.field_a", "transform": "input / 2"},
                 }
             },
-            "steps": []
+            "steps": [],
         }
-        
+
         validator = WorkflowValidator()
         validator.schema = None  # Disable JSON schema validation for test
         assert not validator.validate(workflow)

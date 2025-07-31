@@ -2,28 +2,23 @@
 Database migration management.
 """
 
-from typing import Dict, Any, List
+from typing import Any
 
 
 class MigrationManager:
     """Manages database migrations safely."""
-    
-    async def get_pending_migrations(self) -> List[Dict[str, Any]]:
+
+    async def get_pending_migrations(self) -> list[dict[str, Any]]:
         """Get list of pending migrations."""
         # Simplified for demo
         return [
             {
-                'id': '001_add_workflow_metadata',
-                'description': 'Add metadata field to workflows',
-                'type': 'schema_change'
+                "id": "001_add_workflow_metadata",
+                "description": "Add metadata field to workflows",
+                "type": "schema_change",
             }
         ]
-    
-    async def validate_migration(self, migration: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def validate_migration(self, migration: dict[str, Any]) -> dict[str, Any]:
         """Validate migration safety."""
-        return {
-            'safe': True,
-            'warnings': [],
-            'estimated_duration': '5 seconds',
-            'requires_lock': False
-        }
+        return {"safe": True, "warnings": [], "estimated_duration": "5 seconds", "requires_lock": False}

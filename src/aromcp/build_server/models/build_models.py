@@ -1,8 +1,7 @@
 """Dataclass models for build server MCP tool output schemas."""
 
 from dataclasses import dataclass
-from typing import Any, Union
-
+from typing import Any
 
 # Standard cursor pagination fields for all paginated responses:
 # - total: int | None - Total number of items across all pages (None if not paginated)

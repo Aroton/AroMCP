@@ -10,8 +10,8 @@ This file tests the following acceptance criteria:
 Maps to: /documentation/acceptance-criteria/workflow_server/state-management.md
 """
 
-import time
 import threading
+import time
 
 import pytest
 
@@ -406,8 +406,8 @@ class TestCascadingDependencies:
                 "level3": {"from": "computed.level2", "transform": "input / 2"},
                 "combined": {
                     "from": ["computed.level1", "computed.level2", "computed.level3"],
-                    "transform": "input[0] + input[1] + input[2]"
-                }
+                    "transform": "input[0] + input[1] + input[2]",
+                },
             },
         }
         manager = StateManager(schema)
@@ -431,13 +431,13 @@ class TestCascadingDependencies:
             "computed": {
                 "field_a": {"from": "computed.field_b", "transform": "input + 1"},
                 "field_b": {"from": "computed.field_c", "transform": "input * 2"},
-                "field_c": {"from": "computed.field_a", "transform": "input - 1"}  # Circular!
+                "field_c": {"from": "computed.field_a", "transform": "input - 1"},  # Circular!
             }
         }
-        
+
         # When/Then - Should detect circular dependency during initialization
         from aromcp.workflow_server.state.models import CircularDependencyError
-        
+
         with pytest.raises(CircularDependencyError, match="Circular dependency detected"):
             StateManager(schema)
 
@@ -447,28 +447,24 @@ class TestCascadingDependencies:
         schema = {
             "raw": {"status": "string", "value": "number"},
             "computed": {
-                "is_active": {
-                    "from": "inputs.status",
-                    "transform": "input === 'active'"
-                },
+                "is_active": {"from": "inputs.status", "transform": "input === 'active'"},
                 "processed_value": {
                     "from": ["computed.is_active", "inputs.value"],
-                    "transform": "input[0] ? input[1] * 2 : 0"
+                    "transform": "input[0] ? input[1] * 2 : 0",
                 },
                 "final_status": {
                     "from": ["computed.is_active", "computed.processed_value"],
-                    "transform": "input[0] ? `Value: ${input[1]}` : 'Inactive'"
-                }
-            }
+                    "transform": "input[0] ? `Value: ${input[1]}` : 'Inactive'",
+                },
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_conditional"
 
         # When - Active status
-        manager.update(workflow_id, [
-            {"path": "inputs.status", "value": "active"},
-            {"path": "inputs.value", "value": 50}
-        ])
+        manager.update(
+            workflow_id, [{"path": "inputs.status", "value": "active"}, {"path": "inputs.value", "value": 50}]
+        )
         state = manager.read(workflow_id)
 
         # Then
@@ -491,23 +487,14 @@ class TestCascadingDependencies:
         schema = {
             "raw": {"items": "array"},
             "computed": {
-                "item_count": {
-                    "from": "inputs.items",
-                    "transform": "input.length"
-                },
-                "doubled_items": {
-                    "from": "inputs.items",
-                    "transform": "input.map(x => x * 2)"
-                },
-                "sum_of_doubled": {
-                    "from": "computed.doubled_items",
-                    "transform": "input.reduce((a, b) => a + b, 0)"
-                },
+                "item_count": {"from": "inputs.items", "transform": "input.length"},
+                "doubled_items": {"from": "inputs.items", "transform": "input.map(x => x * 2)"},
+                "sum_of_doubled": {"from": "computed.doubled_items", "transform": "input.reduce((a, b) => a + b, 0)"},
                 "average": {
                     "from": ["computed.sum_of_doubled", "computed.item_count"],
-                    "transform": "input[1] > 0 ? input[0] / input[1] : 0"
-                }
-            }
+                    "transform": "input[1] > 0 ? input[0] / input[1] : 0",
+                },
+            },
         }
         manager = StateManager(schema)
         workflow_id = "wf_array"
@@ -528,103 +515,90 @@ class TestThreadSafetyEnhancements:
 
     def test_concurrent_cascading_updates(self):
         """Test thread safety during cascading updates (AC-SM-016)."""
-        import threading
         from aromcp.workflow_server.state.concurrent import ConcurrentStateManager
-        
+
         # Given
         manager = ConcurrentStateManager()
-        
+
         # Initialize workflow with dependencies
         from aromcp.workflow_server.state.models import WorkflowState
+
         manager._base_manager._states["wf_concurrent"] = WorkflowState(
-            inputs={"value1": 0, "value2": 0},
-            computed={},
-            state={}
+            inputs={"value1": 0, "value2": 0}, computed={}, state={}
         )
-        
+
         results = []
         errors = []
-        
+
         def update_value(field_name, value, thread_id):
             try:
                 result = manager.update(
-                    "wf_concurrent",
-                    [{"path": f"inputs.{field_name}", "value": value}],
-                    agent_id=f"thread_{thread_id}"
+                    "wf_concurrent", [{"path": f"inputs.{field_name}", "value": value}], agent_id=f"thread_{thread_id}"
                 )
                 results.append((thread_id, result))
             except Exception as e:
                 errors.append((thread_id, str(e)))
-        
+
         # When - Multiple threads updating different fields
         threads = []
         for i in range(10):
             field = "value1" if i % 2 == 0 else "value2"
-            thread = threading.Thread(
-                target=update_value,
-                args=(field, i * 10, i)
-            )
+            thread = threading.Thread(target=update_value, args=(field, i * 10, i))
             threads.append(thread)
             thread.start()
-        
+
         for thread in threads:
             thread.join()
-        
+
         # Then
         assert len(errors) == 0, f"Unexpected errors: {errors}"
         assert len(results) == 10
-        
+
         # All updates should have succeeded
         successful_updates = [r for _, r in results if r.get("success", False)]
         assert len(successful_updates) >= 8  # Allow some conflicts
 
     def test_atomic_operations_under_load(self):
         """Test atomic operations under heavy concurrent load (AC-SM-016)."""
-        import threading
         from aromcp.workflow_server.state.concurrent import ConcurrentStateManager
-        
+
         # Given
         manager = ConcurrentStateManager()
-        
+
         # Initialize with counter
         from aromcp.workflow_server.state.models import WorkflowState
-        manager._base_manager._states["wf_atomic"] = WorkflowState(
-            state={"counter": 0},
-            computed={},
-            inputs={}
-        )
-        
+
+        manager._base_manager._states["wf_atomic"] = WorkflowState(state={"counter": 0}, computed={}, inputs={})
+
         # When - Many threads incrementing counter
         increment_count = 100
         thread_count = 10
-        
+
         def increment_counter(thread_id):
             for _ in range(increment_count):
                 current_state = manager.read("wf_atomic")
                 current_value = current_state["state"]["counter"]
-                
+
                 # Simulate some processing time
                 time.sleep(0.0001)
-                
+
                 manager.update(
-                    "wf_atomic",
-                    [{"path": "state.counter", "value": current_value + 1}],
-                    agent_id=f"thread_{thread_id}"
+                    "wf_atomic", [{"path": "state.counter", "value": current_value + 1}], agent_id=f"thread_{thread_id}"
                 )
-        
+
         threads = []
         for i in range(thread_count):
             thread = threading.Thread(target=increment_counter, args=(i,))
             threads.append(thread)
             thread.start()
-        
+
         for thread in threads:
             thread.join()
-        
+
         # Then - Due to conflicts, final count may be less than expected
         final_state = manager.read("wf_atomic")
         final_count = final_state["state"]["counter"]
-        
+
         # Should have some successful increments but not all due to conflicts
         assert final_count > 0
         assert final_count <= increment_count * thread_count
@@ -632,30 +606,24 @@ class TestThreadSafetyEnhancements:
     def test_resource_manager_integration(self):
         """Test state manager integration with ResourceManager (AC-SM-016)."""
         from aromcp.workflow_server.workflow.resource_manager import WorkflowResourceManager
-        
+
         # Given
         state_manager = StateManager()
         resource_manager = WorkflowResourceManager()
         workflow_id = "wf_resource"
-        
+
         # Set up workflow with resource tracking
         # Note: WorkflowResourceManager allocates resources directly
-        
+
         # When - Update state and track resources
-        state_manager.update(workflow_id, [
-            {"path": "inputs.data", "value": "x" * 1000}  # 1KB of data
-        ])
-        
+        state_manager.update(workflow_id, [{"path": "inputs.data", "value": "x" * 1000}])  # 1KB of data
+
         # Allocate resources based on state size
-        allocated = resource_manager.allocate_resources(
-            workflow_id=workflow_id,
-            memory_mb=10,
-            cpu_percent=20
-        )
-        
+        allocated = resource_manager.allocate_resources(workflow_id=workflow_id, memory_mb=10, cpu_percent=20)
+
         # Then
         assert allocated
-        
+
         # Get resource usage
         usage = resource_manager.get_resource_usage(workflow_id)
         assert usage is not None
@@ -664,34 +632,34 @@ class TestThreadSafetyEnhancements:
     def test_performance_monitoring_integration(self):
         """Test state manager integration with PerformanceMonitor (AC-SM-016)."""
         from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
-        
+
         # Given
         state_manager = StateManager()
         monitor = PerformanceMonitor()
         workflow_id = "wf_perf"
-        
+
         # When - Monitor state update operations
         # Record state update performance
         import time
+
         start_time = time.time()
         state_manager.update(workflow_id, [{"path": "inputs.test", "value": "value"}])
         duration = time.time() - start_time
         monitor.record_step_performance("state_update", "state_operation", duration, 5.0, 100.0)
-        
+
         # Perform multiple updates
         for i in range(10):
             start_time = time.time()
-            
-            state_manager.update(workflow_id, [
-                {"path": "inputs.counter", "value": i},
-                {"path": "state.timestamp", "value": time.time()}
-            ])
-            
+
+            state_manager.update(
+                workflow_id, [{"path": "inputs.counter", "value": i}, {"path": "state.timestamp", "value": time.time()}]
+            )
+
             update_time = time.time() - start_time
             monitor.record_step_performance(f"update_{i}", "state_operation", update_time, 5.0, 50.0)
-        
+
         # Performance monitoring doesn't have end_operation method
-        
+
         # Then - Check performance metrics
         analysis = monitor.get_performance_analysis()
         assert analysis is not None
@@ -701,46 +669,41 @@ class TestThreadSafetyEnhancements:
     def test_debug_manager_state_tracking(self):
         """Test state manager integration with DebugManager (AC-SM-016)."""
         from aromcp.workflow_server.debugging.debug_tools import DebugManager
-        
+
         # Given
         state_manager = StateManager()
         debug_manager = DebugManager()
         workflow_id = "wf_debug"
-        
+
         # Enable debug mode
         debug_manager.enable_debug_mode(True)
-        
+
         # When - Update state with debug tracking
         initial_state = {"inputs": {"value": 0}, "state": {}, "computed": {}}
-        
+
         # Add checkpoint before update
         checkpoint_id = debug_manager.create_checkpoint(
             workflow_id=workflow_id,
             step_id="state_update_1",
             state_before=initial_state,
-            step_config={"operation": "state_update"}
+            step_config={"operation": "state_update"},
         )
-        
+
         # Update state
-        state_manager.update(workflow_id, [
-            {"path": "inputs.value", "value": 42},
-            {"path": "state.updated", "value": True}
-        ])
-        
+        state_manager.update(
+            workflow_id, [{"path": "inputs.value", "value": 42}, {"path": "state.updated", "value": True}]
+        )
+
         # Get updated state
         updated_state = state_manager.read(workflow_id)
-        
+
         # Complete checkpoint after update
-        debug_manager.complete_checkpoint(
-            checkpoint_id=checkpoint_id,
-            state_after=updated_state,
-            execution_time=0.1
-        )
-        
+        debug_manager.complete_checkpoint(checkpoint_id=checkpoint_id, state_after=updated_state, execution_time=0.1)
+
         # Then - Verify debug tracking
         checkpoints = debug_manager.get_checkpoint_history(workflow_id)
         assert len(checkpoints) > 0
-        
+
         checkpoint = checkpoints[0]
         assert checkpoint.step_id == "state_update_1"
         assert checkpoint.state_before == initial_state

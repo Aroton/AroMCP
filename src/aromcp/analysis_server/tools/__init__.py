@@ -5,18 +5,18 @@ TypeScript analysis tools for Phase 1 implementation.
 
 from ...utils.json_parameter_middleware import json_convert
 from ..models.typescript_models import (
+    CallTraceResponse,
     FindReferencesResponse,
     FunctionDetailsResponse,
-    CallTraceResponse,
 )
 from .find_references import find_references_impl
-from .get_function_details import get_function_details_impl
 from .get_call_trace import get_call_trace_impl
+from .get_function_details import get_function_details_impl
 
 
 def register_analysis_tools(mcp):
     """Register TypeScript analysis tools with the MCP server."""
-    
+
     @mcp.tool
     @json_convert
     def find_references(
@@ -31,15 +31,15 @@ def register_analysis_tools(mcp):
     ) -> FindReferencesResponse:
         """
         Find all references to a TypeScript symbol across files.
-        
+
         Use this tool when:
         - Tracking where a function, class, or variable is used
         - Analyzing symbol dependencies before refactoring
         - Understanding code impact of changes
         - Finding all usages of an interface or type
-        
+
         Replaces bash commands: grep -r "symbolName", ag "symbolName"
-        
+
         Args:
             symbol: Symbol name to find references for (e.g., "getUserById", "User")
             file_paths: Specific files to search, or None for project-wide search
@@ -49,11 +49,11 @@ def register_analysis_tools(mcp):
             resolution_depth: Analysis level - "syntactic", "semantic", or "full_type"
             page: Page number for pagination (default: 1)
             max_tokens: Maximum tokens per page (default: 20000)
-            
+
         Example:
             find_references("User")
             → FindReferencesResponse with all User interface references
-            
+
         Note: Cross-references with get_function_details for detailed analysis
         """
         return find_references_impl(
@@ -66,7 +66,7 @@ def register_analysis_tools(mcp):
             page=page,
             max_tokens=max_tokens,
         )
-    
+
     @mcp.tool
     @json_convert
     def get_function_details(
@@ -81,15 +81,15 @@ def register_analysis_tools(mcp):
     ) -> FunctionDetailsResponse:
         """
         Get detailed information about TypeScript functions and methods.
-        
+
         Use this tool when:
         - Understanding function signatures and parameters
         - Analyzing type definitions used in functions
         - Documenting function behavior and interfaces
         - Preparing for function refactoring or optimization
-        
+
         Replaces bash commands: grep -A 20 "function name", manual code inspection
-        
+
         Args:
             functions: Function names to analyze (single string or list)
             file_paths: Files to search, or None for project-wide search
@@ -99,11 +99,11 @@ def register_analysis_tools(mcp):
             resolution_depth: Analysis level - "syntactic", "semantic", or "full_type"
             page: Page number for pagination (default: 1)
             max_tokens: Maximum tokens per page (default: 20000)
-            
+
         Example:
             get_function_details(["getUserById", "createUser"])
             → FunctionDetailsResponse with signatures and implementations
-            
+
         Note: Pairs well with find_references to understand complete function usage
         """
         return get_function_details_impl(
@@ -116,7 +116,7 @@ def register_analysis_tools(mcp):
             page=page,
             max_tokens=max_tokens,
         )
-    
+
     @mcp.tool
     @json_convert
     def analyze_call_graph(
@@ -131,15 +131,15 @@ def register_analysis_tools(mcp):
     ) -> CallTraceResponse:
         """
         Analyze static call graph and function dependencies from an entry point.
-        
+
         Use this tool when:
         - Mapping function dependencies before refactoring
         - Understanding which functions a method can potentially call
         - Detecting circular dependencies in function calls
         - Planning code organization and module boundaries
-        
+
         Replaces bash commands: manual dependency mapping, grep -r for function calls
-        
+
         Args:
             entry_point: Function name to analyze dependencies for (e.g., "main", "UserService.process")
             file_paths: Files to analyze (required to avoid ambiguity with multiple definitions)
@@ -149,11 +149,11 @@ def register_analysis_tools(mcp):
             resolution_depth: Analysis level - "syntactic", "semantic", or "full_type"
             page: Page number for pagination (default: 1)
             max_tokens: Maximum tokens per page (default: 20000)
-            
+
         Example:
             analyze_call_graph("authenticate", "src/auth/auth.ts", max_depth=5)
             → CallTraceResponse with static call graph from authenticate function
-            
+
         Note: Shows potential calls, not runtime execution. Use with get_function_details for implementation details.
         """
         return get_call_trace_impl(

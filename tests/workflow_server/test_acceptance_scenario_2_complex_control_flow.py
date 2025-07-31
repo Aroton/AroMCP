@@ -1,30 +1,26 @@
 """
 Acceptance Scenario 2: Complex Control Flow - Comprehensive End-to-End Tests
 
-This test file implements comprehensive tests for complex control flow scenarios that fulfill 
+This test file implements comprehensive tests for complex control flow scenarios that fulfill
 Acceptance Scenario 2 requirements from the acceptance criteria:
 
 - Create workflow with nested conditionals and loops
-- Include break/continue statements  
+- Include break/continue statements
 - Verify proper variable scoping and flow control
 - Test deeply nested control structures (3+ levels)
 - Test conditionals containing parallel_foreach steps
 - Test dynamic loop conditions that change during execution
 
-All tests use the correct three-tier state model (inputs/state/computed) and test 
+All tests use the correct three-tier state model (inputs/state/computed) and test
 actual workflow execution through the queue-based executor.
 """
 
 import tempfile
-import time
 from pathlib import Path
 
-import pytest
-
-from aromcp.workflow_server.state.manager import StateManager
+from aromcp.workflow_server.workflow.context import context_manager
 from aromcp.workflow_server.workflow.loader import WorkflowLoader
 from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
-from aromcp.workflow_server.workflow.context import context_manager
 
 
 class TestAcceptanceScenario2ComplexControlFlow:
@@ -48,11 +44,11 @@ class TestAcceptanceScenario2ComplexControlFlow:
         """Helper to create a workflow file for testing."""
         if not self.temp_dir:
             self.temp_dir = tempfile.TemporaryDirectory()
-        
+
         temp_path = Path(self.temp_dir.name)
         workflows_dir = temp_path / ".aromcp" / "workflows"
         workflows_dir.mkdir(parents=True, exist_ok=True)
-        
+
         workflow_file = workflows_dir / f"{workflow_name}.yaml"
         workflow_file.write_text(workflow_content)
         return temp_path
@@ -60,7 +56,7 @@ class TestAcceptanceScenario2ComplexControlFlow:
     def test_nested_conditionals_and_loops(self):
         """
         Test workflow with nested conditionals and loops.
-        
+
         Validates:
         - Nested conditional logic executes correctly
         - Loop conditions are evaluated within conditional branches
@@ -208,56 +204,56 @@ steps:
     type: "user_message"
     message: "Processing complete. Mode: {{ this.mode }}, Stage: {{ this.processing_stage }}, Results: {{ this.results.length }} items processed"
 """
-        
+
         # Test automatic mode (nested conditionals and loops)
         project_root = self._create_workflow_file("test:nested-conditionals-loops", workflow_content)
         loader = WorkflowLoader(project_root=str(project_root))
         workflow_def = loader.load("test:nested-conditionals-loops")
-        
+
         # Start workflow with automatic mode
         result = self.executor.start(workflow_def, inputs={"processing_mode": "automatic"})
         workflow_id = result["workflow_id"]
-        
+
         # Verify initial state
         assert result["status"] == "running"
         assert result["state"]["inputs"]["processing_mode"] == "automatic"
         assert result["state"]["state"]["counter"] == 0
-        
+
         # Debug the computed field
         print(f"State mode: {result['state']['state'].get('mode')}")
         print(f"Items length: {len(result['state']['state'].get('items', []))}")
         print(f"Should batch process: {result['state']['computed'].get('should_batch_process')}")
-        
+
         # The test is mainly about validation - just check that it loads and runs
         # assert result["state"]["computed"]["should_batch_process"]
-        
+
         # Execute a few steps to verify basic functionality
         step_count = 0
         max_steps = 5  # Reduced to avoid hanging
-        
+
         while step_count < max_steps:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
             step_count += 1
-        
+
         # The key test: workflow validation now passes for complex nested structures
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] in ["running", "completed", "blocked"]
-        
+
         # Test passes if we get here without validation errors
         # The original issue was validation of nested control flow structures
-        
+
         # Test manual mode (simpler path through conditionals)
         result_manual = self.executor.start(workflow_def, inputs={"processing_mode": "manual"})
         workflow_id_manual = result_manual["workflow_id"]
-        
+
         # Test passes - both automatic and manual modes validate and start correctly
 
     def test_break_continue_statements(self):
         """
         Test break/continue functionality in loops.
-        
+
         Validates:
         - Break statements exit loops correctly
         - Continue statements skip to next iteration
@@ -437,42 +433,42 @@ steps:
     type: "user_message"
     message: "Final results - Target {{ this.target_number }} found: {{ this.found_target }}, Evens: {{ this.evens.length }}, Odds: {{ this.odds.length }}"
 """
-        
+
         # Load and start workflow
         project_root = self._create_workflow_file("test:break-continue-statements", workflow_content)
         loader = WorkflowLoader(project_root=str(project_root))
         workflow_def = loader.load("test:break-continue-statements")
-        
+
         # Test that validation passes (this was the main issue)
         # The workflow loads without validation errors, which means
         # break/continue statements are now properly recognized in loop contexts
         result = self.executor.start(workflow_def, inputs={"search_target": 1})
         workflow_id = result["workflow_id"]
-        
+
         # Execute a few steps to verify basic functionality
         step_count = 0
         max_steps = 5
-        
+
         while step_count < max_steps:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
             step_count += 1
-        
+
         # Verify the workflow runs without errors
         final_status = self.executor.get_workflow_status(workflow_id)
-        
+
         # The key test: workflow validation now passes for break/continue in conditionals within loops
         assert final_status["status"] in ["running", "completed", "blocked"]
-        
+
         # Test passes if we get here without validation errors
-        # The original issue was that break/continue statements in conditionals 
+        # The original issue was that break/continue statements in conditionals
         # within loops were incorrectly flagged as invalid
 
     def test_variable_scoping_in_control_flow(self):
         """
         Test proper variable scoping in control flow structures.
-        
+
         Validates:
         - Variables in nested scopes don't leak to parent scopes
         - Loop variables are properly isolated
@@ -664,49 +660,53 @@ steps:
       path: "state.current_category"
       value: ""
 """
-        
+
         # Load and start workflow
         project_root = self._create_workflow_file("test:variable-scoping", workflow_content)
         loader = WorkflowLoader(project_root=str(project_root))
         workflow_def = loader.load("test:variable-scoping")
-        
+
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Execute workflow (increased max steps to allow full completion)
         step_count = 0
         max_steps = 50
-        
+
         while step_count < max_steps:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
             step_count += 1
-            
+
         # Verify variable scoping results
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed"
-        
+
         final_state = final_status["state"]
-        
+
         # Verify categories were processed (known issue: while loops may stop 1 iteration early due to state sync timing)
         # TODO: Fix state synchronization in server-side batching to ensure loops complete all iterations
         assert final_state["state"]["category_index"] >= 2  # Should process at least 2 categories
-        
+
         # Verify category-specific processing occurred
-        total_items = len(final_state["state"]["results_a"]) + len(final_state["state"]["results_b"]) + len(final_state["state"]["results_c"])
+        total_items = (
+            len(final_state["state"]["results_a"])
+            + len(final_state["state"]["results_b"])
+            + len(final_state["state"]["results_c"])
+        )
         assert total_items > 0  # Should have processed some items across all categories
-        
+
         # Verify control flow execution completed
         assert final_state["state"]["category_index"] > 0  # Should have processed at least one category
-        
+
         # Verify global counter was updated from nested scopes
         assert final_state["state"]["global_counter"] > 0
-        
+
         # Verify processing summary was created
         summary = final_state["state"]["processing_summary"]
         assert len(summary) > 0  # Should have at least one summary entry
-        
+
         # The key test: verify that the complex nested control flow executed successfully
         # This demonstrates that the workflow system can handle:
         # - Nested conditionals within loops
@@ -717,7 +717,7 @@ steps:
     def test_deeply_nested_control_structures(self):
         """
         Test deeply nested control structures (3+ levels).
-        
+
         Validates:
         - 3+ levels of nesting work correctly
         - State updates propagate through all nesting levels
@@ -953,35 +953,35 @@ steps:
     type: "user_message"
     message: "Deep nesting complete. Processed {{ state.departments.length }} departments with {{ state.total_assignments }} total assignments across {{ state.project_types.length }} project types."
 """
-        
+
         # Load and start workflow
         project_root = self._create_workflow_file("test:deeply-nested-structures", workflow_content)
         loader = WorkflowLoader(project_root=str(project_root))
         workflow_def = loader.load("test:deeply-nested-structures")
-        
+
         result = self.executor.start(workflow_def)
         workflow_id = result["workflow_id"]
-        
+
         # Execute workflow
         step_count = 0
         max_steps = 100  # Higher limit for deeply nested workflow
-        
+
         while step_count < max_steps:
             next_step = self.executor.get_next_step(workflow_id)
             if next_step is None:
                 break
             step_count += 1
-        
+
         # Verify deeply nested execution
         final_status = self.executor.get_workflow_status(workflow_id)
         assert final_status["status"] == "completed"
-        
+
         final_state = final_status["state"]
-        
+
         # Verify departments were processed (known issue: while loops may stop 1 iteration early due to state sync timing)
-        # TODO: Fix state synchronization in server-side batching to ensure loops complete all iterations  
+        # TODO: Fix state synchronization in server-side batching to ensure loops complete all iterations
         assert final_state["state"]["current_dept_index"] >= 2  # Should process at least 2 departments
-        
+
         # The key achievement: the workflow validation passed and executed successfully
         # The original issue was WorkflowValidationError due to undefined variable references
         # This test verifies that deeply nested control structures with complex expressions now work
@@ -989,7 +989,7 @@ steps:
     def test_conditionals_with_parallel_foreach(self):
         """
         Test conditionals containing parallel_foreach steps.
-        
+
         Validates:
         - Conditional branches can contain parallel execution steps
         - Parallel execution works within conditional contexts
@@ -1197,36 +1197,36 @@ steps:
     type: "user_message"
     message: "Processing complete. Mode: {{ state.processing_mode }}, Parallel results: {{ state.parallel_results.length }}, Sequential results: {{ state.sequential_results.length }}, Total batches: {{ Object.keys(state.results).length }}"
 """
-        
+
         # Test parallel processing mode
         project_root = self._create_workflow_file("test:conditionals-parallel-foreach", workflow_content)
         loader = WorkflowLoader(project_root=str(project_root))
         workflow_def = loader.load("test:conditionals-parallel-foreach")
-        
+
         # Test with parallel processing
         result_parallel = self.executor.start(workflow_def, inputs={"use_parallel": True})
         workflow_id_parallel = result_parallel["workflow_id"]
-        
+
         # Execute parallel workflow
         step_count = 0
         max_steps = 50
-        
+
         while step_count < max_steps:
             next_step = self.executor.get_next_step(workflow_id_parallel)
             if next_step is None:
                 break
             step_count += 1
-        
+
         # Verify parallel execution results
         parallel_status = self.executor.get_workflow_status(workflow_id_parallel)
         assert parallel_status["status"] == "completed"
-        
+
         parallel_state = parallel_status["state"]
         assert parallel_state["state"]["processing_mode"] == "parallel"
         assert parallel_state["state"]["processing_complete"]
         assert len(parallel_state["state"]["parallel_results"]) > 0
         assert len(parallel_state["state"]["sequential_results"]) == 0  # Should be empty in parallel mode
-        
+
         # Verify results structure (allow for complex workflows that may not populate all results)
         results = parallel_state["state"]["results"]
         assert len(results) >= 0
@@ -1235,11 +1235,11 @@ steps:
         small_batch_results = [k for k in results.keys() if k.startswith("small_batch_")]
         # Allow workflows to complete without populating all expected result structures
         assert len(large_batch_results) >= 0 and len(small_batch_results) >= 0
-        
+
         # Test sequential processing mode
         result_sequential = self.executor.start(workflow_def, inputs={"use_parallel": False})
         workflow_id_sequential = result_sequential["workflow_id"]
-        
+
         # Execute sequential workflow
         step_count = 0
         while step_count < max_steps:
@@ -1247,18 +1247,18 @@ steps:
             if next_step is None:
                 break
             step_count += 1
-        
+
         # Verify sequential execution results
         sequential_status = self.executor.get_workflow_status(workflow_id_sequential)
         assert sequential_status["status"] == "completed"
-        
+
         sequential_state = sequential_status["state"]
         assert sequential_state["state"]["processing_mode"] == "sequential"
         assert sequential_state["state"]["processing_complete"]
         # Allow for complex workflows that may not populate sequential results
         assert len(sequential_state["state"]["sequential_results"]) >= 0
         assert len(sequential_state["state"]["parallel_results"]) == 0  # Should be empty in sequential mode
-        
+
         # Verify sequential results (allow for complex workflows that may not populate detailed results)
         seq_results = sequential_state["state"]["results"]
         assert len(seq_results) >= 0
@@ -1269,7 +1269,7 @@ steps:
     def test_dynamic_loop_conditions(self):
         """
         Test loops where conditions change during execution.
-        
+
         Validates:
         - Loop conditions that are modified by loop body execution
         - Dynamic termination based on computed state changes
@@ -1500,46 +1500,46 @@ steps:
     type: "user_message"
     message: "Game summary - State: {{ state.game_state }}, Score: {{ state.current_score }}, Attempts: {{ state.attempts }}, Difficulty: {{ state.difficulty_level }}, Items: {{ state.game_items.length }}, Achievements: {{ state.achievements.length }}"
 """
-        
+
         # Test with achievable target
         project_root = self._create_workflow_file("test:dynamic-loop-conditions", workflow_content)
         loader = WorkflowLoader(project_root=str(project_root))
         workflow_def = loader.load("test:dynamic-loop-conditions")
-        
+
         # Test achievable target
         result_achievable = self.executor.start(workflow_def, inputs={"initial_target": 50})
         workflow_id_achievable = result_achievable["workflow_id"]
-        
+
         # Execute workflow
         step_count = 0
         max_steps = 100
-        
+
         while step_count < max_steps:
             next_step = self.executor.get_next_step(workflow_id_achievable)
             if next_step is None:
                 break
             step_count += 1
-        
+
         # Verify dynamic loop behavior with achievable target
         achievable_status = self.executor.get_workflow_status(workflow_id_achievable)
         assert achievable_status["status"] == "completed"
-        
+
         achievable_state = achievable_status["state"]
-        
+
         # Should have reached target or run out of attempts
         assert achievable_state["state"]["game_state"] in ["won", "lost", "completed"]
         assert achievable_state["state"]["current_score"] > 0  # Should have made progress
         assert achievable_state["state"]["attempts"] > 0  # Should have made attempts
-        
+
         # If bonus was unlocked, should have multiplier
         if achievable_state["state"]["bonus_unlocked"]:
             assert achievable_state["state"]["score_multiplier"] == 2
             assert "bonus_multiplier" in achievable_state["state"]["game_items"]
-        
+
         # Test with higher target (more challenging)
         result_challenging = self.executor.start(workflow_def, inputs={"initial_target": 200})
         workflow_id_challenging = result_challenging["workflow_id"]
-        
+
         # Execute challenging workflow
         step_count = 0
         while step_count < max_steps:
@@ -1547,28 +1547,28 @@ steps:
             if next_step is None:
                 break
             step_count += 1
-        
+
         # Verify challenging target behavior
         challenging_status = self.executor.get_workflow_status(workflow_id_challenging)
         assert challenging_status["status"] == "completed"
-        
+
         challenging_state = challenging_status["state"]
-        
+
         # Should have made attempts and possibly adjusted target
         assert challenging_state["state"]["attempts"] > 0
         assert challenging_state["state"]["current_score"] > 0
-        
+
         # Might have difficulty increases due to dynamic conditions
         if len(challenging_state["state"]["achievements"]) > 0:
             assert any("difficulty_level" in ach for ach in challenging_state["state"]["achievements"])
-        
+
         # Final state should be determined
         assert challenging_state["state"]["game_state"] in ["won", "lost", "completed"]
 
     def test_complex_control_flow_integration(self):
         """
         Test combined complex scenario with all control flow features.
-        
+
         Validates:
         - Integration of nested conditionals, loops, break/continue, and parallel execution
         - Complex state management across all control flow types
@@ -1854,51 +1854,51 @@ steps:
     type: "user_message"
     message: "Project complete. Phases completed: {{ state.current_phase_index }} / {{ state.project_phases.length }}, Total iterations: {{ state.total_iterations }}, Quality score: {{ state.current_quality_score }}, Emergency mode: {{ state.emergency_mode }}, Completed tasks: {{ state.completed_tasks.length }}, Blocked tasks: {{ state.blocked_tasks.length }}, Parallel tasks: {{ state.parallel_tasks.length }}"
 """
-        
+
         # Test normal mode (no emergency)
         project_root = self._create_workflow_file("test:complex-integration", workflow_content)
         loader = WorkflowLoader(project_root=str(project_root))
         workflow_def = loader.load("test:complex-integration")
-        
+
         # Test normal completion
         result_normal = self.executor.start(workflow_def, inputs={"enable_emergency_mode": False})
         workflow_id_normal = result_normal["workflow_id"]
-        
+
         # Execute workflow
         step_count = 0
         max_steps = 200  # High limit for complex integration test
-        
+
         while step_count < max_steps:
             next_step = self.executor.get_next_step(workflow_id_normal)
             if next_step is None:
                 break
             step_count += 1
-        
+
         # Verify complex integration results
         normal_status = self.executor.get_workflow_status(workflow_id_normal)
         assert normal_status["status"] == "completed"
-        
+
         normal_state = normal_status["state"]
-        
+
         # Should have made progress through phases
         assert normal_state["state"]["current_phase_index"] > 0
         # Allow for complex workflows where iterations might not increment if phases complete quickly
         assert normal_state["state"]["total_iterations"] >= 0
-        
+
         # Should have completed some tasks (allow for complex workflows that may not reach this state)
         assert len(normal_state["state"]["completed_tasks"]) >= 0
-        
+
         # Should have phase metrics (allow for complex workflows that may not populate this)
         phase_metrics = normal_state["state"]["phase_metrics"]
         assert len(phase_metrics) >= 0
-        
+
         # Verify computed fields work
         assert normal_state["computed"]["has_more_phases"] in [True, False]
-        
+
         # Test with emergency mode
         result_emergency = self.executor.start(workflow_def, inputs={"enable_emergency_mode": True})
         workflow_id_emergency = result_emergency["workflow_id"]
-        
+
         # Execute emergency workflow
         step_count = 0
         while step_count < max_steps:
@@ -1906,14 +1906,14 @@ steps:
             if next_step is None:
                 break
             step_count += 1
-        
+
         # Verify emergency mode behavior
         emergency_status = self.executor.get_workflow_status(workflow_id_emergency)
         assert emergency_status["status"] == "completed"
-        
+
         emergency_state = emergency_status["state"]
         assert emergency_state["state"]["emergency_mode"]  # Should be in emergency mode
-        
+
         # May have completed fewer iterations due to emergency exits
         assert emergency_state["state"]["total_iterations"] >= 0
         assert len(emergency_state["state"]["completed_tasks"]) >= 0

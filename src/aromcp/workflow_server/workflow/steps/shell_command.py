@@ -30,7 +30,10 @@ class ShellCommandProcessor:
         # Check execution context
         execution_context = step_definition.get("execution_context", "server")
         if execution_context not in ["server", "client"]:
-            return {"status": "failed", "error": f"Invalid execution_context '{execution_context}'. Must be 'server' or 'client'"}
+            return {
+                "status": "failed",
+                "error": f"Invalid execution_context '{execution_context}'. Must be 'server' or 'client'",
+            }
 
         # If client execution context, delegate to agent processor
         if execution_context == "client":
@@ -44,7 +47,7 @@ class ShellCommandProcessor:
         # Handle retry strategy
         max_retries = error_handling.get("max_retries", 0) if error_handling.get("strategy") == "retry" else 0
         retry_delay = error_handling.get("retry_delay", 1.0)
-        
+
         for attempt in range(max_retries + 1):
             try:
                 # Determine working directory
@@ -83,7 +86,7 @@ class ShellCommandProcessor:
                 # Check if command failed and handle according to error_handling strategy
                 if result.returncode != 0:
                     strategy = error_handling.get("strategy", "fail")
-                    
+
                     if strategy == "retry" and attempt < max_retries:
                         # Retry on next iteration
                         if retry_delay > 0:
@@ -92,20 +95,22 @@ class ShellCommandProcessor:
                     elif strategy == "retry":
                         # Exhausted all retries, fail
                         return {
-                            "status": "failed", 
+                            "status": "failed",
                             "error": f"Command failed with exit code {result.returncode} after {max_retries + 1} attempts: {result.stderr}",
-                            "output": output
+                            "output": output,
                         }
                     elif strategy == "fail":
                         # Fail immediately
                         return {
-                            "status": "failed", 
+                            "status": "failed",
                             "error": f"Command failed with exit code {result.returncode}: {result.stderr}",
-                            "output": output
+                            "output": output,
                         }
                     elif strategy == "continue":
                         # Continue execution despite failure
-                        output["warning"] = f"Command failed with exit code {result.returncode} but continuing due to error_handling strategy"
+                        output["warning"] = (
+                            f"Command failed with exit code {result.returncode} but continuing due to error_handling strategy"
+                        )
                     elif strategy == "fallback":
                         # Use fallback value
                         fallback_value = error_handling.get("fallback_value", "")
@@ -122,7 +127,7 @@ class ShellCommandProcessor:
 
             except subprocess.TimeoutExpired:
                 strategy = error_handling.get("strategy", "fail")
-                
+
                 if strategy == "retry" and attempt < max_retries:
                     # Retry on next iteration
                     if retry_delay > 0:
@@ -131,15 +136,21 @@ class ShellCommandProcessor:
                 elif strategy == "fail":
                     return {"status": "failed", "error": f"Command timed out after {timeout} seconds: {command}"}
                 elif strategy == "continue":
-                    return {"status": "success", "output": {"warning": f"Command timed out after {timeout} seconds but continuing"}}
+                    return {
+                        "status": "success",
+                        "output": {"warning": f"Command timed out after {timeout} seconds but continuing"},
+                    }
                 elif strategy == "fallback":
                     fallback_value = error_handling.get("fallback_value", "")
-                    return {"status": "success", "output": {"stdout": str(fallback_value), "stderr": "", "exit_code": 0}}
+                    return {
+                        "status": "success",
+                        "output": {"stdout": str(fallback_value), "stderr": "", "exit_code": 0},
+                    }
                 else:
                     return {"status": "failed", "error": f"Command timed out after {timeout} seconds: {command}"}
             except Exception as e:
                 strategy = error_handling.get("strategy", "fail")
-                
+
                 if strategy == "retry" and attempt < max_retries:
                     # Retry on next iteration
                     if retry_delay > 0:
@@ -151,10 +162,13 @@ class ShellCommandProcessor:
                     return {"status": "success", "output": {"warning": f"Command execution failed but continuing: {e}"}}
                 elif strategy == "fallback":
                     fallback_value = error_handling.get("fallback_value", "")
-                    return {"status": "success", "output": {"stdout": str(fallback_value), "stderr": "", "exit_code": 0}}
+                    return {
+                        "status": "success",
+                        "output": {"stdout": str(fallback_value), "stderr": "", "exit_code": 0},
+                    }
                 else:
                     return {"status": "failed", "error": f"Command execution failed: {e}"}
-        
+
         # If we reach here, all retries were exhausted
         return {"status": "failed", "error": f"Command failed after {max_retries + 1} attempts"}
 

@@ -146,7 +146,6 @@ Critical rules:
 - Update state only as workflow directs
 - Escalate unrecoverable errors through workflow state or return to main agent"""
 
-
     @classmethod
     def _get_debug_note(cls) -> str:
         """Get debug mode note if enabled."""

@@ -5,15 +5,11 @@ import re
 from pathlib import Path
 
 from ...utils.pagination import auto_paginate_cursor_response
-from ..models.filesystem_models import ListFilesResponse
 from .._security import get_project_root
+from ..models.filesystem_models import ListFilesResponse
 
 
-def list_files_impl(
-    patterns: str | list[str], 
-    cursor: str | None = None,
-    max_tokens: int = 20000
-) -> ListFilesResponse:
+def list_files_impl(patterns: str | list[str], cursor: str | None = None, max_tokens: int = 20000) -> ListFilesResponse:
     """List files matching glob patterns.
 
     Args:
@@ -23,7 +19,7 @@ def list_files_impl(
 
     Returns:
         ListFilesResponse with file list and optional pagination
-        
+
     Note:
         Automatically excludes common folders like node_modules, .git, __pycache__, dist, etc.
     """
@@ -55,21 +51,17 @@ def list_files_impl(
             processed_patterns = patterns
 
         files = _get_file_paths_by_pattern(processed_patterns, project_path)
-        
+
         # Build response using dataclass
-        response = ListFilesResponse(
-            files=files,
-            pattern_used=patterns,
-            total=len(files)
-        )
-        
+        response = ListFilesResponse(files=files, pattern_used=patterns, total=len(files))
+
         # Use cursor-based pagination
         return auto_paginate_cursor_response(
             response=response,
             items_field="files",
             cursor=cursor,
             max_tokens=max_tokens,
-            sort_key=lambda x: x  # Sort alphabetically
+            sort_key=lambda x: x,  # Sort alphabetically
         )
 
     except Exception as e:
@@ -108,7 +100,7 @@ DEFAULT_EXCLUDE_DIRS = {
     ".terraform",
     "vendor",
     "target",  # Rust/Java
-    "out",     # Various build systems
+    "out",  # Various build systems
     ".gradle",
     ".settings",
     "bower_components",
@@ -117,13 +109,13 @@ DEFAULT_EXCLUDE_DIRS = {
 
 def _expand_brace_patterns(pattern: str) -> list[str]:
     """Expand brace patterns like {js,jsx,ts,tsx} into multiple patterns.
-    
+
     Args:
         pattern: A glob pattern that may contain brace expansions
-        
+
     Returns:
         List of expanded glob patterns
-        
+
     Examples:
         "src/**/*.{js,jsx}" -> ["src/**/*.js", "src/**/*.jsx"]
         "src/{components,utils}/**/*.ts" -> ["src/components/**/*.ts", "src/utils/**/*.ts"]
@@ -132,47 +124,47 @@ def _expand_brace_patterns(pattern: str) -> list[str]:
     # Validate basic pattern structure
     if not pattern or not isinstance(pattern, str):
         return [pattern] if pattern else []
-    
+
     # If no braces, return the pattern as-is
     if "{" not in pattern or "}" not in pattern:
         return [pattern]
-    
+
     # Check for mismatched braces
     if pattern.count("{") != pattern.count("}"):
         # Malformed braces - treat as literal pattern
         return [pattern]
-    
+
     # Find all brace patterns using regex
-    brace_pattern = re.compile(r'\{([^{}]+)\}')
-    
+    brace_pattern = re.compile(r"\{([^{}]+)\}")
+
     def expand_single_brace(text: str) -> list[str]:
         """Expand a single brace pattern."""
         match = brace_pattern.search(text)
         if not match:
             return [text]
-        
+
         # Extract the content inside braces
         brace_content = match.group(1)
         if not brace_content.strip():
             # Empty braces - treat as literal
             return [text]
-        
-        options = [opt.strip() for opt in brace_content.split(',')]
+
+        options = [opt.strip() for opt in brace_content.split(",")]
         # Filter out empty options
         options = [opt for opt in options if opt]
-        
+
         if not options:
             # No valid options - treat as literal
             return [text]
-        
+
         # Replace the brace pattern with each option
         results = []
         for option in options:
-            expanded = text[:match.start()] + option + text[match.end():]
+            expanded = text[: match.start()] + option + text[match.end() :]
             results.extend(expand_single_brace(expanded))  # Recursively handle nested braces
-        
+
         return results
-    
+
     try:
         return expand_single_brace(pattern)
     except Exception:
@@ -200,7 +192,7 @@ def _get_file_paths_by_pattern(patterns: list[str], project_path: Path) -> list[
     for pattern in patterns:
         # Expand brace patterns first
         expanded_patterns = _expand_brace_patterns(pattern)
-        
+
         for expanded_pattern in expanded_patterns:
             # Use pathlib's glob for pattern matching
             if expanded_pattern.startswith("/"):

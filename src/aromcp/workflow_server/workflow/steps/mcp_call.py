@@ -32,7 +32,7 @@ class MCPCallProcessor:
         # Add state update instructions if specified
         if state_update:
             mcp_call["state_update"] = state_update
-        
+
         # Add store_result instructions if specified
         if store_result:
             mcp_call["store_result"] = store_result
@@ -84,12 +84,12 @@ class InternalMCPCallProcessor:
                 "parameters": parameters,
                 "execution_mode": "internal",
             }
-            
+
             if state_update:
                 agent_action["state_update"] = state_update
             if store_result:
                 agent_action["store_result"] = store_result
-                
+
             return {
                 "status": "success",
                 "agent_action": agent_action,

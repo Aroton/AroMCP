@@ -107,7 +107,7 @@ class WorkflowLoader:
 
         # Validate workflow structure using the validator
         validator = WorkflowValidator()
-        
+
         if self.strict_schema:
             # Use strict JSON schema validation only
             if not validator.validate_strict_schema_only(data):
@@ -144,7 +144,7 @@ class WorkflowLoader:
     def _parse_default_state(self, default_state_data: dict[str, Any]) -> dict[str, Any]:
         """Parse default state with backward compatibility for 'raw' tier."""
         default_state = default_state_data.copy()
-        
+
         # Handle backward compatibility: map "raw" to "inputs"
         if "raw" in default_state:
             if "inputs" not in default_state:
@@ -153,7 +153,7 @@ class WorkflowLoader:
             default_state["inputs"].update(default_state["raw"])
             # Remove raw to maintain clean state structure
             del default_state["raw"]
-        
+
         return default_state
 
     def _parse_state_schema(self, schema_data: dict[str, Any]) -> StateSchema:
@@ -209,16 +209,13 @@ class WorkflowLoader:
             execution_context = "server"  # Default for all steps
             if step_type == "shell_command":
                 execution_context = step_data.get("execution_context", "server")
-            
+
             # Extract definition (everything except id, type, and execution_context)
             definition = {k: v for k, v in step_data.items() if k not in ["id", "type", "execution_context"]}
 
-            steps.append(WorkflowStep(
-                id=step_id, 
-                type=step_type, 
-                definition=definition,
-                execution_context=execution_context
-            ))
+            steps.append(
+                WorkflowStep(id=step_id, type=step_type, definition=definition, execution_context=execution_context)
+            )
 
         return steps
 

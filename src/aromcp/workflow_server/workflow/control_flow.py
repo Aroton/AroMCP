@@ -192,10 +192,7 @@ class LoopState:
         if self.loop_type == "foreach":
             # Set custom loop variables for foreach loops
             current_item = self.get_current_item()
-            self.variable_bindings.update({
-                self.variable_name: current_item,
-                self.index_name: self.current_item_index
-            })
+            self.variable_bindings.update({self.variable_name: current_item, self.index_name: self.current_item_index})
         elif self.loop_type == "while":
             # Set loop.iteration for while loops (1-based iteration counter)
             self.variable_bindings["iteration"] = self.current_iteration + 1
@@ -207,7 +204,7 @@ class LoopState:
         if self.loop_type == "foreach":
             self.current_item_index += 1
         self.control_signal = None  # Reset control signal
-        
+
         # Update loop variables after advancing
         self.update_loop_variables()
 

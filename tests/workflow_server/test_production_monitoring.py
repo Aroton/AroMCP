@@ -15,26 +15,16 @@ Focus: Performance monitoring, bottleneck identification, production observabili
 Pillar: Monitoring & Debugging
 """
 
-import pytest
 import time
-import json
-import psutil
-import threading
-from unittest.mock import Mock, patch, MagicMock, call
-from typing import Dict, Any, List
-import asyncio
+from unittest.mock import Mock, patch
 
+import pytest
+
+from aromcp.workflow_server.monitoring.observability import ObservabilityManager
+from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
 from aromcp.workflow_server.monitoring.test_adapters import (
     MetricsCollectorTestAdapter as MetricsCollector,
-    HAManagerTestAdapter as HAManager,
-    ScalingManagerTestAdapter as ScalingManager,
-    ConnectionManagerTestAdapter as ConnectionManager,
-    ProductionIntegrationTestAdapter as ProductionIntegration
 )
-from aromcp.workflow_server.monitoring.performance_monitor import PerformanceMonitor
-from aromcp.workflow_server.monitoring.observability import ObservabilityManager
-from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowInstance
-from aromcp.workflow_server.state.manager import StateManager
 from aromcp.workflow_server.workflow.workflow_state import WorkflowState
 
 
@@ -68,8 +58,8 @@ class TestProductionMonitoring:
             execution_context={
                 "start_time": time.time() - 30,  # Started 30 seconds ago
                 "step_durations": [1.2, 0.8, 2.3],
-                "resource_usage": {"memory_mb": 150, "cpu_percent": 25}
-            }
+                "resource_usage": {"memory_mb": 150, "cpu_percent": 25},
+            },
         )
 
     def test_comprehensive_execution_metrics_tracking(self, execution_tracker, mock_workflow_state):
@@ -92,10 +82,10 @@ class TestProductionMonitoring:
         for event in execution_events:
             execution_tracker.record_step_execution(
                 step_id=event["step_id"],
-                step_type=event["step_type"], 
+                step_type=event["step_type"],
                 duration=event["duration"],
                 status=event["status"],
-                timestamp=time.time()
+                timestamp=time.time(),
             )
 
         # Get comprehensive metrics
@@ -106,7 +96,7 @@ class TestProductionMonitoring:
         assert metrics["completed_steps"] == 5
         assert metrics["failed_steps"] == 1
         assert metrics["timeout_steps"] == 1
-        assert metrics["success_rate"] == 5/7  # ~0.714
+        assert metrics["success_rate"] == 5 / 7  # ~0.714
 
         # Verify duration metrics
         assert metrics["total_duration"] == sum(e["duration"] for e in execution_events)
@@ -118,12 +108,12 @@ class TestProductionMonitoring:
         step_type_metrics = metrics["step_type_breakdown"]
         assert step_type_metrics["shell_command"]["count"] == 2
         assert step_type_metrics["shell_command"]["success_rate"] == 1.0
-        assert step_type_metrics["mcp_call"]["count"] == 2  
+        assert step_type_metrics["mcp_call"]["count"] == 2
         assert step_type_metrics["mcp_call"]["success_rate"] == 0.0  # Both failed/timeout
 
         # Verify error pattern analysis
-        assert metrics["error_patterns"]["timeout_rate"] == 1/7
-        assert metrics["error_patterns"]["failure_rate"] == 1/7
+        assert metrics["error_patterns"]["timeout_rate"] == 1 / 7
+        assert metrics["error_patterns"]["failure_rate"] == 1 / 7
 
     def test_performance_bottleneck_identification(self, performance_monitor):
         """
@@ -136,12 +126,10 @@ class TestProductionMonitoring:
             {"step_id": "step1", "type": "shell_command", "duration": 0.5, "cpu": 10, "memory": 50},
             {"step_id": "step2", "type": "user_message", "duration": 0.1, "cpu": 5, "memory": 48},
             {"step_id": "step3", "type": "user_message", "duration": 0.05, "cpu": 3, "memory": 49},
-            
             # Performance bottlenecks
             {"step_id": "step4", "type": "mcp_call", "duration": 8.2, "cpu": 85, "memory": 200},  # Slow + high CPU
             {"step_id": "step5", "type": "shell_command", "duration": 0.3, "cpu": 15, "memory": 800},  # High memory
             {"step_id": "step6", "type": "agent_prompt", "duration": 12.5, "cpu": 45, "memory": 150},  # Very slow
-            
             # More normal steps
             {"step_id": "step7", "type": "conditional", "duration": 0.02, "cpu": 2, "memory": 49},
             {"step_id": "step8", "type": "user_input", "duration": 2.1, "cpu": 8, "memory": 55},  # User wait time
@@ -154,7 +142,7 @@ class TestProductionMonitoring:
                 step_type=data["type"],
                 duration=data["duration"],
                 cpu_usage=data["cpu"],
-                memory_usage=data["memory"]
+                memory_usage=data["memory"],
             )
 
         # Analyze for bottlenecks
@@ -166,7 +154,7 @@ class TestProductionMonitoring:
         # Verify duration bottlenecks
         duration_bottlenecks = [b for b in bottlenecks if b.type == "duration"]
         assert len(duration_bottlenecks) >= 2
-        
+
         duration_step_ids = [b.step_id for b in duration_bottlenecks]
         assert "step4" in duration_step_ids  # 8.2s duration
         assert "step6" in duration_step_ids  # 12.5s duration
@@ -212,7 +200,7 @@ class TestProductionMonitoring:
                 timestamp=point["timestamp"],
                 memory_mb=point["memory_mb"],
                 cpu_percent=point["cpu_percent"],
-                context={"current_step": point["step"]}
+                context={"current_step": point["step"]},
             )
 
         # Get resource usage analysis
@@ -221,13 +209,17 @@ class TestProductionMonitoring:
         # Verify memory tracking
         memory_stats = resource_analysis["memory"]
         assert memory_stats["peak_usage_mb"] == 320
-        assert memory_stats["average_usage_mb"] == sum(p["memory_mb"] for p in resource_timeline) / len(resource_timeline)
+        assert memory_stats["average_usage_mb"] == sum(p["memory_mb"] for p in resource_timeline) / len(
+            resource_timeline
+        )
         assert memory_stats["memory_growth_rate"] > 0  # Memory increased during heavy step
-        
+
         # Verify CPU tracking
         cpu_stats = resource_analysis["cpu"]
         assert cpu_stats["peak_cpu_percent"] == 85
-        assert cpu_stats["average_cpu_percent"] == sum(p["cpu_percent"] for p in resource_timeline) / len(resource_timeline)
+        assert cpu_stats["average_cpu_percent"] == sum(p["cpu_percent"] for p in resource_timeline) / len(
+            resource_timeline
+        )
 
         # Verify pattern identification
         patterns = resource_analysis["patterns"]
@@ -263,12 +255,12 @@ class TestProductionMonitoring:
                 status=update["status"],
                 step_name=update["step_name"],
                 progress=update["progress"],
-                error=update.get("error")
+                error=update.get("error"),
             )
 
         # Test status monitoring API
         status_api = observability_manager.get_status_api()
-        
+
         # Get current workflow status
         current_status = status_api.get_workflow_status("wf_monitor_test")
         assert current_status["workflow_id"] == "wf_monitor_test"
@@ -307,20 +299,20 @@ class TestProductionMonitoring:
                 "system": "prometheus",
                 "endpoint": "http://prometheus:9090/metrics",
                 "format": "prometheus",
-                "metrics": ["workflow_duration", "step_success_rate", "resource_usage"]
+                "metrics": ["workflow_duration", "step_success_rate", "resource_usage"],
             },
             {
                 "system": "datadog",
                 "api_key": "mock_api_key",
                 "format": "datadog",
-                "metrics": ["workflow.duration", "workflow.step.success_rate", "workflow.resource.memory"]
+                "metrics": ["workflow.duration", "workflow.step.success_rate", "workflow.resource.memory"],
             },
             {
                 "system": "cloudwatch",
                 "region": "us-east-1",
                 "format": "cloudwatch",
-                "metrics": ["WorkflowDuration", "StepSuccessRate", "ResourceUsage"]
-            }
+                "metrics": ["WorkflowDuration", "StepSuccessRate", "ResourceUsage"],
+            },
         ]
 
         # Mock external monitoring clients
@@ -330,7 +322,7 @@ class TestProductionMonitoring:
             mock_client.send_metrics = Mock()
             mock_clients[config["system"]] = mock_client
 
-        with patch.dict('src.aromcp.workflow_server.monitoring.observability.EXTERNAL_CLIENTS', mock_clients):
+        with patch.dict("src.aromcp.workflow_server.monitoring.observability.EXTERNAL_CLIENTS", mock_clients):
             # Configure integrations
             for config in monitoring_configs:
                 observability_manager.configure_external_integration(config)
@@ -342,7 +334,7 @@ class TestProductionMonitoring:
                 "resource_usage_memory_mb": 250,
                 "resource_usage_cpu_percent": 35,
                 "active_workflows": 3,
-                "failed_workflows": 1
+                "failed_workflows": 1,
             }
 
             # Export metrics to all configured systems
@@ -352,7 +344,7 @@ class TestProductionMonitoring:
             prometheus_client = mock_clients["prometheus"]
             prometheus_client.send_metrics.assert_called_once()
             prometheus_args = prometheus_client.send_metrics.call_args[0][0]
-            
+
             # Prometheus format should be key-value pairs
             assert "workflow_duration 45.2" in prometheus_args
             assert "step_success_rate 0.85" in prometheus_args
@@ -361,7 +353,7 @@ class TestProductionMonitoring:
             datadog_client = mock_clients["datadog"]
             datadog_client.send_metrics.assert_called_once()
             datadog_args = datadog_client.send_metrics.call_args[0][0]
-            
+
             # DataDog format should be structured JSON
             assert isinstance(datadog_args, list)
             assert any(metric["metric"] == "workflow.duration" for metric in datadog_args)
@@ -370,7 +362,7 @@ class TestProductionMonitoring:
             cloudwatch_client = mock_clients["cloudwatch"]
             cloudwatch_client.send_metrics.assert_called_once()
             cloudwatch_args = cloudwatch_client.send_metrics.call_args[0][0]
-            
+
             # CloudWatch format should have MetricData structure
             assert "MetricData" in cloudwatch_args
             metric_data = cloudwatch_args["MetricData"]
@@ -390,49 +382,49 @@ class TestProductionMonitoring:
                 "timestamp": time.time() - 100,
                 "event_type": "workflow_started",
                 "workflow_id": "wf_audit_test",
-                "details": {"initiated_by": "user123", "config": {"timeout": 300}}
+                "details": {"initiated_by": "user123", "config": {"timeout": 300}},
             },
             {
                 "timestamp": time.time() - 90,
-                "event_type": "step_started", 
+                "event_type": "step_started",
                 "step_id": "step1",
                 "step_type": "shell_command",
-                "details": {"command": "npm run lint"}
+                "details": {"command": "npm run lint"},
             },
             {
                 "timestamp": time.time() - 85,
                 "event_type": "step_completed",
                 "step_id": "step1",
-                "details": {"duration": 5.2, "exit_code": 0, "output_lines": 15}
+                "details": {"duration": 5.2, "exit_code": 0, "output_lines": 15},
             },
             {
                 "timestamp": time.time() - 80,
                 "event_type": "state_updated",
-                "details": {"path": "lint_results", "old_value": None, "new_value": {"errors": 0, "warnings": 2}}
+                "details": {"path": "lint_results", "old_value": None, "new_value": {"errors": 0, "warnings": 2}},
             },
             {
                 "timestamp": time.time() - 75,
                 "event_type": "decision_point",
                 "step_id": "step2",
-                "details": {"condition": "lint_results.errors == 0", "result": True, "branch_taken": "continue"}
+                "details": {"condition": "lint_results.errors == 0", "result": True, "branch_taken": "continue"},
             },
             {
                 "timestamp": time.time() - 70,
                 "event_type": "user_interaction",
                 "step_id": "step3",
-                "details": {"prompt": "Continue with deployment?", "response": "yes", "response_time": 3.2}
+                "details": {"prompt": "Continue with deployment?", "response": "yes", "response_time": 3.2},
             },
             {
                 "timestamp": time.time() - 60,
                 "event_type": "error_occurred",
                 "step_id": "step4",
-                "details": {"error_type": "TimeoutError", "message": "Deploy timed out", "recovery_action": "retry"}
+                "details": {"error_type": "TimeoutError", "message": "Deploy timed out", "recovery_action": "retry"},
             },
             {
                 "timestamp": time.time() - 50,
                 "event_type": "workflow_completed",
-                "details": {"final_status": "completed", "total_duration": 50.3, "steps_completed": 5}
-            }
+                "details": {"final_status": "completed", "total_duration": 50.3, "steps_completed": 5},
+            },
         ]
 
         # Record audit events
@@ -442,7 +434,7 @@ class TestProductionMonitoring:
                 timestamp=event["timestamp"],
                 workflow_id=event.get("workflow_id", "wf_audit_test"),
                 step_id=event.get("step_id"),
-                details=event["details"]
+                details=event["details"],
             )
 
         # Generate audit trail
@@ -459,8 +451,16 @@ class TestProductionMonitoring:
 
         # Verify event types are captured
         event_types = [event["event_type"] for event in audit_trail["events"]]
-        expected_types = ["workflow_started", "step_started", "step_completed", "state_updated", 
-                         "decision_point", "user_interaction", "error_occurred", "workflow_completed"]
+        expected_types = [
+            "workflow_started",
+            "step_started",
+            "step_completed",
+            "state_updated",
+            "decision_point",
+            "user_interaction",
+            "error_occurred",
+            "workflow_completed",
+        ]
         assert all(et in event_types for et in expected_types)
 
         # Verify decision point tracking
@@ -495,19 +495,15 @@ class TestProductionMonitoring:
                 "channel": "email",
                 "recipients": ["admin@example.com", "team@example.com"],
                 "severity_threshold": "medium",
-                "rate_limit": "5_per_hour"
+                "rate_limit": "5_per_hour",
             },
             {
                 "channel": "slack",
                 "webhook_url": "https://hooks.slack.com/mock",
                 "channel_name": "#alerts",
-                "severity_threshold": "high"
+                "severity_threshold": "high",
             },
-            {
-                "channel": "pagerduty",
-                "service_key": "mock_service_key",
-                "severity_threshold": "critical"
-            }
+            {"channel": "pagerduty", "service_key": "mock_service_key", "severity_threshold": "critical"},
         ]
 
         # Mock notification clients
@@ -517,7 +513,7 @@ class TestProductionMonitoring:
             mock_notifier.send_alert = Mock()
             mock_notifiers[config["channel"]] = mock_notifier
 
-        with patch.dict('src.aromcp.workflow_server.monitoring.observability.ALERT_CLIENTS', mock_notifiers):
+        with patch.dict("src.aromcp.workflow_server.monitoring.observability.ALERT_CLIENTS", mock_notifiers):
             # Configure alert channels
             for config in alert_configs:
                 observability_manager.configure_alert_channel(config)
@@ -531,25 +527,25 @@ class TestProductionMonitoring:
                     "message": "Input validation failed",
                     "should_alert_email": False,
                     "should_alert_slack": False,
-                    "should_alert_pagerduty": False
+                    "should_alert_pagerduty": False,
                 },
                 {
-                    "workflow_id": "wf_medium_fail", 
+                    "workflow_id": "wf_medium_fail",
                     "error_type": "TimeoutError",
                     "severity": "medium",
                     "message": "Step execution timed out",
                     "should_alert_email": True,
                     "should_alert_slack": False,
-                    "should_alert_pagerduty": False
+                    "should_alert_pagerduty": False,
                 },
                 {
                     "workflow_id": "wf_high_fail",
                     "error_type": "SystemError",
-                    "severity": "high", 
+                    "severity": "high",
                     "message": "Database connection failed",
                     "should_alert_email": True,
                     "should_alert_slack": True,
-                    "should_alert_pagerduty": False
+                    "should_alert_pagerduty": False,
                 },
                 {
                     "workflow_id": "wf_critical_fail",
@@ -558,8 +554,8 @@ class TestProductionMonitoring:
                     "message": "Security breach detected",
                     "should_alert_email": True,
                     "should_alert_slack": True,
-                    "should_alert_pagerduty": True
-                }
+                    "should_alert_pagerduty": True,
+                },
             ]
 
             # Trigger alerts for each scenario
@@ -569,7 +565,7 @@ class TestProductionMonitoring:
                     error_type=scenario["error_type"],
                     severity=scenario["severity"],
                     message=scenario["message"],
-                    context={"timestamp": time.time()}
+                    context={"timestamp": time.time()},
                 )
 
             # Verify email alerts
@@ -612,7 +608,7 @@ class TestProductionMonitoring:
             "average_cpu_percent": 65,
             "concurrent_steps": 3,
             "parallelizable_steps": 4,
-            "serial_steps": 2
+            "serial_steps": 2,
         }
 
         # Simulate serial mode execution (same workflow)
@@ -624,7 +620,7 @@ class TestProductionMonitoring:
             "average_cpu_percent": 35,  # Lower CPU due to single-threaded
             "concurrent_steps": 1,
             "parallelizable_steps": 0,  # All executed serially
-            "serial_steps": 6
+            "serial_steps": 6,
         }
 
         # Record both execution modes
@@ -660,7 +656,7 @@ class TestProductionMonitoring:
         recommendations = comparison["recommendations"]
         assert len(recommendations) > 0
         assert any("parallel" in rec["mode"] for rec in recommendations)
-        
+
         # Should recommend parallel for this scenario (significant speedup despite memory cost)
         primary_recommendation = recommendations[0]
         assert primary_recommendation["recommended_mode"] == "parallel"
@@ -683,12 +679,12 @@ class TestProductionMonitoringIntegration:
         # Simulate code standards workflow execution
         workflow_steps = [
             {"step": "lint_check", "type": "shell_command", "duration": 3.2, "memory": 120, "cpu": 25},
-            {"step": "type_check", "type": "shell_command", "duration": 5.8, "memory": 180, "cpu": 45}, 
+            {"step": "type_check", "type": "shell_command", "duration": 5.8, "memory": 180, "cpu": 45},
             {"step": "test_execution", "type": "shell_command", "duration": 12.3, "memory": 250, "cpu": 60},
             {"step": "security_scan", "type": "mcp_call", "duration": 8.1, "memory": 200, "cpu": 35},
             {"step": "build_check", "type": "shell_command", "duration": 15.4, "memory": 300, "cpu": 70},
             {"step": "results_summary", "type": "user_message", "duration": 0.2, "memory": 110, "cpu": 5},
-            {"step": "cleanup", "type": "user_message", "duration": 0.1, "memory": 105, "cpu": 3}
+            {"step": "cleanup", "type": "user_message", "duration": 0.1, "memory": 105, "cpu": 3},
         ]
 
         start_time = time.time()
@@ -696,12 +692,10 @@ class TestProductionMonitoringIntegration:
         # Record execution with full monitoring
         for i, step_data in enumerate(workflow_steps):
             step_start = time.time()
-            
+
             # Record step start
             execution_tracker.record_step_start(
-                step_id=step_data["step"],
-                step_type=step_data["type"],
-                timestamp=step_start
+                step_id=step_data["step"], step_type=step_data["type"], timestamp=step_start
             )
 
             # Simulate step execution time
@@ -712,7 +706,7 @@ class TestProductionMonitoringIntegration:
                 timestamp=step_start + step_data["duration"] / 2,
                 memory_mb=step_data["memory"],
                 cpu_percent=step_data["cpu"],
-                context={"step": step_data["step"]}
+                context={"step": step_data["step"]},
             )
 
             # Record step completion
@@ -720,7 +714,7 @@ class TestProductionMonitoringIntegration:
                 step_id=step_data["step"],
                 duration=step_data["duration"],
                 status="completed",
-                timestamp=step_start + step_data["duration"]
+                timestamp=step_start + step_data["duration"],
             )
 
             # Record audit event
@@ -731,8 +725,8 @@ class TestProductionMonitoringIntegration:
                 details={
                     "duration": step_data["duration"],
                     "resource_usage": {"memory": step_data["memory"], "cpu": step_data["cpu"]},
-                    "status": "completed"
-                }
+                    "status": "completed",
+                },
             )
 
         total_duration = time.time() - start_time
@@ -743,7 +737,7 @@ class TestProductionMonitoringIntegration:
             "performance_analysis": performance_monitor.get_performance_analysis(),
             "resource_usage": performance_monitor.get_resource_analysis(),
             "audit_trail": observability_manager.generate_audit_trail("wf_code_standards"),
-            "bottlenecks": performance_monitor.identify_bottlenecks()
+            "bottlenecks": performance_monitor.identify_bottlenecks(),
         }
 
         # Verify comprehensive monitoring
@@ -779,13 +773,11 @@ class TestProductionMonitoringIntegration:
         Focus: System health monitoring and alert generation for real failures
         """
         observability_manager = ObservabilityManager()
-        
+
         # Configure production-like alerting
-        observability_manager.configure_alert_channel({
-            "channel": "email",
-            "recipients": ["devops@company.com"],
-            "severity_threshold": "medium"
-        })
+        observability_manager.configure_alert_channel(
+            {"channel": "email", "recipients": ["devops@company.com"], "severity_threshold": "medium"}
+        )
 
         # Simulate system health degradation scenario
         health_events = [
@@ -797,7 +789,7 @@ class TestProductionMonitoringIntegration:
         ]
 
         alerts_triggered = []
-        
+
         def mock_alert_handler(alert_data):
             alerts_triggered.append(alert_data)
 
@@ -809,27 +801,25 @@ class TestProductionMonitoringIntegration:
                 timestamp=time.time() + event["time"],
                 memory_usage_percent=event["memory_usage"],
                 cpu_usage_percent=event["cpu_usage"],
-                error_rate=event["error_rate"]
+                error_rate=event["error_rate"],
             )
 
             # Check if health threshold triggers alert
             current_health = observability_manager.evaluate_system_health()
-            
+
             if current_health["status"] != event["health"]:
                 # Health status changed - trigger alert
                 observability_manager.trigger_health_alert(
-                    old_status=event["health"],
-                    new_status=current_health["status"],
-                    metrics=current_health["metrics"]
+                    old_status=event["health"], new_status=current_health["status"], metrics=current_health["metrics"]
                 )
 
         # Verify health monitoring and alerting
         assert len(alerts_triggered) >= 2  # Should alert on degraded and unhealthy
-        
+
         # Verify alert escalation
         degraded_alerts = [a for a in alerts_triggered if "degraded" in a.get("message", "")]
         unhealthy_alerts = [a for a in alerts_triggered if "unhealthy" in a.get("message", "")]
-        
+
         assert len(degraded_alerts) >= 1
         assert len(unhealthy_alerts) >= 1
 

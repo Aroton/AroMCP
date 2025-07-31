@@ -14,18 +14,14 @@ Focus: Tool timeout scenarios, agent operation timeouts, multiple timeout level 
 Pillar: Step Processing / Error Handling & Validation
 """
 
-import pytest
 import asyncio
 import time
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
-from typing import Dict, Any, List
-import threading
-import signal
-import subprocess
+from unittest.mock import AsyncMock, Mock
 
-from aromcp.workflow_server.workflow.steps.mcp_call import MCPCallProcessor
-from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowInstance
+import pytest
+
 from aromcp.workflow_server.state.manager import StateManager
+from aromcp.workflow_server.workflow.steps.mcp_call import MCPCallProcessor
 
 
 class TestStepTimeoutComprehensive:
@@ -40,7 +36,7 @@ class TestStepTimeoutComprehensive:
         manager.update_state = Mock()
         return manager
 
-    @pytest.fixture  
+    @pytest.fixture
     def timeout_manager(self):
         """Create timeout manager for testing."""
         return TimeoutManager()
@@ -52,7 +48,7 @@ class TestStepTimeoutComprehensive:
             workflow_id="wf_timeout_test",
             step_id="step_timeout_1",
             state_manager=mock_state_manager,
-            workflow_config={"timeout_seconds": 30}
+            workflow_config={"timeout_seconds": 30},
         )
 
     @pytest.fixture
@@ -64,7 +60,7 @@ class TestStepTimeoutComprehensive:
             current_step_index=1,
             total_steps=5,
             state={"inputs": {}, "state": {}, "computed": {}},
-            execution_context={"start_time": time.time()}
+            execution_context={"start_time": time.time()},
         )
 
     def test_mcp_call_step_timeout_enforcement(self, step_context):
@@ -82,19 +78,19 @@ class TestStepTimeoutComprehensive:
             "tool": "slow_tool",
             "parameters": {"input": "test"},
             "timeout": 2,  # 2 second timeout
-            "error_handling": {"strategy": "fail"}
+            "error_handling": {"strategy": "fail"},
         }
 
         mcp_step = MCPCallProcessor()
-        
+
         start_time = time.time()
-        
+
         # Should timeout after 2 seconds
         with pytest.raises(TimeoutError) as exc_info:
             asyncio.run(mcp_step.execute(step_definition, step_context, mcp_client=mock_client))
 
         elapsed_time = time.time() - start_time
-        
+
         # Verify timeout occurred around expected time (within tolerance)
         assert 1.8 <= elapsed_time <= 2.5
         assert "timeout" in str(exc_info.value).lower()
@@ -106,7 +102,7 @@ class TestStepTimeoutComprehensive:
         Focus: Retries respect individual timeout limits
         """
         call_count = 0
-        
+
         async def failing_tool_call(*args, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -120,30 +116,26 @@ class TestStepTimeoutComprehensive:
 
         step_definition = {
             "id": "mcp_retry_timeout",
-            "type": "mcp_call", 
+            "type": "mcp_call",
             "tool": "retry_tool",
             "parameters": {"input": "test"},
             "timeout": 2,
-            "error_handling": {
-                "strategy": "retry",
-                "max_retries": 3,
-                "retry_delay": 0.1
-            }
+            "error_handling": {"strategy": "retry", "max_retries": 3, "retry_delay": 0.1},
         }
 
         mcp_step = MCPCallProcessor()
-        
+
         start_time = time.time()
-        
+
         # Should eventually succeed on third try
         result = asyncio.run(mcp_step.execute(step_definition, step_context, mcp_client=mock_client))
-        
+
         elapsed_time = time.time() - start_time
-        
+
         # Should have made 3 attempts (2 timeouts + 1 success)
         assert call_count == 3
         assert result["result"] == "success_after_retries"
-        
+
         # Total time should include 2 timeouts (~2s each) plus delays
         assert 4 <= elapsed_time <= 7  # Allow for retry delays and processing time
 
@@ -155,11 +147,11 @@ class TestStepTimeoutComprehensive:
         """
         # Mock agent client that takes too long to respond
         mock_agent_client = Mock()
-        
+
         async def slow_agent_call(*args, **kwargs):
             await asyncio.sleep(10)  # Exceeds 5s timeout
             return {"response": "delayed_response"}
-            
+
         mock_agent_client.create_prompt = AsyncMock(side_effect=slow_agent_call)
 
         step_definition = {
@@ -167,18 +159,18 @@ class TestStepTimeoutComprehensive:
             "type": "agent_prompt",
             "prompt": "This is a test prompt",
             "timeout": 5,  # 5 second timeout
-            "error_handling": {"strategy": "fallback", "fallback_value": "timeout_fallback"}
+            "error_handling": {"strategy": "fallback", "fallback_value": "timeout_fallback"},
         }
 
         agent_step = AgentPromptStep()
-        
+
         start_time = time.time()
-        
+
         # Should timeout and use fallback
         result = await agent_step.execute(step_definition, step_context, agent_client=mock_agent_client)
-        
+
         elapsed_time = time.time() - start_time
-        
+
         # Should timeout around 5 seconds
         assert 4.5 <= elapsed_time <= 6.0
         assert result.get("fallback_used") == True
@@ -195,28 +187,29 @@ class TestStepTimeoutComprehensive:
             "command": "sleep 10",  # Command that would run for 10 seconds
             "timeout": 3,  # 3 second timeout
             "working_directory": "/tmp",
-            "error_handling": {"strategy": "fail"}
+            "error_handling": {"strategy": "fail"},
         }
 
         shell_step = ShellCommandStep()
-        
+
         start_time = time.time()
-        
+
         # Should timeout and terminate gracefully
         with pytest.raises(TimeoutError) as exc_info:
             shell_step.execute(step_definition, step_context)
 
         elapsed_time = time.time() - start_time
-        
+
         # Should timeout around 3 seconds
         assert 2.8 <= elapsed_time <= 3.5
         assert "command timed out" in str(exc_info.value).lower()
-        
+
         # Verify no lingering processes (best effort check)
         import psutil
+
         current_process = psutil.Process()
-        children = current_process.children(recursive=True)  
-        sleep_processes = [p for p in children if 'sleep' in ' '.join(p.cmdline())]
+        children = current_process.children(recursive=True)
+        sleep_processes = [p for p in children if "sleep" in " ".join(p.cmdline())]
         assert len(sleep_processes) == 0, "Sleep process should have been terminated"
 
     def test_workflow_level_timeout_limits_execution(self, timeout_manager, workflow_state):
@@ -230,28 +223,33 @@ class TestStepTimeoutComprehensive:
 
         steps = [
             {"id": "step1", "type": "shell_command", "command": "sleep 2", "timeout": 10},
-            {"id": "step2", "type": "shell_command", "command": "sleep 2", "timeout": 10}, 
-            {"id": "step3", "type": "shell_command", "command": "sleep 2", "timeout": 10}  # Would exceed workflow timeout
+            {"id": "step2", "type": "shell_command", "command": "sleep 2", "timeout": 10},
+            {
+                "id": "step3",
+                "type": "shell_command",
+                "command": "sleep 2",
+                "timeout": 10,
+            },  # Would exceed workflow timeout
         ]
 
         executed_steps = []
-        
+
         for i, step in enumerate(steps):
             # Check workflow-level timeout before each step
             elapsed_time = time.time() - workflow_state.execution_context["start_time"]
             remaining_time = workflow_state.execution_context["timeout_seconds"] - elapsed_time
-            
+
             if remaining_time <= 0:
                 # Workflow timeout exceeded
                 break
-                
+
             if remaining_time < step.get("timeout", 30):
                 # Step timeout would exceed workflow timeout
                 with pytest.raises(TimeoutError) as exc_info:
                     timeout_manager.enforce_workflow_timeout(step, workflow_state, remaining_time)
                 assert "workflow timeout" in str(exc_info.value).lower()
                 break
-            
+
             # Simulate step execution
             time.sleep(1.8)  # Simulate step taking ~2 seconds
             executed_steps.append(step["id"])
@@ -267,16 +265,16 @@ class TestStepTimeoutComprehensive:
         Focus: Warning notifications before actual timeout expiration
         """
         warnings_received = []
-        
+
         def warning_callback(message, remaining_time):
             warnings_received.append((message, remaining_time))
 
         step_definition = {
             "id": "warning_test",
             "type": "mcp_call",
-            "tool": "slow_tool", 
+            "tool": "slow_tool",
             "timeout": 5,
-            "warning_thresholds": [1.0, 0.5]  # Warn at 1s and 0.5s remaining
+            "warning_thresholds": [1.0, 0.5],  # Warn at 1s and 0.5s remaining
         }
 
         # Mock tool that takes 4 seconds (allows warnings but not timeout)
@@ -285,24 +283,20 @@ class TestStepTimeoutComprehensive:
 
         # Enable timeout warnings
         timeout_manager.set_warning_callback(warning_callback)
-        
+
         start_time = time.time()
-        
+
         # Should complete with warnings
         try:
             result = asyncio.run(
-                timeout_manager.execute_with_warnings(
-                    mock_client.call_tool,
-                    step_definition,
-                    timeout=5
-                )
+                timeout_manager.execute_with_warnings(mock_client.call_tool, step_definition, timeout=5)
             )
         except TimeoutError:
             pass  # Expected in some cases
 
         # Verify warnings were generated
         assert len(warnings_received) >= 1
-        
+
         # Verify warning content and timing
         for message, remaining in warnings_received:
             assert "timeout approaching" in message.lower()
@@ -318,7 +312,7 @@ class TestStepTimeoutComprehensive:
         global_timeout = 20  # Global system timeout
         workflow_timeout = 10  # Workflow-level timeout
         step_timeout = 15  # Step-level timeout (longer than workflow)
-        
+
         workflow_state.execution_context["timeout_seconds"] = workflow_timeout
         workflow_state.execution_context["start_time"] = time.time() - 8  # 8 seconds already elapsed
 
@@ -326,15 +320,13 @@ class TestStepTimeoutComprehensive:
             "id": "multi_timeout_test",
             "type": "shell_command",
             "command": "sleep 5",  # Would take 5 seconds
-            "timeout": step_timeout
+            "timeout": step_timeout,
         }
 
         # Calculate effective timeout (most restrictive)
         workflow_remaining = workflow_timeout - 8  # 2 seconds remaining
         effective_timeout = timeout_manager.calculate_effective_timeout(
-            step_timeout=step_timeout,
-            workflow_remaining=workflow_remaining,
-            global_timeout=global_timeout
+            step_timeout=step_timeout, workflow_remaining=workflow_remaining, global_timeout=global_timeout
         )
 
         # Should use workflow remaining time as most restrictive
@@ -342,12 +334,10 @@ class TestStepTimeoutComprehensive:
         assert effective_timeout == 2
 
         # Verify timeout hierarchy enforcement
-        timeout_levels = timeout_manager.get_timeout_hierarchy(
-            step_definition, workflow_state, global_timeout
-        )
-        
+        timeout_levels = timeout_manager.get_timeout_hierarchy(step_definition, workflow_state, global_timeout)
+
         assert timeout_levels["global"] == global_timeout
-        assert timeout_levels["workflow"] == workflow_remaining  
+        assert timeout_levels["workflow"] == workflow_remaining
         assert timeout_levels["step"] == step_timeout
         assert timeout_levels["effective"] == workflow_remaining  # Most restrictive
 
@@ -362,43 +352,39 @@ class TestStepTimeoutComprehensive:
                 "type": "shell_command",
                 "command": "sleep 5",
                 "timeout": 2,
-                "error_handling": {"strategy": "fail"}
+                "error_handling": {"strategy": "fail"},
             },
             {
-                "id": "timeout_continue", 
+                "id": "timeout_continue",
                 "type": "shell_command",
                 "command": "sleep 5",
                 "timeout": 2,
-                "error_handling": {"strategy": "continue"}
+                "error_handling": {"strategy": "continue"},
             },
             {
                 "id": "timeout_fallback",
-                "type": "shell_command", 
+                "type": "shell_command",
                 "command": "sleep 5",
                 "timeout": 2,
                 "error_handling": {
                     "strategy": "fallback",
-                    "fallback_value": {"stdout": "timeout_fallback", "exit_code": 0}
-                }
+                    "fallback_value": {"stdout": "timeout_fallback", "exit_code": 0},
+                },
             },
             {
                 "id": "timeout_retry",
                 "type": "shell_command",
-                "command": "sleep 5", 
+                "command": "sleep 5",
                 "timeout": 2,
-                "error_handling": {
-                    "strategy": "retry",
-                    "max_retries": 2,
-                    "retry_delay": 0.1
-                }
-            }
+                "error_handling": {"strategy": "retry", "max_retries": 2, "retry_delay": 0.1},
+            },
         ]
 
         results = {}
-        
+
         for step_def in step_definitions:
             shell_step = ShellCommandStep()
-            
+
             try:
                 result = shell_step.execute(step_def, step_context)
                 results[step_def["id"]] = {"success": True, "result": result}
@@ -410,7 +396,7 @@ class TestStepTimeoutComprehensive:
         assert "timeout" in results["timeout_fail"]["error"].lower()
 
         assert results["timeout_continue"]["success"] == True  # Continue strategy succeeds
-        
+
         assert results["timeout_fallback"]["success"] == True
         assert results["timeout_fallback"]["result"]["stdout"] == "timeout_fallback"
 
@@ -428,24 +414,24 @@ class TestStepTimeoutComprehensive:
         async def execute_step_with_timeout(step_id, duration, timeout):
             try:
                 start_time = time.time()
-                
+
                 # Simulate step execution
                 await asyncio.sleep(duration)
-                
+
                 elapsed = time.time() - start_time
                 if elapsed > timeout:
                     raise TimeoutError(f"Step {step_id} exceeded timeout")
-                    
+
                 results[step_id] = {"completed": True, "duration": elapsed}
             except Exception as e:
                 errors.append(f"{step_id}: {str(e)}")
 
         # Create multiple concurrent steps with different timeout characteristics
         tasks = [
-            execute_step_with_timeout("fast_step", 0.5, 2.0),      # Should complete
-            execute_step_with_timeout("medium_step", 1.5, 2.0),   # Should complete
-            execute_step_with_timeout("slow_step", 3.0, 2.0),     # Should timeout
-            execute_step_with_timeout("very_slow", 5.0, 2.0),     # Should timeout
+            execute_step_with_timeout("fast_step", 0.5, 2.0),  # Should complete
+            execute_step_with_timeout("medium_step", 1.5, 2.0),  # Should complete
+            execute_step_with_timeout("slow_step", 3.0, 2.0),  # Should timeout
+            execute_step_with_timeout("very_slow", 5.0, 2.0),  # Should timeout
         ]
 
         # Execute all steps concurrently
@@ -468,13 +454,13 @@ class TestStepTimeoutComprehensive:
         """
         # Test various timeout configurations
         test_configs = [
-            {"timeout": 30, "expected": 30},                    # Valid integer
-            {"timeout": 30.5, "expected": 30.5},               # Valid float
-            {"timeout": "30", "expected": 30},                 # String conversion
-            {"timeout": 0, "expected": None},                  # Zero means no timeout
-            {"timeout": -5, "expected": None},                 # Negative means no timeout
-            {"timeout": None, "expected": None},               # None means no timeout
-            {"timeout": "invalid", "expected": None},          # Invalid string
+            {"timeout": 30, "expected": 30},  # Valid integer
+            {"timeout": 30.5, "expected": 30.5},  # Valid float
+            {"timeout": "30", "expected": 30},  # String conversion
+            {"timeout": 0, "expected": None},  # Zero means no timeout
+            {"timeout": -5, "expected": None},  # Negative means no timeout
+            {"timeout": None, "expected": None},  # None means no timeout
+            {"timeout": "invalid", "expected": None},  # Invalid string
         ]
 
         for config in test_configs:
@@ -502,7 +488,7 @@ class TestStepTimeoutComprehensive:
                 step_id=scenario["step_id"],
                 timeout=scenario["timeout"],
                 actual_duration=scenario["actual_duration"],
-                timed_out=scenario["timed_out"]
+                timed_out=scenario["timed_out"],
             )
 
         # Get metrics
@@ -534,22 +520,22 @@ class TestTimeoutIntegrationScenarios:
             {"id": "lint", "type": "shell_command", "command": "npm run lint", "timeout": 60},
             {"id": "typecheck", "type": "shell_command", "command": "npm run typecheck", "timeout": 120},
             {"id": "test", "type": "shell_command", "command": "npm test", "timeout": 300},
-            {"id": "build", "type": "shell_command", "command": "npm run build", "timeout": 180}
+            {"id": "build", "type": "shell_command", "command": "npm run build", "timeout": 180},
         ]
 
         timeout_manager = TimeoutManager()
         workflow_timeout = 600  # 10 minute workflow timeout
-        
+
         start_time = time.time()
         results = []
 
         for step in workflow_steps:
             elapsed = time.time() - start_time
             remaining_workflow_time = workflow_timeout - elapsed
-            
+
             # Calculate effective timeout
             effective_timeout = min(step["timeout"], remaining_workflow_time)
-            
+
             if effective_timeout <= 0:
                 results.append({"step": step["id"], "status": "skipped", "reason": "workflow_timeout"})
                 continue
@@ -557,18 +543,20 @@ class TestTimeoutIntegrationScenarios:
             # Simulate step execution (much faster for testing)
             step_duration = 0.1  # Simulate quick execution
             time.sleep(step_duration)
-            
-            results.append({
-                "step": step["id"], 
-                "status": "completed",
-                "duration": step_duration,
-                "effective_timeout": effective_timeout
-            })
+
+            results.append(
+                {
+                    "step": step["id"],
+                    "status": "completed",
+                    "duration": step_duration,
+                    "effective_timeout": effective_timeout,
+                }
+            )
 
         # Verify all steps completed within workflow timeout
         assert len(results) == 4
         assert all(r["status"] == "completed" for r in results)
-        
+
         # Verify effective timeouts were calculated correctly
         total_elapsed = sum(r["duration"] for r in results)
         assert total_elapsed < workflow_timeout

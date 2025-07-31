@@ -3,7 +3,7 @@ Test suite for Core Execution Engine - Acceptance Criteria 2
 
 This file tests the following acceptance criteria:
 - AC 2.1: Sequential Step Processing - steps execute in defined order using queue-based execution
-- AC 2.2: Workflow Lifecycle Management - proper state transitions and workflow ID generation  
+- AC 2.2: Workflow Lifecycle Management - proper state transitions and workflow ID generation
 - AC 2.3: Queue-Based Execution Model - proper queuing behavior for different step types
 
 Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
@@ -12,11 +12,7 @@ Maps to: /documentation/acceptance-criteria/workflow_server/workflow_server.md
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from aromcp.workflow_server.state.manager import StateManager
 from aromcp.workflow_server.workflow.loader import WorkflowLoader
-from aromcp.workflow_server.workflow.models import WorkflowExecutionError
 from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
 from aromcp.workflow_server.workflow.variables import VariableReplacer
 
@@ -79,7 +75,7 @@ steps:
             assert result["workflow_id"].startswith("wf_")
             assert len(result["workflow_id"]) == 11  # "wf_" + 8 chars
             assert all(c in "0123456789abcdef" for c in result["workflow_id"][3:])
-            
+
             # Verify proper state transitions
             assert result["status"] in ["pending", "running", "completed", "failed", "paused"]
             assert result["total_steps"] == 2
@@ -172,9 +168,23 @@ class TestQueueBasedExecutionModel:
         from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowStep
 
         steps = [
-            WorkflowStep(id="step1", type="shell_command", definition={"command": "echo 'State update step1'", "state_update": {"path": "state.counter", "value": 1}}),
+            WorkflowStep(
+                id="step1",
+                type="shell_command",
+                definition={
+                    "command": "echo 'State update step1'",
+                    "state_update": {"path": "state.counter", "value": 1},
+                },
+            ),
             WorkflowStep(id="step2", type="user_message", definition={"message": "Hello"}),
-            WorkflowStep(id="step3", type="shell_command", definition={"command": "echo 'State update step3'", "state_update": {"path": "state.counter", "value": 2}}),
+            WorkflowStep(
+                id="step3",
+                type="shell_command",
+                definition={
+                    "command": "echo 'State update step3'",
+                    "state_update": {"path": "state.counter", "value": 2},
+                },
+            ),
         ]
 
         workflow_def = WorkflowDefinition(
@@ -223,7 +233,14 @@ class TestQueueBasedExecutionModel:
         from aromcp.workflow_server.workflow.models import WorkflowDefinition, WorkflowStep
 
         steps = [
-            WorkflowStep(id="step1", type="shell_command", definition={"command": "echo 'State update step1'", "state_update": {"path": "state.counter", "value": 1}}),
+            WorkflowStep(
+                id="step1",
+                type="shell_command",
+                definition={
+                    "command": "echo 'State update step1'",
+                    "state_update": {"path": "state.counter", "value": 1},
+                },
+            ),
             WorkflowStep(id="step2", type="user_message", definition={"message": "This will fail"}),
         ]
 
@@ -260,7 +277,10 @@ class TestQueueBasedExecutionModel:
 
         # Check workflow status - should be completed (not failed with implicit completion)
         status = executor.get_workflow_status(workflow_id)
-        assert status["status"] in ["completed", "running"]  # Implicit completion doesn't track individual step failures
+        assert status["status"] in [
+            "completed",
+            "running",
+        ]  # Implicit completion doesn't track individual step failures
 
 
 class TestVariableReplacement:
@@ -470,7 +490,7 @@ class TestWorkflowLifecycleManagement:
 
         # QueueBasedWorkflowExecutor returns error dict instead of raising exception
         result = executor.get_next_step("nonexistent_workflow")
-        
+
         # Verify error message format compliance
         assert "error" in result
         assert "Workflow nonexistent_workflow not found" in result["error"]
@@ -499,7 +519,11 @@ class TestConditionalMultipleSteps:
                     "then_steps": [{"type": "user_message", "message": "Value is greater than 10"}],
                     "else_steps": [
                         {"type": "user_message", "message": "Value is 10 or less"},
-                        {"type": "shell_command", "command": "echo 'Processing'", "state_update": {"path": "state.processed", "value": True}},
+                        {
+                            "type": "shell_command",
+                            "command": "echo 'Processing'",
+                            "state_update": {"path": "state.processed", "value": True},
+                        },
                         {"type": "user_message", "message": "Processing complete"},
                     ],
                 },

@@ -14,13 +14,9 @@ This file tests the following acceptance criteria:
 Maps to: /documentation/acceptance-criteria/workflow_server/user-interaction.md
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 
 from aromcp.workflow_server.workflow.steps.user_message import UserInputProcessor
-from aromcp.workflow_server.workflow.context import ExecutionContext
-from aromcp.workflow_server.workflow.models import WorkflowStep
-from aromcp.workflow_server.workflow.control_flow import ControlFlowError
 
 
 class TestUserInputCollection:
@@ -32,15 +28,15 @@ class TestUserInputCollection:
             "prompt": "Enter your name:",
             "input_type": "string",
             "validation_pattern": "^[A-Za-z\\s]+$",
-            "validation_message": "Name must contain only letters and spaces"
+            "validation_message": "Name must contain only letters and spaces",
         }
-        
+
         # Mock state manager (not used by UserInputProcessor.process)
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["type"] == "user_input"
@@ -52,35 +48,28 @@ class TestUserInputCollection:
         step_definition = {
             "prompt": "Enter your age:",
             "input_type": "number",
-            "validation": {
-                "min": 0,
-                "max": 150
-            },
-            "validation_message": "Age must be between 0 and 150"
+            "validation": {"min": 0, "max": 150},
+            "validation_message": "Age must be between 0 and 150",
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["input_type"] == "number"
 
     def test_user_input_boolean_type_validation(self):
         """Test user input with boolean type validation."""
-        step_definition = {
-            "prompt": "Do you want to continue?",
-            "input_type": "boolean",
-            "default": False
-        }
-        
+        step_definition = {"prompt": "Do you want to continue?", "input_type": "boolean", "default": False}
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["input_type"] == "boolean"
@@ -92,14 +81,14 @@ class TestUserInputCollection:
             "prompt": "Select your preferred language:",
             "input_type": "choice",
             "choices": ["Python", "JavaScript", "TypeScript", "Go"],
-            "default": "Python"
+            "default": "Python",
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["input_type"] == "choice"
@@ -113,14 +102,14 @@ class TestUserInputCollection:
             "input_type": "string",
             "validation_pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
             "validation_message": "Please enter a valid email address",
-            "required": True
+            "required": True,
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["required"] == True
@@ -130,16 +119,14 @@ class TestUserInputCollection:
         step_definition = {
             "prompt": "Enter project name:",
             "input_type": "string",
-            "state_update": {
-                "project_name": "{{ user_input }}"
-            }
+            "state_update": {"project_name": "{{ user_input }}"},
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert "state_update" in result["agent_action"]
@@ -155,14 +142,14 @@ class TestUserInputRetryLogic:
             "prompt": "Enter timeout (seconds):",
             "input_type": "number",
             "default": 30,
-            "required": False
+            "required": False,
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["default"] == 30
@@ -170,17 +157,13 @@ class TestUserInputRetryLogic:
 
     def test_user_input_basic_processing(self):
         """Test user input basic processing functionality."""
-        step_definition = {
-            "prompt": "Enter valid input:",
-            "input_type": "string",
-            "max_attempts": 2
-        }
-        
+        step_definition = {"prompt": "Enter valid input:", "input_type": "string", "max_attempts": 2}
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["type"] == "user_input"
@@ -191,18 +174,15 @@ class TestUserInputRetryLogic:
         step_definition = {
             "prompt": "Enter a number:",
             "input_type": "number",
-            "validation": {
-                "min": 1,
-                "max": 100
-            },
-            "max_attempts": 3
+            "validation": {"min": 1, "max": 100},
+            "max_attempts": 3,
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["type"] == "user_input"
@@ -215,14 +195,14 @@ class TestUserInputRetryLogic:
             "input_type": "string",
             "max_attempts": 5,  # Custom max attempts
             "validation_pattern": "^[A-Z]{3}$",
-            "validation_message": "Must be exactly 3 uppercase letters"
+            "validation_message": "Must be exactly 3 uppercase letters",
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["type"] == "user_input"
@@ -230,16 +210,13 @@ class TestUserInputRetryLogic:
 
     def test_user_input_basic_string_processing(self):
         """Test user input basic string processing."""
-        step_definition = {
-            "prompt": "Enter input:",
-            "input_type": "string"
-        }
-        
+        step_definition = {"prompt": "Enter input:", "input_type": "string"}
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["type"] == "user_input"
@@ -256,14 +233,14 @@ class TestUserInputChoiceSelection:
             "prompt": "Choose deployment environment:",
             "input_type": "choice",
             "choices": ["development", "staging", "production"],
-            "default": "development"
+            "default": "development",
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["choices"] == ["development", "staging", "production"]
@@ -275,14 +252,14 @@ class TestUserInputChoiceSelection:
             "prompt": "Select option:",
             "input_type": "choice",
             "choices": ["option1", "option2", "option3"],
-            "validation_message": "Please select from the available options"
+            "validation_message": "Please select from the available options",
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["choices"] == ["option1", "option2", "option3"]
@@ -296,20 +273,20 @@ class TestUserInputChoiceSelection:
             "choices": [
                 {"value": "dev", "label": "Developer"},
                 {"value": "qa", "label": "Quality Assurance"},
-                {"value": "pm", "label": "Product Manager"}
-            ]
+                {"value": "pm", "label": "Product Manager"},
+            ],
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["choices"] is not None
         assert len(result["agent_action"]["choices"]) == 3
-        
+
         # Should support both simple and complex choice formats
         choices = result["agent_action"]["choices"]
         if isinstance(choices[0], dict):
@@ -322,14 +299,14 @@ class TestUserInputChoiceSelection:
             "prompt": "Select priority level:",
             "input_type": "choice",
             "choices": [1, 2, 3, 4, 5],
-            "default": 3
+            "default": 3,
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["choices"] == [1, 2, 3, 4, 5]
@@ -341,16 +318,14 @@ class TestUserInputChoiceSelection:
             "prompt": "Enter username:",
             "input_type": "string",
             "variable_name": "username",
-            "state_update": {
-                "auth_username": "{{ username }}"
-            }
+            "state_update": {"auth_username": "{{ username }}"},
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         # Variable name should be used in state updates
@@ -362,14 +337,14 @@ class TestUserInputChoiceSelection:
             "prompt": "Enter password:",
             "instructions": "Password must be at least 8 characters with uppercase, lowercase, and numbers",
             "input_type": "string",
-            "validation_pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$"
+            "validation_pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$",
         }
-        
+
         state_manager = Mock()
         workflow_id = "test_workflow_123"
-        
+
         result = UserInputProcessor.process(step_definition, workflow_id, state_manager)
-        
+
         assert result["status"] == "success"
         assert result["execution_type"] == "agent"
         assert result["agent_action"]["type"] == "user_input"

@@ -13,7 +13,7 @@ class WorkflowState:
     """
     Three-tier state model for workflow execution
 
-    - inputs: Read-only input parameters (initialized once) 
+    - inputs: Read-only input parameters (initialized once)
     - state: Mutable state values (updated during execution)
     - computed: MCP-computed values (derived from transformations)
     """

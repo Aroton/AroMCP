@@ -5,11 +5,9 @@ from pathlib import Path
 
 from aromcp.filesystem_server._security import validate_file_path, validate_file_path_legacy
 from aromcp.filesystem_server.tools import (
-    extract_method_signatures_impl,
     read_files_impl,
     write_files_impl,
 )
-from aromcp.filesystem_server.models.filesystem_models import ExtractMethodSignaturesResponse
 
 
 class TestSecurityValidation:
@@ -32,21 +30,7 @@ class TestSecurityValidation:
                 except ValueError as e:
                     assert "Failed to read files" in str(e)
 
-                # Test extract_method_signatures
-                import os
-
-                os.environ["MCP_FILE_ROOT"] = temp_dir
-                try:
-                    result = extract_method_signatures_impl(path)
-                    # Should return response with errors for invalid paths
-                    assert isinstance(result, ExtractMethodSignaturesResponse)
-                    assert result.errors is not None
-                    assert len(result.errors) > 0
-                except ValueError as e:
-                    assert "Failed to extract" in str(e) or "Invalid" in str(e)
-                finally:
-                    if "MCP_FILE_ROOT" in os.environ:
-                        del os.environ["MCP_FILE_ROOT"]
+                # extract_method_signatures tool has been removed
 
     def test_write_files_path_validation(self):
         """Test path validation in write operations."""

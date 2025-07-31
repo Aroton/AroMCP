@@ -25,13 +25,21 @@ class WorkflowStep:
     type: str  # "mcp_call", "user_message", "shell_command", "agent_prompt", "agent_response", etc.
     definition: dict[str, Any] = field(default_factory=dict)
     execution_context: str = "server"  # "server" or "client" - where the step executes (only used for shell_command)
-    
-    def __init__(self, id: str, type: str, definition: dict[str, Any] = None, execution_context: str = "server", config: dict[str, Any] = None, **kwargs):
+
+    def __init__(
+        self,
+        id: str,
+        type: str,
+        definition: dict[str, Any] = None,
+        execution_context: str = "server",
+        config: dict[str, Any] = None,
+        **kwargs,
+    ):
         """Initialize WorkflowStep with support for config parameter as alias for definition."""
         self.id = id
         self.type = type
         self.execution_context = execution_context
-        
+
         # Support config as alias for definition for backwards compatibility
         if definition is not None:
             self.definition = definition
@@ -39,7 +47,7 @@ class WorkflowStep:
             self.definition = config
         else:
             self.definition = {}
-            
+
         # Add any additional kwargs to definition
         self.definition.update(kwargs)
 
@@ -85,11 +93,7 @@ class WorkflowDefinition:
                     step_type = step.get("type", "unknown")
                     # Create definition from all other fields
                     definition = {k: v for k, v in step.items() if k not in ["id", "type"]}
-                    converted_steps.append(WorkflowStep(
-                        id=step_id,
-                        type=step_type,
-                        definition=definition
-                    ))
+                    converted_steps.append(WorkflowStep(id=step_id, type=step_type, definition=definition))
                 else:
                     converted_steps.append(step)
             self.steps = converted_steps

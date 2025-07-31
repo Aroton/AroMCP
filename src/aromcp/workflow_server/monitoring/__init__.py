@@ -17,8 +17,8 @@ from .metrics import (
     ResourceMetrics,
     WorkflowMetrics,
 )
-from .performance_monitor import PerformanceMonitor
 from .observability import ObservabilityManager
+from .performance_monitor import PerformanceMonitor
 
 __all__ = [
     "MetricsCollector",

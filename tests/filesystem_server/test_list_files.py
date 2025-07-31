@@ -3,8 +3,8 @@
 import tempfile
 from pathlib import Path
 
-from aromcp.filesystem_server.tools import list_files_impl
 from aromcp.filesystem_server.models.filesystem_models import ListFilesResponse
+from aromcp.filesystem_server.tools import list_files_impl
 
 
 class TestListFiles:
@@ -137,11 +137,11 @@ class TestListFiles:
             # Create test files with different extensions
             files = [
                 "src/components/Button.js",
-                "src/components/Header.jsx", 
+                "src/components/Header.jsx",
                 "src/components/Footer.ts",
                 "src/components/Modal.tsx",
                 "src/components/styles.css",  # Should not match
-                "src/components/README.md"   # Should not match
+                "src/components/README.md",  # Should not match
             ]
             for file_path in files:
                 full_path = Path(temp_dir) / file_path
@@ -150,6 +150,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test the exact pattern from user's request
@@ -159,9 +160,9 @@ class TestListFiles:
             assert len(result.files) == 4
             expected = {
                 "src/components/Button.js",
-                "src/components/Header.jsx", 
+                "src/components/Header.jsx",
                 "src/components/Footer.ts",
-                "src/components/Modal.tsx"
+                "src/components/Modal.tsx",
             }
             assert set(result.files) == expected
 
@@ -182,6 +183,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["src/{components,utils}/**/*.ts"])
@@ -198,7 +200,7 @@ class TestListFiles:
             files = [
                 "src/components/Button.js",
                 "src/components/Button.ts",
-                "src/utils/helper.js", 
+                "src/utils/helper.js",
                 "src/utils/helper.ts",
                 "src/services/api.py",  # Should not match
             ]
@@ -209,6 +211,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["src/{components,utils}/**/*.{js,ts}"])
@@ -217,9 +220,9 @@ class TestListFiles:
             assert len(result.files) == 4
             expected = {
                 "src/components/Button.js",
-                "src/components/Button.ts", 
+                "src/components/Button.ts",
                 "src/utils/helper.js",
-                "src/utils/helper.ts"
+                "src/utils/helper.ts",
             }
             assert set(result.files) == expected
 
@@ -235,6 +238,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["**/*.py"])
@@ -256,6 +260,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["**/*.{py}"])
@@ -270,12 +275,13 @@ class TestListFiles:
             # Create test files
             files = ["src/test.py", "src/test{malformed.js"]
             for file_path in files:
-                full_path = Path(temp_dir) / file_path  
+                full_path = Path(temp_dir) / file_path
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 full_path.write_text("content")
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test patterns with unmatched braces - should treat as literal
@@ -289,14 +295,7 @@ class TestListFiles:
         """Test character class patterns like [abc] and [a-z]."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test files with different extensions
-            files = [
-                "src/test.js",
-                "src/test.ts", 
-                "src/test.py",
-                "src/test.css",
-                "src/main.jsx",
-                "src/main.tsx"
-            ]
+            files = ["src/test.js", "src/test.ts", "src/test.py", "src/test.css", "src/main.jsx", "src/main.tsx"]
             for file_path in files:
                 full_path = Path(temp_dir) / file_path
                 full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -304,6 +303,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test character classes for extensions
@@ -318,16 +318,14 @@ class TestListFiles:
         """Test character class ranges like [a-z]."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create files with single character names
-            files = [
-                "a.js", "b.js", "c.js", "z.js",
-                "1.js", "A.js"  # Should not match [a-z]
-            ]
+            files = ["a.js", "b.js", "c.js", "z.js", "1.js", "A.js"]  # Should not match [a-z]
             for file_path in files:
                 full_path = Path(temp_dir) / file_path
                 full_path.write_text("// content")
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["[a-z].js"])
@@ -342,9 +340,12 @@ class TestListFiles:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create files with different name lengths
             files = [
-                "a.js", "b.ts", "c.py",  # Single char names
-                "ab.js", "test.js",      # Multi char names
-                "main.tsx"               # Multi char name
+                "a.js",
+                "b.ts",
+                "c.py",  # Single char names
+                "ab.js",
+                "test.js",  # Multi char names
+                "main.tsx",  # Multi char name
             ]
             for file_path in files:
                 full_path = Path(temp_dir) / file_path
@@ -352,6 +353,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["?.js"])
@@ -365,16 +367,20 @@ class TestListFiles:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create files with exact character lengths
             files = [
-                "ab.js", "xy.ts", "12.py",  # 2 chars + extension
-                "abc.js", "test.js",        # 3+ chars + extension
-                "a.js"                      # 1 char + extension
+                "ab.js",
+                "xy.ts",
+                "12.py",  # 2 chars + extension
+                "abc.js",
+                "test.js",  # 3+ chars + extension
+                "a.js",  # 1 char + extension
             ]
             for file_path in files:
                 full_path = Path(temp_dir) / file_path
                 full_path.write_text("content")
 
-            # Set project root for the test  
+            # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             result = list_files_impl(patterns=["??.js"])
@@ -387,10 +393,7 @@ class TestListFiles:
         """Test combining character classes, wildcards, and brace expansion."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create diverse test files
-            files = [
-                "src/a.js", "src/b.ts", "src/c.jsx", "src/d.tsx",
-                "src/x.py", "src/test.js", "src/main.css"
-            ]
+            files = ["src/a.js", "src/b.ts", "src/c.jsx", "src/d.tsx", "src/x.py", "src/test.js", "src/main.css"]
             for file_path in files:
                 full_path = Path(temp_dir) / file_path
                 full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -398,6 +401,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Combine single wildcard with brace expansion
@@ -414,12 +418,12 @@ class TestListFiles:
             # Create comprehensive test structure
             files = [
                 "src/components/Button.js",
-                "src/components/Header.jsx", 
+                "src/components/Header.jsx",
                 "src/utils/a.ts",
                 "src/utils/b.tsx",
                 "src/services/api.py",
                 "tests/unit/x.js",
-                "tests/integration/y.ts"
+                "tests/integration/y.ts",
             ]
             for file_path in files:
                 full_path = Path(temp_dir) / file_path
@@ -428,6 +432,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Complex pattern: directory braces + character classes + wildcards
@@ -439,7 +444,7 @@ class TestListFiles:
             assert len(result.files) == 2
             expected = {
                 "src/components/Header.jsx",  # matches .*jsx (j + s + x)
-                "src/utils/b.tsx"            # matches .*tsx (t + s + x)
+                "src/utils/b.tsx",  # matches .*tsx (t + s + x)
             }
             assert set(result.files) == expected
 
@@ -455,6 +460,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test empty braces - should treat as literal
@@ -476,6 +482,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test braces with empty options
@@ -497,6 +504,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test various edge cases that should not crash
@@ -506,7 +514,7 @@ class TestListFiles:
                 "normal_pattern.py",
                 "pattern_with_unmatched_{brackets",
                 "pattern_with_}unmatched_brackets",
-                "src/**/*.{}"
+                "src/**/*.{}",
             ]
 
             for pattern in test_patterns:
@@ -525,7 +533,7 @@ class TestListFiles:
             files = {
                 "src/components/Button.js": "export const Button = () => <button>Click me</button>;",
                 "src/components/Header.jsx": "import React from 'react'; export const Header = () => <h1>Title</h1>;",
-                "src/utils/helper.ts": "export function formatDate(date: Date): string { return date.toISOString(); }"
+                "src/utils/helper.ts": "export function formatDate(date: Date): string { return date.toISOString(); }",
             }
             for file_path, content in files.items():
                 full_path = Path(temp_dir) / file_path
@@ -534,6 +542,7 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # First, use list_files with brace expansion
@@ -546,15 +555,16 @@ class TestListFiles:
 
             # Then, use the result with read_files to verify the pattern works end-to-end
             from aromcp.filesystem_server.tools.read_files import read_files_impl
+
             read_result = read_files_impl(list_result.files)
 
-            assert "items" in read_result  
+            assert "items" in read_result
             assert len(read_result["items"]) == 3
-            
+
             # Verify content matches what we expect
             file_contents = {item["file"]: item["content"] for item in read_result["items"]}
             assert "export const Button" in file_contents["src/components/Button.js"]
-            assert "import React" in file_contents["src/components/Header.jsx"] 
+            assert "import React" in file_contents["src/components/Header.jsx"]
             assert "formatDate" in file_contents["src/utils/helper.ts"]
 
     def test_workflow_pattern_discovery(self):
@@ -578,24 +588,24 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Workflow 1: Find all React components (tsx files in src but not tests)
             components_result = list_files_impl(patterns=["src/**/*.tsx"])
             assert len(components_result.files) == 4
             expected_components = {
-                "src/pages/Home.tsx", "src/pages/_app.tsx", 
-                "src/components/Button.tsx", "src/components/Modal.tsx"
+                "src/pages/Home.tsx",
+                "src/pages/_app.tsx",
+                "src/components/Button.tsx",
+                "src/components/Modal.tsx",
             }
             assert set(components_result.files) == expected_components
 
             # Workflow 2: Find all TypeScript files (both .ts and .tsx) in specific directories
             ts_files_result = list_files_impl(patterns=["src/{pages,utils}/**/*.{ts,tsx}"])
             assert len(ts_files_result.files) == 4
-            expected_ts = {
-                "src/pages/Home.tsx", "src/pages/_app.tsx",
-                "src/utils/api.ts", "src/utils/format.ts"
-            }
+            expected_ts = {"src/pages/Home.tsx", "src/pages/_app.tsx", "src/utils/api.ts", "src/utils/format.ts"}
             assert set(ts_files_result.files) == expected_ts
 
             # Workflow 3: Find test files
@@ -615,25 +625,26 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test first page with cursor pagination - use smaller token limit to force pagination
             result1 = list_files_impl(patterns=["*.py"], cursor=None, max_tokens=500)
-            
+
             assert isinstance(result1, ListFilesResponse)
             assert len(result1.files) > 0
             assert len(result1.files) < 50  # Should be paginated
             assert result1.has_more is True
             assert result1.next_cursor is not None
             assert result1.cursor is None  # First page has no cursor
-            
+
             # Test second page using cursor
             result2 = list_files_impl(patterns=["*.py"], cursor=result1.next_cursor, max_tokens=1000)
-            
+
             assert isinstance(result2, ListFilesResponse)
             assert len(result2.files) > 0
             assert result2.cursor == result1.next_cursor
-            
+
             # Verify no overlap between pages
             page1_files = set(result1.files)
             page2_files = set(result2.files)
@@ -650,11 +661,12 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test that cursor takes precedence over page - use small token limit to force pagination
             result = list_files_impl(patterns=["*.py"], page=2, cursor="file_with_longer_name_005.py", max_tokens=100)
-            
+
             # Should use cursor-based pagination, not page-based
             assert result.cursor == "file_with_longer_name_005.py"
             # Should return files after cursor position (but limited by tokens)
@@ -676,25 +688,26 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Navigate through all pages
             all_files = []
             cursor = None
             page_count = 0
-            
+
             while True:
                 result = list_files_impl(patterns=["*.py"], cursor=cursor, max_tokens=200)  # Smaller token limit
                 all_files.extend(result.files)
                 page_count += 1
-                
+
                 if not result.has_more:
                     assert result.next_cursor is None
                     break
                 else:
                     assert result.next_cursor is not None
                     cursor = result.next_cursor
-            
+
             # Verify we got all files
             assert len(all_files) == 25
             assert set(all_files) == set(files)
@@ -711,11 +724,12 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test page-based pagination (no cursor provided - use default)
             result = list_files_impl(patterns=["*.py"], page=1, max_tokens=200)  # cursor defaults to "NOT_PROVIDED"
-            
+
             assert isinstance(result, ListFilesResponse)
             # Should use page-based pagination
             assert result.page is not None
@@ -737,11 +751,12 @@ class TestListFiles:
 
             # Set project root for the test
             import os
+
             os.environ["MCP_FILE_ROOT"] = temp_dir
 
             # Test with invalid cursor (should start from beginning)
             result = list_files_impl(patterns=["*.py"], cursor="invalid_cursor", max_tokens=1000)
-            
+
             assert isinstance(result, ListFilesResponse)
             assert result.files == ["a.py", "b.py", "c.py"]  # Should get all files
             # For small result sets that don't require pagination, cursor fields may be None

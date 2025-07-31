@@ -236,14 +236,14 @@ steps:
 """
 
         workflow = WorkflowParser.parse(yaml_content)
-        
+
         # Test numeric constraints
         numeric_input = workflow.inputs["numeric_with_constraints"]
         assert numeric_input.type == "number"
         assert numeric_input.validation["minimum"] == 0
         assert numeric_input.validation["maximum"] == 100
         assert numeric_input.validation["multipleOf"] == 0.5
-        
+
         # Test string pattern constraints
         string_input = workflow.inputs["string_with_pattern"]
         assert string_input.type == "string"
@@ -275,7 +275,7 @@ steps:
 """
 
         workflow = WorkflowParser.parse(yaml_content)
-        
+
         # Test email list validation
         email_input = workflow.inputs["email_list"]
         assert email_input.type == "array"
@@ -312,7 +312,7 @@ steps:
 """
 
         workflow = WorkflowParser.parse(yaml_content)
-        
+
         # Test simple defaults
         simple_defaults_input = workflow.inputs["simple_defaults"]
         assert simple_defaults_input.validation["properties"]["string_default"]["default"] == "default_value"
@@ -619,6 +619,7 @@ steps:
 
             loader = WorkflowLoader(project_root=temp_dir)
             from aromcp.workflow_server.workflow.queue_executor import QueueBasedWorkflowExecutor as WorkflowExecutor
+
             executor = WorkflowExecutor()
 
             workflow_def = loader.load("test:inputs")
@@ -668,6 +669,7 @@ steps:
         assert computed["multi_dependency"]["on_error"] == "use_fallback"
         assert computed["multi_dependency"]["fallback"] == 0
 
+
 class TestDeprecatedStepMigration:
     """Test deprecated step migration patterns for schema compliance - AC 1.1"""
 
@@ -683,25 +685,22 @@ class TestDeprecatedStepMigration:
             "id": "update_count",
             "type": "state_update",
             "path": "state.counter",
-            "value": "{{ state.counter + 1 }}"
+            "value": "{{ state.counter + 1 }}",
         }
-        
+
         is_valid, error = self.registry.validate_step(deprecated_step)
         assert not is_valid
         assert "deprecated and removed" in error
         assert "Use 'state_update' field within other step types" in error
-        
+
         # New recommended pattern
         migrated_step = {
             "id": "update_count",
             "type": "shell_command",
             "command": "echo 'Updating counter'",
-            "state_update": {
-                "path": "state.counter",
-                "value": "{{ state.counter + 1 }}"
-            }
+            "state_update": {"path": "state.counter", "value": "{{ state.counter + 1 }}"},
         }
-        
+
         is_valid, error = self.registry.validate_step(migrated_step)
         assert is_valid, f"Migrated step should be valid: {error}"
 
@@ -714,15 +713,15 @@ class TestDeprecatedStepMigration:
             "updates": [
                 {"path": "state.counter", "value": "10"},
                 {"path": "state.message", "value": "Hello"},
-                {"path": "state.enabled", "value": "true"}
-            ]
+                {"path": "state.enabled", "value": "true"},
+            ],
         }
-        
+
         is_valid, error = self.registry.validate_step(deprecated_step)
         assert not is_valid
         assert "deprecated and removed" in error
         assert "Use 'state_updates' field within 'agent_response'" in error
-        
+
         # New recommended pattern
         migrated_step = {
             "id": "process_response",
@@ -730,14 +729,11 @@ class TestDeprecatedStepMigration:
             "state_updates": [
                 {"path": "state.counter", "value": "{{ response.counter }}"},
                 {"path": "state.message", "value": "{{ response.message }}"},
-                {"path": "state.enabled", "value": "{{ response.enabled }}"}
+                {"path": "state.enabled", "value": "{{ response.enabled }}"},
             ],
-            "response_schema": {
-                "type": "object",
-                "required": ["counter", "message", "enabled"]
-            }
+            "response_schema": {"type": "object", "required": ["counter", "message", "enabled"]},
         }
-        
+
         is_valid, error = self.registry.validate_step(migrated_step)
         assert is_valid, f"Agent response with state_updates should be valid: {error}"
 
@@ -748,23 +744,15 @@ class TestDeprecatedStepMigration:
             "description": "Test workflow with deprecated steps",
             "version": "1.0.0",
             "steps": [
-                {
-                    "id": "deprecated_state_update",
-                    "type": "state_update",
-                    "path": "state.count",
-                    "value": "1"
-                },
+                {"id": "deprecated_state_update", "type": "state_update", "path": "state.count", "value": "1"},
                 {
                     "id": "deprecated_batch_update",
                     "type": "batch_state_update",
-                    "updates": [
-                        {"path": "state.a", "value": "1"},
-                        {"path": "state.b", "value": "2"}
-                    ]
-                }
-            ]
+                    "updates": [{"path": "state.a", "value": "1"}, {"path": "state.b", "value": "2"}],
+                },
+            ],
         }
-        
+
         # Validation should fail due to deprecated step types
         is_valid = self.validator.validate_strict_schema_only(workflow_with_deprecated)
         assert not is_valid, "Workflow with deprecated steps should fail validation"
@@ -780,31 +768,25 @@ class TestDeprecatedStepMigration:
                     "id": "migrated_state_update",
                     "type": "shell_command",
                     "command": "echo 'Setting count'",
-                    "state_update": {
-                        "path": "state.count",
-                        "value": "1"
-                    }
+                    "state_update": {"path": "state.count", "value": "1"},
                 },
                 {
                     "id": "collect_input",
                     "type": "user_input",
                     "prompt": "Enter value:",
-                    "state_update": {
-                        "path": "state.user_value",
-                        "value": "{{ input }}"
-                    }
+                    "state_update": {"path": "state.user_value", "value": "{{ input }}"},
                 },
                 {
                     "id": "process_results",
                     "type": "agent_response",
                     "state_updates": [
                         {"path": "state.result_a", "value": "{{ response.a }}"},
-                        {"path": "state.result_b", "value": "{{ response.b }}"}
-                    ]
-                }
-            ]
+                        {"path": "state.result_b", "value": "{{ response.b }}"},
+                    ],
+                },
+            ],
         }
-        
+
         # Validation should pass with migrated patterns
         is_valid = self.validator.validate_strict_schema_only(workflow_migrated)
         assert is_valid, "Workflow with migrated steps should pass validation"
@@ -819,7 +801,7 @@ class TestDeprecatedStepMigration:
         assert "user_input" in suggestion
         assert "shell_command" in suggestion
         assert "agent_response" in suggestion
-        
+
         # batch_shell_command with state_update suggestion
         suggestion = self.registry.suggest_replacement_for_deprecated("batch_state_update")
         assert "state_updates" in suggestion
@@ -836,10 +818,20 @@ class TestStepRegistryValidation:
     def test_schema_compliance_required_step_types_available(self):
         """Test schema compliance ensures all required step types are available in registry (AC 1.1)."""
         required_step_types = [
-            "user_message", "mcp_call", "user_input", "agent_prompt", "agent_response",
-            "parallel_foreach", "shell_command", "conditional", "while_loop", "foreach", "break", "continue"
+            "user_message",
+            "mcp_call",
+            "user_input",
+            "agent_prompt",
+            "agent_response",
+            "parallel_foreach",
+            "shell_command",
+            "conditional",
+            "while_loop",
+            "foreach",
+            "break",
+            "continue",
         ]
-        
+
         for step_type in required_step_types:
             config = self.registry.get(step_type)
             assert config is not None, f"Required step type '{step_type}' not found in registry"
@@ -847,11 +839,11 @@ class TestStepRegistryValidation:
     def test_schema_compliance_deprecated_step_types_removed(self):
         """Test schema compliance removes deprecated step types from registry (AC 1.1)."""
         deprecated_step_types = ["state_update", "batch_state_update"]
-        
+
         for step_type in deprecated_step_types:
             config = self.registry.get(step_type)
             assert config is None, f"Deprecated step type '{step_type}' should not be in registry"
-            
+
         # But should be detected as deprecated
         for step_type in deprecated_step_types:
             assert self.registry.is_deprecated_step_type(step_type)
@@ -864,14 +856,9 @@ class TestStepRegistryValidation:
         assert not is_valid
         assert "missing required field" in error_message
         assert "message" in error_message
-        
+
         # Test unknown field rejection
-        step = {
-            "id": "test",
-            "type": "user_message", 
-            "message": "Hello",
-            "unknown_field": "should_fail"
-        }
+        step = {"id": "test", "type": "user_message", "message": "Hello", "unknown_field": "should_fail"}
         is_valid, error_message = self.registry.validate_step(step)
         assert not is_valid
         assert "unknown field" in error_message
@@ -879,22 +866,12 @@ class TestStepRegistryValidation:
     def test_schema_compliance_execution_context_validation(self):
         """Test schema compliance validates execution_context only on shell_command steps (AC 1.1)."""
         # Valid: shell_command with execution_context
-        step = {
-            "id": "test_shell",
-            "type": "shell_command",
-            "command": "echo test",
-            "execution_context": "client"
-        }
+        step = {"id": "test_shell", "type": "shell_command", "command": "echo test", "execution_context": "client"}
         is_valid, error_message = self.registry.validate_step(step)
         assert is_valid, f"Should be valid: {error_message}"
-        
+
         # Invalid: execution_context on non-shell_command step
-        step = {
-            "id": "test_user",
-            "type": "user_message",
-            "message": "Hello",
-            "execution_context": "client"
-        }
+        step = {"id": "test_user", "type": "user_message", "message": "Hello", "execution_context": "client"}
         is_valid, error_message = self.registry.validate_step(step)
         assert not is_valid
         assert "execution_context" in error_message

@@ -1,12 +1,13 @@
 """Dataclass models for workflow server MCP tool output schemas."""
 
 from dataclasses import dataclass
-from typing import Any
 from enum import Enum
+from typing import Any
 
 
 class WorkflowStatus(Enum):
     """Workflow status enumeration."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -46,8 +47,6 @@ class WorkflowListResponse:
     count: int
 
 
-
-
 @dataclass
 class WorkflowStatusResponse:
     """Response schema for workflow_get_status tool."""
@@ -58,7 +57,7 @@ class WorkflowStatusResponse:
     total_steps: int
     state: dict[str, Any]
     execution_context: dict[str, Any]
-    
+
     # Status constants for compatibility with tests
     PENDING = WorkflowStatus.PENDING
     RUNNING = WorkflowStatus.RUNNING

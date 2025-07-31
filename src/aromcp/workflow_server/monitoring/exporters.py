@@ -24,7 +24,7 @@ class MetricsExporter:
             self._exporter = CSVExporter(**kwargs)
         else:
             raise ValueError(f"Unsupported format: {format}")
-        
+
         self.format = format
 
     def export_workflow_metrics(self, metrics: dict[str, WorkflowMetrics]) -> str:

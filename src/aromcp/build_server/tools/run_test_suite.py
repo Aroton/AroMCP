@@ -102,7 +102,7 @@ def run_test_suite_impl(
                             status="passed" if test_file.get("failed", 0) == 0 else "failed",
                             duration=test_file.get("duration", 0.0),
                             file=test_file.get("file", ""),
-                            error_message=None
+                            error_message=None,
                         )
                     )
 
@@ -127,7 +127,7 @@ def run_test_suite_impl(
                 success=result.returncode == 0,
                 coverage=parsed_results.get("coverage", None),
                 test_results=test_results,
-                test_suites=test_suites
+                test_suites=test_suites,
             )
 
             # Apply pagination with sort key
@@ -136,7 +136,7 @@ def run_test_suite_impl(
                 items_field="test_results",
                 cursor=cursor,
                 max_tokens=max_tokens,
-                sort_key=lambda x: (x.file, x.name) if hasattr(x, 'file') else (x.get("file", ""), x.get("name", ""))
+                sort_key=lambda x: (x.file, x.name) if hasattr(x, "file") else (x.get("file", ""), x.get("name", "")),
             )
 
         except subprocess.TimeoutExpired as e:
