@@ -47,10 +47,10 @@ sudo mkdir -p /usr/mcp
 sudo ln -sf $(pwd) /usr/mcp/AroMCP
 
 # 3. Configure Claude Desktop with desired servers
-# See INSTALLATION.md for complete setup guide
+# See documentation/INSTALLATION.md for complete setup guide
 ```
 
-**📋 [Complete Installation Guide](INSTALLATION.md)** - Detailed setup for all deployment options
+**📋 [Complete Installation Guide](documentation/INSTALLATION.md)** - Detailed setup for all deployment options
 
 ### 🚀 Individual Server Architecture
 
@@ -236,98 +236,19 @@ aromcp.analyze_call_graph(entry_points=["src/main.ts"], max_depth=3)
 
 AroMCP integrates seamlessly with Claude Code for enhanced AI-driven development.
 
-### Setup Steps
+### Quick Setup
 1. **Install AroMCP** (see Quick Start above)
 2. **Configure Claude Code** - Add AroMCP to your MCP servers
 3. **Set Environment** - `export MCP_FILE_ROOT=/path/to/your/project`
-4. **Add to CLAUDE.md** - Include AroMCP usage patterns in your project
+4. **Copy Integration Template** - Copy the contents of [`CLAUDE-MD-HINT.md`](documentation/CLAUDE-MD-HINT.md) into your project's `CLAUDE.md` file
 
-### Essential CLAUDE.md Integration
-```markdown
-## Development Workflow with AroMCP
+### Integration Template
+📋 **[CLAUDE-MD-HINT.md](documentation/CLAUDE-MD-HINT.md)** - Complete template with usage patterns and best practices
 
-### The Core Principle
-**The ONE mandatory requirement**: Always call `hints_for_file()` before editing any file to get project standards.
-
-### Essential Tools
-1. **`hints_for_file(filepath, session_id?)`** - Get project standards and coding rules (MANDATORY before edits)
-2. **`lint_project(use_standards=True)`** - Check code style using generated rules (ALWAYS use generated rules)
-3. **`check_typescript()`** - Validate TypeScript compilation
-4. **`standards:fix`** - Automated parallel standards application with architectural intelligence
-
-### Required Workflow Order
-```python
-# 1. Get standards before editing
-hints = hints_for_file("src/api/user.ts", session_id="fix-user-api-123")
-
-# 2. Make your edits following the standards...
-
-# 3. Run linter with generated rules (REQUIRED)
-lint_results = lint_project(use_standards=True)
-
-# 4. Check TypeScript errors (REQUIRED)
-ts_errors = check_typescript()
-```
-
-### Automated Standards Application
-```bash
-# Apply standards to all changed files with intelligent batching
-claude standards:fix
-
-# The command uses architectural analysis to:
-# - Group related files (Frontend UI, Backend API, Data Schema, etc.)
-# - Process up to 5 files per batch with specialized agents
-# - Run 3 parallel agents for optimal performance
-# - Apply context-appropriate standards for each architectural layer
-```
-
-### Multiple File Operations
-```python
-# Multiple files - reuse session for efficiency
-session = "refactor-auth-1234"
-hints_for_file("src/auth/login.ts", session_id=session)
-hints_for_file("src/auth/logout.ts", session_id=session)  # 70-80% token savings
-
-# Make changes...
-
-# ALWAYS validate in this order after edits:
-lint_project(use_standards=True, target_files=["src/auth/*.ts"])  # Generated rules
-check_typescript(files=["src/auth/*.ts"])  # TypeScript validation
-```
-
-### Scale to Your Task
-- **Quick fix** (1 file): Standards → Edit → Done (validate only if needed)
-- **Small feature** (2-5 files): Load all standards first → Edit → Validate changed files
-- **Major refactor**: Use `standards:fix` for automated parallel processing with architectural intelligence
-- **Large codebases**: `standards:fix` with resume capability handles extensive changes efficiently
-
-### Other Useful Tools
-Discover available tools via MCP, but these are commonly helpful:
-- **`read_files()`/`write_files()`** - Batch file operations
-- **`find_who_imports()`** - Check dependencies before changes
-- **`lint_project()`** - Run ESLint with standards
-- **`check_typescript()`** - Validate TypeScript compilation  
-- **`run_test_suite()`** - Execute tests with detailed results
-- **`standards:fix`** - Automated standards application with architectural intelligence and parallel processing
-
-### Best Practices
-✅ Always check standards before editing (the one hard rule)
-✅ ALWAYS use `use_standards=True` when linting (generated rules are superior)
-✅ Follow the required order: Standards → Edit → Lint → TypeScript
-✅ Use consistent `session_id` within operations for token efficiency
-✅ Focus validation on changed files
-✅ Use `standards:fix` for complex refactoring with multiple files
-✅ Leverage architectural batching for efficient parallel processing
-
-❌ Don't skip `hints_for_file()` - ever
-❌ Don't skip linting after edits - always validate
-❌ Don't use `use_standards=False` unless debugging ESLint issues
-❌ Don't run dev servers (`npm run dev`, etc.)
-❌ Don't validate unchanged files unless debugging
-
-### The Bottom Line
-Check standards before editing. For large changes, use `standards:fix` for automated intelligent processing. Everything else adapts to what you're doing. Simple tasks need simple workflows.
-```
+**To integrate AroMCP with your project:**
+1. Copy the markdown content from `documentation/CLAUDE-MD-HINT.md`
+2. Paste it into your project's `CLAUDE.md` file
+3. Customize the patterns for your specific project needs
 
 **[Complete Integration Guide →](documentation/claude_code.md)**
 
