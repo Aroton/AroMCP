@@ -9,19 +9,20 @@ AroMCP is a suite of MCP (Model Context Protocol) servers designed as utilities 
 ## Current State
 
 **Implementation Status:**
-- ✅ **Phase 1: FileSystem Tools** - 6 simplified tools with file I/O, diff operations, code analysis
-- ✅ **Phase 2: Build Tools** - 3 simplified tools with linting, TypeScript checking, test execution
-- ✅ **Phase 4: Code Analysis Tools** - 3 tools implemented (find_dead_code, find_import_cycles, extract_api_endpoints)
-- ⚠️ Phases 3, 5-6: Other tool categories are stub implementations
+- ✅ **Filesystem Server** - 3 tools: `list_files`, `read_files`, `write_files` with pagination and glob patterns
+- ✅ **Build Server** - 3 tools: `check_typescript`, `lint_project`, `run_test_suite` with comprehensive automation
+- ✅ **Analysis Server** - 3 tools: `find_references`, `get_function_details`, `analyze_call_graph` for TypeScript analysis
+- ✅ **Standards Server** - 10 tools for intelligent coding standards management with 70-80% token reduction
+- ✅ **Workflow Server** - 12 tools for workflow execution and persistent state management
 
 ## Architecture
 
-Six main tool categories:
-1. **FileSystem Tools** - Simplified file operations, code parsing, diff validation
-2. **Build Tools** - Simplified lint, TypeScript, and test execution
-4. **Code Analysis Tools** - Standards-driven analysis, security detection, quality checks
-5. **Context Window Management Tools** - Token optimization (planned)
-6. **Interactive Debugging Tools** - Debugging utilities (planned)
+Five implemented MCP servers:
+1. **Filesystem Server** - File operations with glob patterns and pagination (3 tools)
+2. **Build Server** - Build automation, linting, and testing (3 tools)
+3. **Analysis Server** - TypeScript symbol resolution and call graph analysis (3 tools)
+4. **Standards Server** - Intelligent coding standards with session management (10 tools)
+5. **Workflow Server** - State management and workflow orchestration (12 tools)
 
 ## Development Guidelines
 
@@ -35,7 +36,7 @@ Six main tool categories:
 ## Development Commands
 
 - **Install dependencies**: `uv sync --dev` (uses uv package manager)
-- **Run server**: `uv run python main.py` or `uv run python -m src.aromcp.main_server`
+- **Run individual servers**: `uv run python servers/{name}/main.py` (filesystem, build, analysis, standards, workflow)
 - **Run tests**: `uv run pytest`
 - **Run single test**: `uv run pytest tests/filesystem_server/test_list_files.py::TestListFiles::test_basic_functionality`
 - **Code formatting**: `uv run black src/ tests/`
@@ -55,34 +56,38 @@ The project uses **PythonMonkey** as the JavaScript engine for workflow transfor
 Falls back to Python-based evaluation for basic expressions when PythonMonkey is not available.
 
 ## Project Structure
-
-- `src/aromcp/main_server.py` - Unified FastMCP server that combines all tools
 - `src/aromcp/filesystem_server/tools/` - FileSystem tools with registration and implementations:
   - `__init__.py` - FastMCP tool registration for filesystem operations
-  - `list_files.py` - File listing with glob pattern matching
+  - `list_files.py` - File listing with glob pattern matching and pagination
   - `read_files.py` - Multi-file reading with encoding detection and pagination
   - `write_files.py` - Multi-file writing with automatic directory creation
-  - `extract_method_signatures.py` - AST-based code signature extraction
-  - `find_who_imports.py` - Import dependency analysis
 - `src/aromcp/build_server/tools/` - Build tools with registration and implementations:
   - `__init__.py` - FastMCP tool registration for build operations
-  - `lint_project.py` - ESLint integration for code style checking
+  - `lint_project.py` - ESLint integration for code style checking with pagination
   - `check_typescript.py` - TypeScript compiler error checking
-  - `run_test_suite.py` - Execute test suites with result parsing
-- `src/aromcp/analysis_server/tools/` - Code analysis tools with registration and implementations:
+  - `run_test_suite.py` - Execute test suites with result parsing and pagination
+- `src/aromcp/analysis_server/tools/` - TypeScript analysis tools with registration and implementations:
   - `__init__.py` - FastMCP tool registration for analysis operations
-  - `find_dead_code.py` - Identify unused code that can be removed
-  - `find_import_cycles.py` - Detect circular import dependencies
-  - `extract_api_endpoints.py` - Document API endpoints from route files
-- `main.py` - Entry point that imports and runs the main server
-- `tests/filesystem_server/` - Modular test suite with separate files per test class:
-  - `test_list_files.py` - Tests for file listing and pattern matching
-  - `test_read_files.py` - Tests for multi-file reading operations with pagination
-  - `test_write_files.py` - Tests for multi-file writing operations
-  - `test_extract_method_signatures.py` - Tests for code signature extraction
-  - `test_find_who_imports.py` - Tests for import dependency analysis
-  - `test_security_validation.py` - Tests for security measures across all tools
-- `tests/analysis_server/` - Analysis server test suite with modular structure
+  - `find_references.py` - Find TypeScript symbol references across projects
+  - `get_function_details.py` - Extract detailed TypeScript function information
+  - `analyze_call_graph.py` - Generate static call graphs for TypeScript code
+- `src/aromcp/standards_server/` - Standards management with session-based optimization:
+  - `tools/` - 10 tools for hints, rules, and session management
+  - `models/` - Enhanced rule structures and compression models
+  - `services/` - Session management and context-aware compression
+  - `utils/` - Token optimization and example generation utilities
+- `src/aromcp/workflow_server/` - Workflow execution and state management:
+  - `tools/` - 12 tools for workflow orchestration and state persistence
+  - `models/` - Workflow state and execution models
+  - `services/` - Workflow execution engine and state management
+- `servers/{name}/main.py` - Individual server entry points for each specialized server
+- `tests/` - Comprehensive test suite organized by server:
+  - `filesystem_server/` - Tests for file operations and pagination
+  - `build_server/` - Tests for build automation and linting
+  - `analysis_server/` - Tests for TypeScript analysis tools
+  - `standards_server/` - Tests for standards management and session handling
+  - `workflow_server/` - Tests for workflow execution and state management
+  - `test_main_server.py` - Integration tests for server registration and tool validation
 
 ## Core Design Principles
 
@@ -91,7 +96,7 @@ Falls back to Python-based evaluation for basic expressions when PythonMonkey is
 3. **Project Agnostic** - Work with any project structure
 4. **Stateless Operations** - Most operations stateless except state server
 5. **Batch Operations** - Support batch operations to reduce round trips
-6. **Unified Server Architecture** - Single FastMCP server hosts all tools for simplified deployment
+6. **Individual Server Architecture** - Specialized servers for focused functionality and independent scaling
 7. **Parameter Flexibility** - JSON parameter middleware handles type conversion automatically
 
 ## Server Configuration
@@ -229,7 +234,7 @@ All tools must follow consistent error response format:
 - **Descriptive Test Names**: Test method names should clearly describe what is being tested
 - **Isolated Tests**: Each test should be independent and use temporary directories
 - **Security Testing**: Dedicated `test_security_validation.py` file for cross-tool security validation
-- **IMPORTANT**: When adding new tools, **ALWAYS update `tests/test_main_server.py`** to include the new tool names in the expected tools lists. This ensures the unified server test validates all tools are properly registered.
+- **IMPORTANT**: When adding new tools, **ALWAYS update `tests/test_main_server.py`** to include the new tool names in the expected tools lists. This ensures the server registration tests validate all tools are properly implemented.
 
 ### Type Annotations
 - **Modern Python Types**: Use `dict[str, Any]` instead of `Dict[str, Any]`

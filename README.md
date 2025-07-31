@@ -1,82 +1,80 @@
 # AroMCP
 
-A comprehensive suite of MCP (Model Context Protocol) servers designed as intelligent utilities for AI-driven development workflows. AroMCP provides both deterministic operations and AI-orchestrated processes, enabling Claude Code to perform complex development tasks efficiently while maintaining token optimization.
+A comprehensive suite of MCP (Model Context Protocol) servers designed as intelligent utilities for AI-driven development workflows. AroMCP provides deterministic operations and AI-orchestrated processes, enabling Claude Code to perform complex development tasks efficiently while maintaining token optimization.
 
-## 🚀 Key Features
+## 🚀 Production Ready Servers
 
-### ✅ Production Ready
-- **[FileSystem Tools](documentation/usage/filesystem_tools.md)** - File I/O, git integration, code parsing, and document loading
-- **[Build Tools](documentation/usage/build_tools.md)** - Build, lint, test, and validation commands
-- **[Code Analysis Tools](documentation/usage/analysis_tools.md)** - Enhanced standards management with v2 features (70-80% token reduction, session deduplication, context-aware compression)
-- **[ESLint Rule Generation](documentation/commands/generate-eslint-rules.md)** - AI-orchestrated generation of project-specific ESLint rules from markdown standards
-- **🆕 [Simplified Tools](documentation/ai-agent-improvements.md)** - Intuitive aliases with 2-3 parameters for better AI agent adoption
+AroMCP consists of **5 fully functional MCP servers**, each providing specialized development tools:
 
-### 🔄 Planned
-- **State Management Tools** - Persistent state for long-running processes
-- **Context Window Management** - Token usage tracking and optimization
-- **Interactive Debugging Tools** - Advanced debugging utilities
+### **1. [Filesystem Server](servers/filesystem/README.md)** - File Operations
+- **Tools**: `list_files`, `read_files`, `write_files` (3 tools)
+- **Purpose**: File I/O operations with advanced glob patterns and pagination
+- **Features**: Multi-file operations, automatic directory creation, cursor pagination
+
+### **2. [Build Server](servers/build/README.md)** - Development Automation  
+- **Tools**: `check_typescript`, `lint_project`, `run_test_suite` (3 tools)
+- **Purpose**: Build automation, linting, and testing
+- **Features**: ESLint integration, TypeScript error checking, test execution with pagination
+
+### **3. [Analysis Server](servers/analysis/README.md)** - TypeScript Analysis
+- **Tools**: `find_references`, `get_function_details`, `analyze_call_graph` (3 tools)
+- **Purpose**: Advanced TypeScript code analysis and symbol resolution
+- **Features**: Symbol references, function details, static call graph analysis
+
+### **4. [Standards Server](servers/standards/README.md)** - Coding Guidelines
+- **Tools**: 10 tools including `hints_for_file`, `register`, `add_rule`, `get_session_stats`
+- **Purpose**: Intelligent coding standards management with 70-80% token reduction
+- **Features**: Context-aware hints, session management, ESLint rule integration
+
+### **5. [Workflow Server](servers/workflow/README.md)** - State Management ⚠️ **IN DEVELOPMENT**
+- **Status**: 🚧 **NOT YET FUNCTIONAL** - Under active development
+- **Tools**: 14 tools planned for workflow execution and state management
+- **Purpose**: Persistent state for long-running development processes (when complete)
+- **Features**: Workflow orchestration, state persistence, checkpoint/resume capabilities (planned)
+
+**Total**: **19 production-ready tools** across 4 functional servers + 1 development server
 
 ## ⚡ Quick Start
 
-### Installation & Setup
 ```bash
-# Clone and install
+# 1. Clone and install
 git clone <repository-url>
 cd AroMCP
 uv sync --dev
 
-# Create system-wide symlink (recommended)
+# 2. Create system-wide symlink (recommended)
 sudo mkdir -p /usr/mcp
 sudo ln -sf $(pwd) /usr/mcp/AroMCP
 
-# Verify symlink
-ls -la /usr/mcp/AroMCP  # Should point to your AroMCP directory
-
-# Install Claude Code commands (optional)
-./install.sh
-
-# Start the server (unified - deprecated)
-uv run python main.py
+# 3. Configure Claude Desktop with desired servers
+# See INSTALLATION.md for complete setup guide
 ```
 
-### Why Use a Symlink?
+**📋 [Complete Installation Guide](INSTALLATION.md)** - Detailed setup for all deployment options
 
-Creating a symlink at `/usr/mcp/AroMCP` provides several benefits:
+### 🚀 Individual Server Architecture
 
-- **🔗 Consistent Path**: All Claude Desktop configurations use the same path regardless of where you clone AroMCP
-- **📝 Simplified Config**: No need to update configurations when moving the repository
-- **🔄 Easy Updates**: Pull updates to your local directory, symlink automatically points to latest code
-- **👥 Team Consistency**: All team members can use identical Claude Desktop configurations
-
-**Alternative without symlink**: If you prefer not to use a symlink, replace `/usr/mcp/AroMCP` with your actual AroMCP directory path in all configurations below.
-
-### 🆕 Individual Servers (Recommended)
-
-AroMCP now supports running individual MCP servers, allowing you to enable only the functionality you need:
+AroMCP uses an individual server architecture where each server provides specialized functionality:
 
 ```bash
 # Run individual servers
-uv run python servers/filesystem/main.py   # File operations and code analysis
-uv run python servers/build/main.py        # Build, lint, and test tools
-uv run python servers/analysis/main.py     # Code quality analysis
-uv run python servers/standards/main.py    # ESLint rules and coding guidelines
-uv run python servers/workflow/main.py     # Workflow execution and state management
+uv run python servers/filesystem/main.py   # File operations (3 tools)
+uv run python servers/build/main.py        # Build automation (3 tools)  
+uv run python servers/analysis/main.py     # TypeScript analysis (3 tools)
+uv run python servers/standards/main.py    # Coding standards (10 tools)
+# uv run python servers/workflow/main.py   # ⚠️ IN DEVELOPMENT - NOT FUNCTIONAL YET
 
-# Or run all servers in background
-./scripts/run-all-servers.sh
-
-# Check server health
-./scripts/health-check.py
-
-# Stop all servers
-./scripts/stop-all-servers.sh
+# Management scripts
+./scripts/run-all-servers.sh     # Start all servers in background
+./scripts/health-check.py        # Check server health
+./scripts/stop-all-servers.sh    # Stop all servers
 ```
 
-**Benefits of Individual Servers:**
+**Architecture Benefits:**
 - 🎯 **Selective Deployment** - Enable only the servers you need
-- 📦 **Minimal Dependencies** - Each server has its own minimal requirements
+- 📦 **Minimal Dependencies** - Each server has minimal, focused requirements
 - 🚀 **Better Performance** - Reduced memory footprint per server
-- 🔧 **Independent Development** - Work on servers in isolation
+- 🔧 **Independent Scaling** - Scale servers based on usage patterns
 
 See [Individual Servers Guide](docs/INDIVIDUAL_SERVERS.md) for detailed configuration and Claude Desktop setup.
 
@@ -228,9 +226,10 @@ standards = aromcp.hints_for_file(
 stats = aromcp.get_session_stats(session_id="dev-session-123")
 context = aromcp.analyze_context(file_path="src/api/routes/user.ts")
 
-# Code quality analysis
-aromcp.extract_api_endpoints(route_patterns=["src/**/*.ts"])
-aromcp.find_dead_code()
+# TypeScript code analysis
+aromcp.find_references(symbol_name="calculateTotal", file_path="src/utils.ts")
+aromcp.get_function_details(function_name="processPayment", file_path="src/payment.ts")
+aromcp.analyze_call_graph(entry_points=["src/main.ts"], max_depth=3)
 ```
 
 ## 🔗 Claude Code Integration

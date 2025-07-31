@@ -86,26 +86,26 @@ categories = [
 [tool.aromcp.primary_tools]
 # Simplified tools recommended for AI agents
 file_operations = ["list_files", "read_files", "write_files"]
-code_analysis = ["find_who_imports", "find_dead_code", "find_import_cycles"]
+code_analysis = ["find_references", "get_function_details", "analyze_call_graph"]
 quality_checks = ["lint_project", "check_typescript", "run_tests"]
 build_tools = ["execute_command", "detect_build_tools", "check_dependencies"]
-documentation = ["extract_api_endpoints", "load_project_documents"]
+typescript_analysis = ["find_references", "get_function_details", "analyze_call_graph"]
 standards = ["hints_for_file", "register_standard", "add_rule"]
 
 [tool.aromcp.workflows]
 # Common workflows for AI agents
 pre_commit = ["lint_project", "check_typescript", "run_tests"]
 explore_project = ["list_files", "read_files", "detect_build_tools"]
-refactor_safe = ["find_who_imports", "read_files", "write_files", "lint_project"]
-cleanup_code = ["find_dead_code", "find_import_cycles", "check_dependencies"]
+refactor_safe = ["find_references", "read_files", "write_files", "lint_project"]
+analyze_code = ["find_references", "get_function_details", "analyze_call_graph"]
 
 # Individual server configurations
 [tool.aromcp.servers.filesystem]
 name = "AroMCP FileSystem Server"
 version = "0.1.0"
-description = "File operations and code analysis tools"
+description = "File operations with advanced pattern matching and pagination"
 entry_point = "servers/filesystem/main.py"
-tools = ["list_files", "read_files", "write_files", "extract_method_signatures", "find_who_imports"]
+tools = ["list_files", "read_files", "write_files"]
 
 [tool.aromcp.servers.build]
 name = "AroMCP Build Server"
@@ -117,9 +117,9 @@ tools = ["lint_project", "check_typescript", "run_test_suite", "run_tests"]
 [tool.aromcp.servers.analysis]
 name = "AroMCP Analysis Server"
 version = "0.1.0"
-description = "Code quality and dependency analysis tools"
+description = "TypeScript code analysis and symbol resolution"
 entry_point = "servers/analysis/main.py"
-tools = ["find_dead_code", "find_import_cycles", "extract_api_endpoints"]
+tools = ["find_references", "get_function_details", "analyze_call_graph"]
 
 [tool.aromcp.servers.standards]
 name = "AroMCP Standards Server"

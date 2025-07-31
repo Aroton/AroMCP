@@ -1,14 +1,14 @@
 # AroMCP Analysis Server
 
-Code quality and dependency analysis tools for maintaining clean codebases.
+Advanced TypeScript code analysis and symbol resolution for maintaining clean codebases.
 
 ## Overview
 
-The Analysis server provides advanced code analysis capabilities:
-- Dead code detection
-- Circular import detection
-- API endpoint extraction and documentation
-- Multi-language support (Python, JavaScript, TypeScript)
+The Analysis server provides TypeScript-focused code analysis capabilities:
+- Symbol reference tracking across projects
+- Function signature and parameter analysis
+- Static call graph generation
+- Type-aware code navigation and analysis
 
 ## Installation
 
@@ -25,9 +25,9 @@ uv run python main.py
 
 ## Tools Available
 
-- `find_dead_code` - Identify unused functions, classes, and variables
-- `find_import_cycles` - Detect circular import dependencies
-- `extract_api_endpoints` - Document API routes and endpoints
+- `find_references` - Find all references to TypeScript symbols (functions, classes, variables)
+- `get_function_details` - Extract detailed information about TypeScript functions including parameters, return types, and documentation
+- `analyze_call_graph` - Generate static call graphs showing function dependencies and relationships
 
 ## Claude Desktop Configuration
 
@@ -89,39 +89,39 @@ sudo ln -sf $(pwd) /usr/mcp/AroMCP
 
 ## Analysis Features
 
-### Dead Code Detection
-- Identifies unused functions, classes, and variables
-- Respects exports and public APIs
-- Ignores test files by default
-- Supports Python, JavaScript, and TypeScript
+### Symbol Reference Tracking
+- Finds all references to TypeScript symbols across the codebase
+- Tracks usage in functions, classes, interfaces, and types
+- Supports cross-file and cross-module analysis
+- Respects TypeScript module resolution
 
-### Import Cycle Detection
-- Finds circular dependencies between modules
-- Shows complete import chains
-- Configurable search depth
-- Helps maintain clean architecture
+### Function Analysis
+- Extracts complete function signatures with parameter types
+- Analyzes return types and JSDoc documentation
+- Identifies function complexity and dependencies
+- Supports both regular functions and arrow functions
 
-### API Endpoint Extraction
-- Automatically detects framework (Express, FastAPI, Flask, Django)
-- Extracts route definitions with HTTP methods
-- Documents request/response schemas when available
-- Generates markdown documentation
+### Call Graph Generation
+- Creates static call graphs showing function relationships
+- Identifies direct and indirect dependencies
+- Helps understand code architecture and data flow
+- Supports filtering by depth and complexity
 
 ## Example Usage
 
 Once configured in Claude Desktop, you can use commands like:
 
-- "Find all dead code in the project"
-- "Check for circular imports"
-- "Document all API endpoints"
-- "Find unused functions in the utils module"
+- "Find all references to the calculateTotal function"
+- "Get detailed information about the UserService class methods"
+- "Generate a call graph for the authentication module"
+- "Show me all functions that call the validateInput function"
 
 ## Configuration
 
 Analysis behavior can be customized through:
-- Ignore patterns in tool parameters
-- Framework-specific detection rules
-- Language-specific parsing strategies
+- TypeScript project configuration (tsconfig.json)
+- Symbol search depth and scope parameters
+- Call graph complexity filtering options
 
 ## Standalone Usage
 
@@ -137,10 +137,10 @@ MCP_LOG_LEVEL=DEBUG uv run python main.py
 
 ## Use Cases
 
-1. **Pre-release Cleanup**: Find and remove dead code before releases
-2. **Architecture Review**: Detect and fix circular dependencies
-3. **API Documentation**: Keep API docs in sync with implementation
-4. **Code Quality**: Maintain a clean, well-structured codebase
+1. **Code Navigation**: Quickly find all usages of functions and classes
+2. **Refactoring**: Understand impact of changes before modification
+3. **Architecture Analysis**: Visualize function dependencies and call patterns
+4. **Code Documentation**: Generate documentation from TypeScript symbols
 
 ## Dependencies
 

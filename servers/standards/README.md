@@ -24,22 +24,23 @@ uv sync
 uv run python main.py
 ```
 
-## Tools Available
+## Tools Available (10 Tools)
 
-### Standard Management
-- `register_standard` - Register a new coding standard
-- `delete_standard` - Remove a coding standard
-- `check_updates` - Check for standard updates
+### Core Standards Management
+- `hints_for_file` - Get context-aware coding hints with session management and 70-80% token reduction
+- `register` - Register new coding standards with enhanced metadata
+- `check_updates` - Check for updated or new standard files
+- `delete` - Remove all rules and hints for a standard
 
-### Rule Management
+### Rule & Hint Management
 - `add_rule` - Add ESLint rules with context awareness
-- `update_rule` - Modify existing rules
-- `delete_rule` - Remove an ESLint rule
-
-### Hint Management
+- `list_rules` - List ESLint rules for a standard
 - `add_hint` - Add coding hints and best practices
-- `hints_for_file` - Get relevant hints for a specific file
-- `delete_hint` - Remove a coding hint
+
+### Session & Analytics
+- `get_session_stats` - Get statistics for AI coding sessions
+- `clear_session` - Clear session data for memory management
+- `analyze_context` - Analyze context for specific files and sessions
 
 ## Claude Desktop Configuration
 

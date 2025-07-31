@@ -1,47 +1,67 @@
-# AroMCP Workflow Server
+# AroMCP Workflow Server ⚠️ **IN DEVELOPMENT**
 
-Workflow execution and state management for complex AI-driven automation.
+## 🚧 **DEVELOPMENT STATUS - NOT FUNCTIONAL YET**
 
-## Overview
+**⚠️ WARNING**: This server is currently under active development and is **NOT YET FUNCTIONAL**. 
 
-The Workflow server provides advanced workflow orchestration:
+- **Current Status**: Implementation in progress
+- **Expected Features**: Workflow execution and state management for complex AI-driven automation
+- **Production Ready**: **NO** - Do not use in production environments
+- **Timeline**: Under development - no ETA available
+
+## Planned Overview
+
+When complete, the Workflow server will provide advanced workflow orchestration:
 - YAML-based workflow definitions
-- Complex control flow (conditionals, loops, parallel execution)
+- Complex control flow (conditionals, loops, parallel execution)  
 - State management with variable scoping
 - Sub-agent communication
 - Performance monitoring and debugging
 
-## Installation
+## Development Installation
+
+**⚠️ Note**: This is for development purposes only. The server is not yet functional.
 
 ```bash
 cd servers/workflow
 uv sync
 ```
 
-## Running the Server
+## Development Server Execution
+
+**⚠️ WARNING**: Running this server will likely result in errors as implementation is incomplete.
 
 ```bash
-uv run python main.py
+uv run python main.py  # ⚠️ NOT FUNCTIONAL - FOR DEVELOPMENT ONLY
 ```
 
-## Tools Available
+## Planned Tools (14 Development Tools)
 
-### Workflow Execution
-- `workflow_start` - Start a new workflow execution
-- `workflow_step` - Execute the next step in a workflow
-- `workflow_status` - Get workflow execution status
-- `workflow_stop` - Stop a running workflow
-- `workflow_list` - List available workflows
+**⚠️ Note**: These tools are under development and may not function as described.
 
-### State Management
-- `state_get` - Get values from workflow state
-- `state_update` - Update workflow state values
-- `state_transform` - Transform state with JavaScript
-- `state_clear` - Clear workflow state
+### Planned State Management (5 Tools)
+- `workflow_state_read` - Read workflow state with nested structure support (⚠️ IN DEVELOPMENT)
+- `workflow_state_update` - Update workflow state with cascading transformations (⚠️ IN DEVELOPMENT)
+- `workflow_state_dependencies` - Get computed field dependency information (⚠️ IN DEVELOPMENT)
+- `workflow_state_init` - Initialize new workflow with schema and defaults (⚠️ IN DEVELOPMENT)
+- `workflow_state_validate_path` - Validate state path writability (⚠️ IN DEVELOPMENT)
 
-## Claude Desktop Configuration
+### Planned Workflow Execution (9 Tools)
+- `workflow_start` - Initialize and start workflow instance (⚠️ IN DEVELOPMENT)
+- `workflow_get_info` - Get workflow metadata and input requirements (⚠️ IN DEVELOPMENT)
+- `workflow_list` - List available workflows from project directories (⚠️ IN DEVELOPMENT)
+- `workflow_get_status` - Get current status and progress of workflow (⚠️ IN DEVELOPMENT)
+- `workflow_update_state` - Update workflow state with multiple changes (⚠️ IN DEVELOPMENT)
+- `workflow_list_active` - List all currently active workflow instances (⚠️ IN DEVELOPMENT)
+- `workflow_get_next_step` - Get next step in workflow execution (⚠️ IN DEVELOPMENT)
+- `workflow_checkpoint` - Create workflow checkpoints (⚠️ IN DEVELOPMENT)
+- `workflow_resume` - Resume from checkpoints (⚠️ IN DEVELOPMENT)
 
-Add this to your Claude Desktop configuration file:
+## Claude Desktop Configuration ⚠️ **NOT RECOMMENDED**
+
+**⚠️ WARNING**: Do not add this server to your Claude Desktop configuration as it is not functional.
+
+For development purposes only, this would be the configuration:
 
 ### macOS
 `~/Library/Application Support/Claude/claude_desktop_config.json`

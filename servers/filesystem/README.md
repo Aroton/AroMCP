@@ -1,15 +1,13 @@
 # AroMCP FileSystem Server
 
-File operations and code analysis tools for AI-driven development.
+File operations with advanced pattern matching and pagination for AI-driven development.
 
 ## Overview
 
-The FileSystem server provides essential file management and code analysis capabilities:
-- File listing with glob patterns
-- Multi-file reading with pagination
+The FileSystem server provides essential file management capabilities:
+- File listing with advanced glob patterns and pagination
+- Multi-file reading with encoding detection and pagination
 - Multi-file writing with automatic directory creation
-- Code signature extraction
-- Import dependency analysis
 
 ## Installation
 
@@ -26,14 +24,9 @@ uv run python main.py
 
 ## Tools Available
 
-### File Operations
-- `list_files` - List files matching glob patterns
-- `read_files` - Read multiple files with pagination support
+- `list_files` - List files matching glob patterns with cursor pagination
+- `read_files` - Read multiple files with encoding detection and pagination support
 - `write_files` - Write multiple files with automatic directory creation
-
-### Code Analysis
-- `extract_method_signatures` - Extract function/method signatures from code
-- `find_who_imports` - Find which files import a given module
 
 ## Claude Desktop Configuration
 
