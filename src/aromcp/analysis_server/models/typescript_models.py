@@ -671,6 +671,67 @@ class BatchFunctionResult:
     partial_results: bool = False  # Whether some functions failed
 
 
+# Knip Integration Models for Unused Code Detection
+
+
+@dataclass
+class UnusedCodeInfo:
+    """Information about unused code detected by Knip."""
+
+    file_path: str  # Path to file with unused code
+    unused_exports: list[str] = field(default_factory=list)  # Unused exported symbols
+    unused_files: list[str] = field(default_factory=list)  # Completely unused files
+    unused_dependencies: list[str] = field(default_factory=list)  # Unused package dependencies
+    issue_type: str = "export"  # "file", "export", "dependency", "type", "enum"
+    severity: str = "warning"  # "error", "warning", "info"
+    line_number: int | None = None  # Line number where unused item is defined
+    column_number: int | None = None  # Column number where unused item is defined
+    symbol_name: str | None = None  # Name of unused symbol
+    reason: str | None = None  # Reason why item is considered unused
+
+
+@dataclass
+class KnipConfiguration:
+    """Information about Knip configuration used."""
+
+    config_file: str | None = None  # Path to knip config file used
+    entry_points: list[str] = field(default_factory=list)  # Entry points configured
+    include_patterns: list[str] = field(default_factory=list)  # Include patterns
+    exclude_patterns: list[str] = field(default_factory=list)  # Exclude patterns
+    frameworks: list[str] = field(default_factory=list)  # Framework presets used
+    workspace: str | None = None  # Workspace configuration
+
+
+@dataclass
+class KnipExecutionStats:
+    """Statistics about Knip execution."""
+
+    knip_version: str  # Version of Knip used
+    execution_time_ms: float  # Time taken for Knip execution
+    files_analyzed: int  # Number of files analyzed by Knip
+    total_issues: int  # Total unused code issues found
+    exit_code: int  # Knip process exit code
+    command_used: list[str]  # Full command executed
+    installation_method: str  # "local", "global", "npx"
+
+
+@dataclass
+class FindUnusedCodeResponse:
+    """Response for find_unused_code tool."""
+
+    unused_items: list[UnusedCodeInfo]
+    total_issues: int
+    knip_configuration: KnipConfiguration
+    execution_stats: KnipExecutionStats
+    errors: list[AnalysisError]
+    success: bool = True
+    # Standard pagination fields
+    total: int = 0
+    page_size: int | None = None
+    next_cursor: str | None = None
+    has_more: bool | None = None
+
+
 # Phase 4 Call Graph Models
 
 

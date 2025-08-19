@@ -9,6 +9,7 @@
 - `/standards:fix branch <branch-name>` - Fix changes against branch
 - `/standards:fix [file-path]` - Fix specific file/directory
 - `/standards:fix [commit-id]` - Fix files in commit
+- `/standards:fix --working-set` - Fix all unstaged/untracked files
 - `/standards:fix --resume` - Continue from previous interrupted run
 
 ## Orchestrator Workflow
@@ -24,38 +25,41 @@
 ### Step 1: Initialize Workflow State
 
 1. **Check for Resume State**:
-   ```bash
-   # Check for existing state
-   if [ -f ".aromcp/state/standards-fix-state.json" ]; then
-     # Resume from existing state
-   else
-     # Initialize new workflow
-   fi
-   ```
+   - Check if `.aromcp/state/standards-fix-state.json` exists
+   - If it exists: Resume from existing state
+   - If not: Initialize new workflow
 
 2. **Detect Target Files**:
    - No argument → `git diff --name-only HEAD`
    - Branch name → `git diff --name-only <branch>`
    - Commit hash → `git diff-tree --no-commit-id --name-only -r <hash>`
-   - File path → use AroMCP `list_files` tool with code patterns
+   - `--working-set` → `git ls-files -m -o --exclude-standard`
+   - File path → Use AroMCP `list_files` tool with code patterns
 
 3. **Filter Files IN MEMORY** (never use bash pipes):
-   ```javascript
-   const codeFiles = files.filter(f => 
-     /\.(ts|tsx|js|jsx|py|java|cpp|c|h|hpp)$/.test(f) &&
-     !/(node_modules|\.min\.|\/dist\/|\/\.next\/|\.d\.ts|\.generated\.|\.aromcp\/)/.test(f)
-   );
-   ```
+
+   Filter for code files with these extensions: `ts`, `tsx`, `js`, `jsx`, `py`, `java`, `cpp`, `c`, `h`, `hpp`
+
+   **Exclude files containing these patterns:**
+   - `node_modules` directories
+   - Minified files (`.min.`)
+   - Distribution folders (`/dist/`)
+   - Next.js build folders (`/.next/`)
+   - TypeScript declaration files (`.d.ts`)
+   - Generated files (`.generated.`)
+   - Files with `.aromcp` in the path
 
 4. **Create Semantic Domain Batches**:
+
    Group files by semantic domain and directory hierarchy for optimal processing efficiency. Use domain-based keyword extraction with directory hierarchy weighting to identify files that "go together" functionally.
 
-   **Domain Extraction Strategy**:
-   - Extract semantic keywords from file paths: `subscription`, `auth`, `payment`, `user`, `notification`, `dashboard`, etc.
+   **Domain Extraction Strategy:**
+   - Extract semantic keywords from file paths (examples: `subscription`, `auth`, `payment`, `user`, `notification`, `dashboard`)
    - Weight relationships by directory proximity (shared parent directories indicate stronger relationships)
    - Group files sharing domain keywords regardless of architectural layer to maintain functional context
 
    **Batching Logic**:
+
    1. **Extract Domain Keywords**: For each file, identify semantic keywords from:
       - Directory path segments (`features/subscription/`, `components/auth/`)
       - Filename patterns (`SubscriptionCard.tsx`, `useAuth.ts`, `payment-api.ts`)
@@ -63,17 +67,17 @@
       - Technical patterns: `api`, `component`, `service`, `util`, `hook`, `store`, `model`, `type`, `test`, `config`
       - CamelCase/PascalCase breakdowns (`UserProfile` → `user`, `profile`)
 
-   2. **Group by Shared Domains**: 
+   2. **Group by Shared Domains**:
       - Files sharing the same domain keywords should be batched together
       - Prioritize larger domain groups first (more files = stronger domain signal)
       - Files with multiple shared keywords have stronger relationships
 
-   3. **Apply Directory Proximity**: 
+   3. **Apply Directory Proximity**:
       - Within each domain group, prioritize files from the same directory
       - Files in `features/subscription/` are more related than files just containing "subscription"
       - Maintain max 10 files per batch, splitting large directories across multiple batches
 
-   4. **Handle Remaining Files**: 
+   4. **Handle Remaining Files**:
       - Files without clear domain keywords get grouped by directory proximity only
       - Ensure all files are assigned to exactly one batch
 

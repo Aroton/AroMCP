@@ -137,7 +137,7 @@ def register_build_tools(mcp):
         # Simply return the result from lint_project_impl, which now returns LintProjectResponse
         return lint_project_impl(use_standards, files, debug, cursor, max_tokens)
 
-    @mcp.tool
+    #@mcp.tool
     def run_test_suite(  # noqa: F841
         test_command: str | None = None,
         test_framework: str = "auto",

@@ -58,9 +58,9 @@ class TestServerRegistration:
         tools = await mcp.get_tools()
         tool_names = list(tools)
         
-        expected_tools = ["find_references", "get_function_details", "analyze_call_graph"]
+        expected_tools = ["find_references", "get_function_details", "analyze_call_graph", "find_unused_code"]
         
-        assert len(tool_names) == 3, f"Expected 3 analysis tools, got {len(tool_names)}"
+        assert len(tool_names) == 4, f"Expected 4 analysis tools, got {len(tool_names)}"
         for tool in expected_tools:
             assert tool in tool_names, f"Analysis tool '{tool}' not registered"
 
@@ -140,8 +140,8 @@ class TestServerRegistration:
         tools = await mcp.get_tools()
         tool_names = list(tools)
         
-        # Expected total: 3 + 3 + 3 + 10 + 14 = 33 tools
-        expected_total = 33
+        # Expected total: 3 + 3 + 4 + 10 + 14 = 34 tools
+        expected_total = 34
         
         assert len(tool_names) == expected_total, f"Expected {expected_total} total tools, got {len(tool_names)}"
         
@@ -167,7 +167,7 @@ class TestServerRegistration:
         analysis_mcp = FastMCP(name="Test Analysis")
         register_analysis_tools(analysis_mcp)
         analysis_tools = await analysis_mcp.get_tools() 
-        assert len(analysis_tools) == 3, "Analysis server should have 3 tools"
+        assert len(analysis_tools) == 4, "Analysis server should have 4 tools"
         
         standards_mcp = FastMCP(name="Test Standards")
         register_standards_tools(standards_mcp)
@@ -179,7 +179,7 @@ class TestServerRegistration:
         workflow_tools = await workflow_mcp.get_tools()
         assert len(workflow_tools) == 14, "Workflow server should have 14 tools"
         
-        # Total should be 33 tools (3+3+3+10+14)
-        total_expected = 33
+        # Total should be 34 tools (3+3+4+10+14)
+        total_expected = 34
         actual_total = len(fs_tools) + len(build_tools) + len(analysis_tools) + len(standards_tools) + len(workflow_tools)
         assert actual_total == total_expected, f"Total tools should be {total_expected}, got {actual_total}"

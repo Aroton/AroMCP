@@ -11,7 +11,7 @@ AroMCP is a suite of MCP (Model Context Protocol) servers designed as utilities 
 **Implementation Status:**
 - ✅ **Filesystem Server** - 3 tools: `list_files`, `read_files`, `write_files` with pagination and glob patterns
 - ✅ **Build Server** - 3 tools: `check_typescript`, `lint_project`, `run_test_suite` with comprehensive automation
-- ✅ **Analysis Server** - 3 tools: `find_references`, `get_function_details`, `analyze_call_graph` for TypeScript analysis
+- ✅ **Analysis Server** - 4 tools: `find_references`, `get_function_details`, `analyze_call_graph`, `find_unused_code` for TypeScript analysis
 - ✅ **Standards Server** - 10 tools for intelligent coding standards management with 70-80% token reduction
 - ✅ **Workflow Server** - 12 tools for workflow execution and persistent state management
 
@@ -20,7 +20,7 @@ AroMCP is a suite of MCP (Model Context Protocol) servers designed as utilities 
 Five implemented MCP servers:
 1. **Filesystem Server** - File operations with glob patterns and pagination (3 tools)
 2. **Build Server** - Build automation, linting, and testing (3 tools)
-3. **Analysis Server** - TypeScript symbol resolution and call graph analysis (3 tools)
+3. **Analysis Server** - TypeScript symbol resolution, call graph analysis, and unused code detection (4 tools)
 4. **Standards Server** - Intelligent coding standards with session management (10 tools)
 5. **Workflow Server** - State management and workflow orchestration (12 tools)
 
@@ -324,14 +324,29 @@ uv run pytest --cov=src/aromcp
 
 ## Pagination Support
 
-All list-returning tools support pagination to stay under 20k token limits:
+All list-returning tools support cursor-based pagination to stay under 20k token limits:
 
 **Implementation (`src/aromcp/utils/pagination.py`)**:
-- Token-based sizing (1 token ≈ 4 characters)
-- Deterministic ordering via sort keys
-- Binary search optimization for page size
+- **Cursor-based pagination**: Uses `simplify_cursor_pagination()` for efficient navigation
+- **Token-based sizing**: Estimates ~3.5 characters per token with 10% safety margin
+- **Deterministic ordering**: Sort keys ensure consistent results across requests
+- **Smart pagination**: Skips pagination entirely for small result sets
+- **Safe defaults**: Handles missing pagination fields gracefully to prevent KeyErrors
 
 **Parameters**: All paginated tools accept `page` (default: 1) and `max_tokens` (default: 20000)
+
+**Response Structure**:
+```python
+{
+    "items": [...],           # Paginated items
+    "total": 100,            # Total items available (with safe fallback)
+    "page_size": 25,         # Items in current page
+    "next_cursor": "abc123", # Cursor for next page (null if last page)
+    "has_more": false        # Whether more pages exist
+}
+```
+
+**Important**: Always use `.get()` with safe defaults when accessing pagination fields to handle cases where `simplify_cursor_pagination` returns simplified responses for small/empty result sets.
 
 ## FastMCP Standards (Updated 2025-07-18)
 
@@ -458,9 +473,13 @@ src/aromcp/
 - Implement comprehensive error handling with structured error responses
 - ESLint rule generation is now handled via Claude Code commands for better AI-driven rule creation
 - The command documentation is at `documentation/commands/generate-eslint-rules.md`
-- **All list-returning tools now support pagination** - Use `page` and `max_tokens` parameters for large result sets
+- **All list-returning tools now support cursor-based pagination** - Use `simplify_cursor_pagination()` for efficient result handling
+- **Always use safe pagination field access** - Use `.get()` with defaults: `paginated_result.get("total", len(items))` to prevent KeyErrors
 - Pagination maintains deterministic ordering and includes comprehensive metadata
-- Token estimation uses conservative 4:1 character ratio to stay under 20k token limit
+- Token estimation uses ~3.5 characters per token with 10% safety margin
+- **Cursor pagination handles empty/small results gracefully** - May return simplified responses without standard pagination fields
+- **Knip integration complete** - `find_unused_code` tool wraps industry-standard Knip CLI for TypeScript unused code detection
+- **Error handling patterns** - Always provide clear installation instructions for missing dependencies (e.g., Knip, ESLint)
 - **Line length is 120 characters**
 - **Ignore linting errors that are intentional**
 - **Remember fastmcp LLM friendly documentation can be found here: https://gofastmcp.com/llms.txt This is a sitemap of places to get docs. Always load this into memory if you are working on fastmcp specific logic. It will require reading and then loading as neccessary. Always prioritize loading fastmcp documentation when working on fastmcp**

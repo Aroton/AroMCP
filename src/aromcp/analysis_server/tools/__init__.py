@@ -7,9 +7,11 @@ from ...utils.json_parameter_middleware import json_convert
 from ..models.typescript_models import (
     CallTraceResponse,
     FindReferencesResponse,
+    FindUnusedCodeResponse,
     FunctionDetailsResponse,
 )
 from .find_references import find_references_impl
+from .find_unused_code import find_unused_code_impl
 from .get_call_trace import get_call_trace_impl
 from .get_function_details import get_function_details_impl
 
@@ -163,6 +165,60 @@ def register_analysis_tools(mcp):
             include_external_calls=include_external_calls,
             analyze_conditions=analyze_conditions,
             resolution_depth=resolution_depth,
+            page=page,
+            max_tokens=max_tokens,
+        )
+
+    @mcp.tool
+    @json_convert
+    def find_unused_code(
+        include_patterns: str | list[str] | None = None,
+        exclude_patterns: str | list[str] | None = None,
+        config_file: str | None = None,
+        include_entry_files: bool = True,
+        include_dependencies: bool = True,
+        include_dev_dependencies: bool = False,
+        workspace: str | None = None,
+        page: int = 1,
+        max_tokens: int = 20000,
+    ) -> FindUnusedCodeResponse:
+        """
+        Find unused code using Knip CLI integration for comprehensive dead code detection.
+
+        Use this tool when:
+        - Identifying unused files, exports, and dependencies for cleanup
+        - Preparing for code refactoring by finding safe-to-delete code
+        - Reducing bundle size by removing dead code paths
+        - Auditing codebase for maintenance and organization
+        - Analyzing TypeScript/JavaScript projects for unused imports
+
+        Replaces bash commands: manual grep searches, custom dead code analysis scripts
+
+        Args:
+            include_patterns: File patterns to include (e.g., ["src/**/*.ts", "lib/**/*.js"])
+            exclude_patterns: File patterns to exclude (e.g., ["**/*.test.ts", "**/*.spec.js"])
+            config_file: Path to Knip configuration file (knip.json, knip.config.js)
+            include_entry_files: Include entry point files in analysis (default: True)
+            include_dependencies: Include package dependency analysis (default: True)
+            include_dev_dependencies: Include dev dependencies in analysis (default: False)
+            workspace: Workspace directory for monorepo analysis
+            page: Page number for pagination (default: 1)
+            max_tokens: Maximum tokens per page (default: 20000)
+
+        Example:
+            find_unused_code(exclude_patterns=["**/*.test.ts", "**/*.spec.js"])
+            → FindUnusedCodeResponse with unused files, exports, and dependencies
+
+        Note: Requires Knip installation (npm install -g knip). Cross-references with find_references for dependency validation.
+        """
+        return find_unused_code_impl(
+            include_patterns=include_patterns,
+            exclude_patterns=exclude_patterns,
+            config_file=config_file,
+            include_entry_files=include_entry_files,
+            include_dependencies=include_dependencies,
+            include_dev_dependencies=include_dev_dependencies,
+            workspace=workspace,
             page=page,
             max_tokens=max_tokens,
         )
