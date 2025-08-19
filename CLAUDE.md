@@ -36,7 +36,12 @@ Five implemented MCP servers:
 ## Development Commands
 
 - **Install dependencies**: `uv sync --dev` (uses uv package manager)
-- **Run individual servers**: `uv run python servers/{name}/main.py` (filesystem, build, analysis, standards, workflow)
+- **Run individual servers**: `./scripts/run-server.sh <server-name>` (filesystem, build, analysis, standards, workflow)
+  - Available servers: `filesystem` (or `fs`), `build`, `analysis`, `standards` (or `std`), `workflow` (or `wf`)
+  - Background mode: `./scripts/run-server.sh <server-name> --background`
+  - Examples:
+    - `./scripts/run-server.sh standards`
+    - `./scripts/run-server.sh filesystem --background`
 - **Run tests**: `uv run pytest`
 - **Run single test**: `uv run pytest tests/filesystem_server/test_list_files.py::TestListFiles::test_basic_functionality`
 - **Code formatting**: `uv run black src/ tests/`

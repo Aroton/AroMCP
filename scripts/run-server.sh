@@ -66,6 +66,10 @@ if [ ! -d "$SERVER_PATH" ]; then
     exit 1
 fi
 
+# Ensure dependencies are installed
+echo -e "${BLUE}Installing dependencies for ${SERVER_NAME} server...${NC}"
+cd "$SERVER_PATH" && uv sync
+
 if [ "$BACKGROUND" == true ]; then
     # Run in background
     mkdir -p "$PROJECT_ROOT/logs"

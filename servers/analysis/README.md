@@ -12,14 +12,27 @@ The Analysis server provides TypeScript-focused code analysis capabilities:
 
 ## Installation
 
+Dependencies are automatically installed when using the run script:
+
 ```bash
-cd servers/analysis
-uv sync
+./scripts/run-server.sh analysis
 ```
 
 ## Running the Server
 
+### Recommended (with automatic dependency management):
 ```bash
+# From AroMCP project root
+./scripts/run-server.sh analysis
+
+# Background mode
+./scripts/run-server.sh analysis --background
+```
+
+### Manual (requires separate dependency installation):
+```bash
+cd servers/analysis
+uv sync  # Install dependencies first
 uv run python main.py
 ```
 
@@ -47,13 +60,9 @@ Add this to your Claude Desktop configuration file:
   "mcpServers": {
     "aromcp-analysis": {
       "type": "stdio",
-      "command": "uv",
+      "command": "/usr/mcp/AroMCP/scripts/run-server.sh",
       "args": [
-        "--directory", "/usr/mcp/AroMCP",
-        "run",
-        "--extra", "all-servers",
-        "python",
-        "servers/analysis/main.py"
+        "analysis"
       ],
       "env": {
         "MCP_FILE_ROOT": "/path/to/your/project"
@@ -67,10 +76,10 @@ Replace `/path/to/your/project` with the project you want to analyze.
 
 ## Key Configuration Changes
 
-1. **Uses symlink path**: `/usr/mcp/AroMCP` provides consistent path across environments
-2. **Run from root directory**: `--directory` points to AroMCP root instead of individual server directory
-3. **Use --extra all-servers**: Ensures all dependencies are available
-4. **Relative paths to servers**: `servers/analysis/main.py` instead of just `main.py`
+1. **Uses run-server.sh script**: Provides automatic dependency management and consistent startup
+2. **Uses symlink path**: `/usr/mcp/AroMCP` provides consistent path across environments
+3. **Simple server specification**: Just specify `analysis` as the server name
+4. **Automatic dependency installation**: Script handles `uv sync` before starting server
 
 ## Setup Requirements
 
@@ -145,3 +154,8 @@ MCP_LOG_LEVEL=DEBUG uv run python main.py
 ## Dependencies
 
 - `fastmcp>=2.10.5` - MCP server framework
+- `tree-sitter>=0.20.0` - Syntax tree parsing
+- `tree-sitter-typescript>=0.20.0` - TypeScript language parser
+- `tree-sitter-javascript>=0.20.0` - JavaScript language parser
+- `networkx>=3.0` - Graph algorithms for call graph analysis
+- `psutil>=5.9.0` - System and process monitoring

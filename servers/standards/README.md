@@ -16,6 +16,14 @@ The Standards server provides comprehensive coding standards management with pow
 
 ### MCP Server Installation
 
+Dependencies are automatically installed when using the run script:
+
+```bash
+./scripts/run-server.sh standards
+```
+
+### Manual Installation (if needed)
+
 ```bash
 cd servers/standards
 uv sync
@@ -39,7 +47,22 @@ This installs all commands from `shared-claude/` to `~/.claude/`:
 
 ## Running the Server
 
+### Recommended (with automatic dependency management):
 ```bash
+# From AroMCP project root
+./scripts/run-server.sh standards
+
+# Background mode
+./scripts/run-server.sh standards --background
+
+# Using alias
+./scripts/run-server.sh std
+```
+
+### Manual (requires separate dependency installation):
+```bash
+cd servers/standards
+uv sync  # Install dependencies first
 uv run python main.py
 ```
 
@@ -277,13 +300,9 @@ Add this to your Claude Desktop configuration file:
   "mcpServers": {
     "aromcp-standards": {
       "type": "stdio",
-      "command": "uv",
+      "command": "/usr/mcp/AroMCP/scripts/run-server.sh",
       "args": [
-        "--directory", "/usr/mcp/AroMCP",
-        "run",
-        "--extra", "all-servers",
-        "python",
-        "servers/standards/main.py"
+        "standards"
       ],
       "env": {
         "MCP_FILE_ROOT": "/path/to/your/project",
@@ -298,10 +317,10 @@ Replace `/path/to/your/project` with your project root.
 
 ## Key Configuration Changes
 
-1. **Uses symlink path**: `/usr/mcp/AroMCP` provides consistent path across environments
-2. **Run from root directory**: `--directory` points to AroMCP root instead of individual server directory
-3. **Use --extra all-servers**: Ensures all dependencies are available
-4. **Relative paths to servers**: `servers/standards/main.py` instead of just `main.py`
+1. **Uses run-server.sh script**: Provides automatic dependency management and consistent startup
+2. **Uses symlink path**: `/usr/mcp/AroMCP` provides consistent path across environments
+3. **Simple server specification**: Just specify `standards` as the server name
+4. **Automatic dependency installation**: Script handles `uv sync` before starting server
 
 ## Setup Requirements
 

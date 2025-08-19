@@ -22,18 +22,25 @@ When complete, the Workflow server will provide advanced workflow orchestration:
 
 **⚠️ Note**: This is for development purposes only. The server is not yet functional.
 
+### Recommended (with automatic dependency management):
+```bash
+# From AroMCP project root
+./scripts/run-server.sh workflow  # ⚠️ NOT FUNCTIONAL - FOR DEVELOPMENT ONLY
+
+# Using alias
+./scripts/run-server.sh wf  # ⚠️ NOT FUNCTIONAL - FOR DEVELOPMENT ONLY
+```
+
+### Manual (requires separate dependency installation):
 ```bash
 cd servers/workflow
-uv sync
+uv sync  # Install dependencies first
+uv run python main.py  # ⚠️ NOT FUNCTIONAL - FOR DEVELOPMENT ONLY
 ```
 
 ## Development Server Execution
 
 **⚠️ WARNING**: Running this server will likely result in errors as implementation is incomplete.
-
-```bash
-uv run python main.py  # ⚠️ NOT FUNCTIONAL - FOR DEVELOPMENT ONLY
-```
 
 ## Planned Tools (14 Development Tools)
 
@@ -77,13 +84,9 @@ For development purposes only, this would be the configuration:
   "mcpServers": {
     "aromcp-workflow": {
       "type": "stdio",
-      "command": "uv",
+      "command": "/usr/mcp/AroMCP/scripts/run-server.sh",
       "args": [
-        "--directory", "/usr/mcp/AroMCP",
-        "run",
-        "--extra", "all-servers",
-        "python",
-        "servers/workflow/main.py"
+        "workflow"
       ],
       "env": {
         "MCP_FILE_ROOT": "/path/to/your/project",
@@ -96,10 +99,10 @@ For development purposes only, this would be the configuration:
 
 ## Key Configuration Changes
 
-1. **Uses symlink path**: `/usr/mcp/AroMCP` provides consistent path across environments
-2. **Run from root directory**: `--directory` points to AroMCP root instead of individual server directory
-3. **Use --extra all-servers**: Ensures all dependencies are available
-4. **Relative paths to servers**: `servers/workflow/main.py` instead of just `main.py`
+1. **Uses run-server.sh script**: Provides automatic dependency management and consistent startup (⚠️ Still not functional)
+2. **Uses symlink path**: `/usr/mcp/AroMCP` provides consistent path across environments
+3. **Simple server specification**: Just specify `workflow` as the server name
+4. **Automatic dependency installation**: Script handles `uv sync` before starting server
 
 ## Setup Requirements
 

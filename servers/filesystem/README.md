@@ -11,14 +11,30 @@ The FileSystem server provides essential file management capabilities:
 
 ## Installation
 
+Dependencies are automatically installed when using the run script:
+
 ```bash
-cd servers/filesystem
-uv sync
+./scripts/run-server.sh filesystem
 ```
 
 ## Running the Server
 
+### Recommended (with automatic dependency management):
 ```bash
+# From AroMCP project root
+./scripts/run-server.sh filesystem
+
+# Background mode
+./scripts/run-server.sh filesystem --background
+
+# Using alias
+./scripts/run-server.sh fs
+```
+
+### Manual (requires separate dependency installation):
+```bash
+cd servers/filesystem
+uv sync  # Install dependencies first
 uv run python main.py
 ```
 
@@ -46,13 +62,9 @@ Add this to your Claude Desktop configuration file:
   "mcpServers": {
     "aromcp-filesystem": {
       "type": "stdio",
-      "command": "uv",
+      "command": "/usr/mcp/AroMCP/scripts/run-server.sh",
       "args": [
-        "--directory", "/usr/mcp/AroMCP",
-        "run",
-        "--extra", "all-servers",
-        "python",
-        "servers/filesystem/main.py"
+        "filesystem"
       ],
       "env": {
         "MCP_FILE_ROOT": "/path/to/your/project",
@@ -67,10 +79,10 @@ Replace `/path/to/your/project` with the project you want to work with.
 
 ## Key Configuration Changes
 
-1. **Uses symlink path**: `/usr/mcp/AroMCP` provides consistent path across environments
-2. **Run from root directory**: `--directory` points to AroMCP root instead of individual server directory
-3. **Use --extra all-servers**: Ensures all dependencies are available
-4. **Relative paths to servers**: `servers/filesystem/main.py` instead of just `main.py`
+1. **Uses run-server.sh script**: Provides automatic dependency management and consistent startup
+2. **Uses symlink path**: `/usr/mcp/AroMCP` provides consistent path across environments
+3. **Simple server specification**: Just specify `filesystem` as the server name
+4. **Automatic dependency installation**: Script handles `uv sync` before starting server
 
 ## Setup Requirements
 
@@ -88,7 +100,7 @@ Test the server manually before adding to Claude:
 
 ```bash
 cd /usr/mcp/AroMCP
-MCP_FILE_ROOT=/path/to/your/project uv run --extra all-servers python servers/filesystem/main.py
+MCP_FILE_ROOT=/path/to/your/project ./scripts/run-server.sh filesystem
 ```
 
 ## Environment Variables

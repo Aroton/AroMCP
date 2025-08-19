@@ -57,12 +57,20 @@ sudo ln -sf $(pwd) /usr/mcp/AroMCP
 AroMCP uses an individual server architecture where each server provides specialized functionality:
 
 ```bash
-# Run individual servers
-uv run python servers/filesystem/main.py   # File operations (3 tools)
-uv run python servers/build/main.py        # Build automation (3 tools)  
-uv run python servers/analysis/main.py     # TypeScript analysis (3 tools)
-uv run python servers/standards/main.py    # Coding standards (10 tools)
-# uv run python servers/workflow/main.py   # ⚠️ IN DEVELOPMENT - NOT FUNCTIONAL YET
+# Run individual servers (recommended approach)
+./scripts/run-server.sh filesystem    # File operations (3 tools)
+./scripts/run-server.sh build         # Build automation (3 tools)  
+./scripts/run-server.sh analysis      # TypeScript analysis (3 tools)
+./scripts/run-server.sh standards     # Coding standards (10 tools)
+# ./scripts/run-server.sh workflow    # ⚠️ IN DEVELOPMENT - NOT FUNCTIONAL YET
+
+# Available aliases
+./scripts/run-server.sh fs             # filesystem alias
+./scripts/run-server.sh std            # standards alias
+./scripts/run-server.sh wf             # workflow alias
+
+# Background mode
+./scripts/run-server.sh filesystem --background
 
 # Management scripts
 ./scripts/run-all-servers.sh     # Start all servers in background
