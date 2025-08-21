@@ -43,9 +43,9 @@ class TestServerRegistration:
         tools = await mcp.get_tools()
         tool_names = list(tools)
         
-        expected_tools = ["check_typescript", "lint_project", "run_test_suite"]
+        expected_tools = ["check_typescript", "lint_project"]
         
-        assert len(tool_names) == 3, f"Expected 3 build tools, got {len(tool_names)}"
+        assert len(tool_names) == 2, f"Expected 2 build tools, got {len(tool_names)}"
         for tool in expected_tools:
             assert tool in tool_names, f"Build tool '{tool}' not registered"
 
@@ -99,29 +99,14 @@ class TestServerRegistration:
         tools = await mcp.get_tools()
         tool_names = list(tools)
         
-        workflow_state_tools = [
-            "workflow_state_read",
-            "workflow_state_update", 
-            "workflow_state_dependencies",
-            "workflow_state_init",
-            "workflow_state_validate_path",
+        # Phase 1 implementation has 3 core workflow tools
+        expected_tools = [
+            "workflow_start",    # Start new workflow execution
+            "workflow_submit",   # Submit result for pending action
+            "workflow_status",   # Get workflow status
         ]
         
-        workflow_execution_tools = [
-            "workflow_get_info",
-            "workflow_start",
-            "workflow_list",
-            "workflow_get_next_step",
-            "workflow_get_status", 
-            "workflow_update_state",
-            "workflow_list_active",
-            "workflow_checkpoint",
-            "workflow_resume",
-        ]
-        
-        expected_tools = workflow_state_tools + workflow_execution_tools
-        
-        assert len(tool_names) == 14, f"Expected 14 workflow tools, got {len(tool_names)}" 
+        assert len(tool_names) == 3, f"Expected 3 workflow tools, got {len(tool_names)}" 
         for tool in expected_tools:
             assert tool in tool_names, f"Workflow tool '{tool}' not registered"
 
@@ -140,8 +125,8 @@ class TestServerRegistration:
         tools = await mcp.get_tools()
         tool_names = list(tools)
         
-        # Expected total: 3 + 3 + 4 + 10 + 14 = 34 tools
-        expected_total = 34
+        # Expected total: 3 + 2 + 4 + 10 + 3 = 22 tools
+        expected_total = 22
         
         assert len(tool_names) == expected_total, f"Expected {expected_total} total tools, got {len(tool_names)}"
         
@@ -162,7 +147,7 @@ class TestServerRegistration:
         build_mcp = FastMCP(name="Test Build")  
         register_build_tools(build_mcp)
         build_tools = await build_mcp.get_tools()
-        assert len(build_tools) == 3, "Build server should have 3 tools"
+        assert len(build_tools) == 2, "Build server should have 2 tools"
         
         analysis_mcp = FastMCP(name="Test Analysis")
         register_analysis_tools(analysis_mcp)
@@ -177,9 +162,9 @@ class TestServerRegistration:
         workflow_mcp = FastMCP(name="Test Workflow")
         register_workflow_tools(workflow_mcp)
         workflow_tools = await workflow_mcp.get_tools()
-        assert len(workflow_tools) == 14, "Workflow server should have 14 tools"
+        assert len(workflow_tools) == 3, "Workflow server should have 3 tools"
         
-        # Total should be 34 tools (3+3+4+10+14)
-        total_expected = 34
+        # Total should be 22 tools (3+2+4+10+3)
+        total_expected = 22
         actual_total = len(fs_tools) + len(build_tools) + len(analysis_tools) + len(standards_tools) + len(workflow_tools)
         assert actual_total == total_expected, f"Total tools should be {total_expected}, got {actual_total}"

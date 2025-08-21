@@ -1,0 +1,124 @@
+# Docker Compose for Temporal Workflow Server Development
+# As specified in Phase 1 implementation plan
+
+version: '3.8'
+
+services:
+  # Temporal server with auto-setup (Phase 1 specification)
+  temporal:
+    image: temporalio/auto-setup:latest
+    ports:
+      - "7233:7233"  # Temporal server gRPC
+      - "8233:8233"  # Temporal Web UI
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postgresql
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    depends_on:
+      - postgresql
+    volumes:
+      - ./docker:/etc/temporal/config/dynamicconfig
+    networks:
+      - temporal-network
+
+  # PostgreSQL database for Temporal (Phase 1 specification)
+  postgresql:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    ports:
+      - "5432:5432"
+    volumes:
+      - temporal_data:/var/lib/postgresql/data
+      - ./docker/postgresql-init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - temporal-network
+
+  # Temporal Web UI (optional, for debugging)
+  temporal-web:
+    image: temporalio/web:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - TEMPORAL_GRPC_ENDPOINT=temporal:7233
+    depends_on:
+      - temporal
+    networks:
+      - temporal-network
+
+  # Development workflow server (optional)
+  workflow-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.workflow-server
+    environment:
+      - TEMPORAL_HOST=temporal:7233
+      - TEMPORAL_NAMESPACE=default
+      - TEMPORAL_TASK_QUEUE=mcp-workflows
+      - WORKFLOW_MOCK_MODE=false
+      - DEBUG_MODE=true
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      - temporal
+    volumes:
+      - ./.aromcp/workflows:/app/.aromcp/workflows
+      - ./logs:/app/logs
+    networks:
+      - temporal-network
+    profiles:
+      - with-server  # Only start when 'with-server' profile is active
+
+  # Optional: Elasticsearch for advanced visibility
+  elasticsearch:
+    image: elasticsearch:8.7.0
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - temporal-network
+    profiles:
+      - elasticsearch
+
+volumes:
+  temporal_data:
+    driver: local
+  elasticsearch-data:
+
+networks:
+  temporal-network:
+    driver: bridge
+
+# Usage Examples (Phase 1 Development):
+# 
+# 1. Start just Temporal (for Phase 1 development):
+#    docker-compose up temporal postgresql
+#
+# 2. Start with Web UI for debugging:
+#    docker-compose up temporal postgresql temporal-web
+#
+# 3. Start everything including workflow server:
+#    docker-compose --profile with-server up
+#
+# 4. Stop all services:
+#    docker-compose down
+#
+# 5. Reset database (clean start):
+#    docker-compose down -v && docker-compose up temporal postgresql
+#
+# Environment Variables for Phase 1:
+# TEMPORAL_HOST=localhost:7233
+# TEMPORAL_NAMESPACE=default  
+# TEMPORAL_TASK_QUEUE=mcp-workflows
+# WORKFLOW_MOCK_MODE=false (set to true for Phase 1 mock mode)
+# DEBUG_MODE=true
+# LOG_LEVEL=INFO

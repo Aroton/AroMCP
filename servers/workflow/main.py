@@ -7,7 +7,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.aromcp.workflow_server.server import mcp
+from src.aromcp.workflow_server.server import main
 
 if __name__ == "__main__":
-    mcp.run()
+    main()

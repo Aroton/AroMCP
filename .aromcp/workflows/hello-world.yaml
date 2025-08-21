@@ -1,0 +1,25 @@
+name: "hello-world"
+description: "Simple hello world workflow for testing Phase 1"
+version: "1.0"
+
+inputs:
+  required:
+    - name
+  optional:
+    greeting: "Hello"
+
+steps:
+  - id: "greeting"
+    action: "shell"
+    command: "echo '{{ inputs.greeting }}, {{ inputs.name }}!'"
+    output_to: "greeting_result"
+
+  - id: "confirmation"  
+    action: "prompt"
+    message: "Did the greeting work correctly? Result was: {{ state.greeting_result }}"
+    output_to: "user_confirmation"
+
+  - id: "final"
+    action: "shell"
+    command: "echo 'Workflow completed with confirmation: {{ state.user_confirmation }}'"
+    output_to: "final_result"

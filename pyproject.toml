@@ -27,8 +27,10 @@ dev = [
 # Legacy - for backward compatibility only
 all-servers = [
     "fastmcp>=2.10.5",
+    "temporalio>=1.5.0",
     "chardet>=5.0.0",
     "pyyaml>=6.0.0",
+    "cachetools>=5.0.0",
     "pythonmonkey>=1.1.1",
     "psutil>=5.9.0",
     "jsonschema>=4.0.0",

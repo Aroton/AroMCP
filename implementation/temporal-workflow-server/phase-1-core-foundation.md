@@ -112,6 +112,8 @@ class WorkflowServerConfig:
 
 ### 3. Core MCP Tools
 
+**Note**: The implementation includes an additional `health_check` tool beyond the three specified below. This tool provides server health monitoring and is an enhancement to aid in development and operations.
+
 #### Tool: `start_workflow`
 **Purpose**: Initiate a new Temporal workflow execution
 
