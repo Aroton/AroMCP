@@ -115,6 +115,26 @@ if [[ -d "./shared-claude/agents" ]]; then
         fi
     done
 
+    # Copy agent-definition directory if it exists
+    if [[ -d "./shared-claude/agents/agent-definition" ]]; then
+        print_status "Installing agent definitions..."
+        mkdir -p "$CLAUDE_DIR/agents/agent-definition"
+        
+        INSTALLED_DEFINITIONS=0
+        for def_file in ./shared-claude/agents/agent-definition/*.md; do
+            if [[ -f "$def_file" ]]; then
+                filename=$(basename "$def_file")
+                cp "$def_file" "$CLAUDE_DIR/agents/agent-definition/"
+                echo -e "${GREEN}[SUCCESS]${NC} Installed agent definition: $filename"
+                INSTALLED_DEFINITIONS=$((INSTALLED_DEFINITIONS + 1))
+            fi
+        done
+        
+        if [[ $INSTALLED_DEFINITIONS -gt 0 ]]; then
+            print_success "Installed $INSTALLED_DEFINITIONS agent definition files"
+        fi
+    fi
+
     if [[ $INSTALLED_AGENTS -gt 0 ]]; then
         print_success "Installed $INSTALLED_AGENTS AroMCP agent files"
     else
